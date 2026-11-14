@@ -1,0 +1,65 @@
+# État d'avancement (exact)
+
+Légende : ✅ fonctionnel et relié au moteur · 🟡 partiel · ❌ non réalisé
+
+## Critères d'acceptation (parcours end-to-end, automatisé dans `e2e/parcours.spec.ts`)
+1 Lancer ✅ · 2 Créer une carrière ✅ · 3 Choisir une banque ✅ · 4 Capital virtuel ✅ · 5 Marchés qui évoluent ✅ · 6 Accélérer/pause ✅ · 7 Acheter ✅ · 8 Solde qui diminue ✅ · 9 Position en portefeuille ✅ · 10 Variations de valeur ✅ · 11 Revendre ✅ · 12 Résultat ✅ · 13 Réunion ✅ · 14 Mission ✅ · 15 Événement économique ✅ · 16 Conséquences sur le marché ✅ · 17 Évaluation professionnelle ✅ · 18 Sauvegarder ✅ · 19 Fermer ✅ · 20 Reprendre sans perte ✅
+
+## Fonctionnalités
+| Domaine | État | Détail |
+|---|---|---|
+| Accueil, nouvelle carrière, continuer, bac à sable, défi, paramètres | ✅ | 3 défis ; paramètres globaux (ratio de temps) + par partie |
+| Personnage (prénom, nom, nationalité, âge, formation, connaissances, objectif, spécialisation, risque) | ✅ | Le niveau de connaissances détermine les banques accessibles et les compétences initiales |
+| 8 parcours, 7 banques fictives avec identité, culture, grille, politique de risque | ✅ | + 2 banques concurrentes cotées (crises) |
+| Entretiens, négociation salariale, offres, changement de banque, licenciement | ✅ | Entretien technique pour les offres ; à la création, l'accès est conditionné au profil (pas d'entretien) |
+| Mutations, réorganisations | 🟡 | Événement narratif ; pas de changement de métier mécanique |
+| Fusions bancaires | 🟡 | Rachat de la banque en crise par un concurrent ; pas de fusion de l'employeur |
+| Burnout, congés, train de vie | ✅ | |
+| Économie virtuelle, comptes séparés, devises virtuelles | ✅ | 8 devises, conversion avec commission |
+| Capital 1 000 / 10 000 / 100 000 / libre | ✅ | |
+| Moteur boursier autonome (facteurs, régimes, corrélations, liquidité, spreads, impact) | ✅ | |
+| 10 régimes, transitions probabilistes, déterminisme par graine | ✅ | Testé |
+| Temps : pause, x1…x100, ratio configurable, pause automatique, « avancer jusqu'à » | ✅ | |
+| Actions (55), ETF (11), obligations (18 dont FRN, IG, HY), devises (9), matières (7), crypto fictives (4) | ✅ | |
+| Options call/put, grecques, payoff, ITM/ATM/OTM, 9 stratégies, marge | ✅ | Européennes, règlement en espèces |
+| Futures (indices, Bund, Brent, or) | ✅ | |
+| Forwards, swaps de taux/devises, CDS, warrants | ❌ | Expliqués au centre de formation ; CDS représentés par le stress/spread de crédit |
+| Produits structurés (autocall, Phoenix, reverse convertible, capital protégé, participation, barrière, paniers) | ✅ | Pas de marché secondaire |
+| Terminal : chandeliers, volumes, carnet, bid/ask, MM, RSI, MACD, Bollinger, ATR, volatilité, watchlist, alertes, actualités, calendrier, recherche | ✅ | « Comparaison d'actifs » : benchmark sur le portefeuille, pas de superposition libre de deux actifs 🟡 |
+| Ordres marché/limite/stop/stop-limite/SL/TP, durée, partiel, statuts, short, marge, liquidation, idempotence | ✅ | |
+| Portefeuille : valeur, P&L latent/réalisé, perf jour/cumulée/annualisée, drawdown, volatilité, Sharpe, expositions, benchmark, journal comptable | ✅ | |
+| Dividendes, coupons, remboursements, défauts, échéances | ✅ | |
+| Hiérarchie de 9 rangs par métier, salaires, bonus, promotions multicritères, revues | ✅ | |
+| Réunions (17) avec contexte, participants, ordre du jour, documents, questions chiffrées, actions exécutées, conséquences | ✅ | |
+| PNJ (12 + clients) avec état persistant, mémoire, opinion | ✅ | |
+| IA conversationnelle (propose, le moteur valide) + mode hors ligne | 🟡 | Code complet ; non exercé contre l'API réelle dans cet environnement (pas de clé) |
+| Clients difficiles (pertes, produit risqué, retrait, frais, rendement irréaliste, conformité, panique) | ✅ | |
+| Actualités dynamiques (8 rubriques) | ✅ | |
+| Crises (liquidité bancaire détaillée en 4 phases, krach, bulle tech, énergie, dette souveraine, taux, faillite d'entreprise, change, immobilier) | ✅ | Récession/inflation via régimes |
+| Macroéconomie 6 zones, banques centrales | ✅ | |
+| Missions (22 modèles paramétrables, centaines de combinaisons) | ✅ | |
+| Compétences (8 branches), réputation (8 indicateurs) | ✅ | |
+| Formation (35 termes × 6 volets) + dictionnaire + infobulles | ✅ | |
+| Événements narratifs (11 types, délais de réapparition) | ✅ | |
+| Entreprise (6 types), bilan, résultat, flux, faillite, levée, emprunt, dividendes | ✅ | Modèle agrégé des encours |
+| Concurrents (banques agents) | ✅ | Influence agrégée sur la liquidité |
+| Difficulté (4 niveaux) | ✅ | Assistance, marges, vente à découvert, fréquence d'événements |
+| Sauvegardes : auto, 3 emplacements, export/import, versions + migration | ✅ | |
+| Authentification, sessions signées, autorisations, limitation de débit, validation Zod | ✅ | Comptes locaux (fichier `data/users.json`) |
+| Mode données réelles | ❌ | Volontairement absent |
+| PostgreSQL / Prisma | ❌ | Remplacé par des fichiers JSON (voir ARCHITECTURE) |
+| Responsive (ordinateur, tablette, mobile) | ✅ | Menu latéral repliable |
+
+## Écrans (30 demandés)
+Accueil · Création de carrière · Choix de banque · Création de personnage · Bureau · Tableau de bord carrière · Terminal · Recherche · Fiche d'actif · Passage d'ordres · Portefeuille · Transactions · Risques · Actualités · Calendrier · Réunions · Messagerie · Clients · Missions · Formation · Dictionnaire · Compétences · Relations · RH · Rémunération · Patrimoine · Entrepreneuriat · Gestion de société · Paramètres · Sauvegardes — **tous présents** (+ Options, Produits structurés, Macroéconomie, Agenda, Réputation, Établissements).
+
+## Vérifications (dernière exécution)
+- `npm run lint` : OK
+- `npm test` : 37/37
+- `npm run e2e` : 1/1 (20 étapes)
+- `npm run build` : OK
+
+## Bugs corrigés pendant les tests
+- Coupons dont la date tombait un week-end jamais versés → rattrapage au jour ouvré suivant.
+- Volatilité réalisée trop élevée (cumul des chocs de volatilité) → amortissement et plafonnement.
+- Historique obligataire décalé du prix courant → recollage sur le dernier cours.
