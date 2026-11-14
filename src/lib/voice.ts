@@ -56,6 +56,7 @@ export function listen(h: { onInterim: (t: string) => void; onFinal: (t: string)
     rec = new C();
     rec.lang = "fr-FR"; rec.continuous = false; rec.interimResults = true; rec.maxAlternatives = 1;
     rec.onresult = (e: any) => {
+      if (stopped) return;
       let interim = "", final = "";
       for (let i = e.resultIndex; i < e.results.length; i++) { const r = e.results[i]; if (r.isFinal) final += r[0].transcript; else interim += r[0].transcript; }
       if (interim) h.onInterim(interim);

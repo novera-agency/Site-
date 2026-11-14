@@ -56,6 +56,8 @@ for (const vp of [{ name: "ordinateur", width: 1440, height: 900 }, { name: "mob
     await join.click();
     const room = page.getByTestId("meeting-room");
     await expect(room).toBeVisible();
+    await expect(room.getByTestId("mode-chooser")).toBeVisible();
+    await room.getByTestId("mode-ecrit").click();
     const choice = room.locator(".grid.gap-2 > button").first();
     await choice.scrollIntoViewIfNeeded();
     await expect(choice).toBeInViewport();

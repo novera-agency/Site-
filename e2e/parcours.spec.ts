@@ -8,6 +8,8 @@ async function handleMeetings(page: Page, answer = "0") {
     if (await join.isVisible().catch(() => false)) await join.click();
     else if (await back.isVisible().catch(() => false)) await back.click();
     else return;
+    const ecrit = page.getByTestId("mode-ecrit");
+    if (await ecrit.waitFor({ timeout: 3000 }).then(() => true).catch(() => false)) await ecrit.click();
     for (let i = 0; i < 20; i++) {
       const quit = page.getByRole("button", { name: "Quitter la salle" });
       if (await quit.isVisible().catch(() => false)) { await quit.click(); break; }

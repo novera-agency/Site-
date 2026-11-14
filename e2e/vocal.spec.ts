@@ -2,17 +2,24 @@ import { test, expect, type Page } from "@playwright/test";
 const BASE = process.env.E2E_BASE ?? "";
 const go = (page: Page, path: string) => page.goto(BASE + path);
 
-/** Micro et haut-parleur simulés : le test « dit » une phrase via window.__nextSay ; les répliques prononcées sont enregistrées dans window.__spoken */
-const FAKE_VOICE = `
-  window.__spoken = []; window.__nextSay = null;
+/** Micro et haut-parleur simulés : le test « dit » une phrase via window.__nextSay ; les répliques prononcées vont dans window.__spoken */
+const fakeVoice = (micAllowed: boolean) => `
+  window.__spoken = []; window.__voices = []; window.__nextSay = null;
   class FakeRec { start() { setTimeout(() => { const say = window.__nextSay; if (say) { window.__nextSay = null; const r = [{ transcript: say }]; r.isFinal = true; this.onresult && this.onresult({ resultIndex: 0, results: [r] }); } this.onend && this.onend(); }, 300); } stop() {} abort() {} }
   window.SpeechRecognition = FakeRec; window.webkitSpeechRecognition = FakeRec;
-  if (window.speechSynthesis) { window.speechSynthesis.speak = (u) => { window.__spoken.push(u.text); setTimeout(() => u.onend && u.onend(), 30); }; window.speechSynthesis.cancel = () => {}; }
+  if (window.speechSynthesis) { window.speechSynthesis.speak = (u) => { window.__spoken.push(u.text); window.__voices.push(u.pitch + "/" + u.rate); setTimeout(() => u.onend && u.onend(), 30); }; window.speechSynthesis.cancel = () => {}; }
+  navigator.mediaDevices.getUserMedia = async () => { if (!${micAllowed}) throw new DOMException("refus", "NotAllowedError"); return { getTracks: () => [{ stop() {} }] }; };
 `;
+type W = { __nextSay: string | null; __spoken: string[] };
+/** Dit une phrase, attend qu'elle soit entendue ; si `reply`, attend aussi que le personnage réponde à voix haute */
+async function say(page: Page, text: string, reply = true) {
+  const before = await page.evaluate(() => (window as unknown as W).__spoken.length);
+  await page.evaluate((t) => { (window as unknown as W).__nextSay = t; }, text);
+  await page.waitForFunction(() => (window as unknown as W).__nextSay === null, null, { timeout: 15000 });
+  if (reply) await page.waitForFunction((b) => (window as unknown as W).__spoken.length > b, before, { timeout: 15000 });
+}
 
-test("réunion vocale : les personnages parlent, le joueur répond à voix haute, le silence est sanctionné", async ({ page }) => {
-  test.setTimeout(120000);
-  await page.addInitScript(FAKE_VOICE);
+async function startCareerAndJoin(page: Page) {
   await go(page, "/");
   await page.getByTestId("new-career").click();
   await page.getByTestId("next").click();
@@ -26,22 +33,52 @@ test("réunion vocale : les personnages parlent, le joueur répond à voix haute
   if ((await page.getByTestId("play-pause").textContent())?.includes("▶")) await page.getByTestId("play-pause").click();
   await page.getByRole("button", { name: "Rejoindre la réunion" }).first().click();
   const room = page.getByTestId("meeting-room");
-  // Le responsable parle (synthèse vocale), puis le micro s'ouvre avec un compte à rebours
+  await expect(room.getByTestId("mode-chooser")).toBeVisible();
+  return room;
+}
+
+test("mode oral : micro autorisé, voix distinctes, aucun historique affiché, réponses parlées, silence sanctionné", async ({ page }) => {
+  test.setTimeout(120000);
+  await page.addInitScript(fakeVoice(true));
+  const room = await startCareerAndJoin(page);
+  await room.getByTestId("mode-oral").click();
+  await expect(room.getByTestId("oral-stage")).toBeVisible();
+  // Pas d'historique ni de réponses écrites en mode oral
+  await expect(room.getByTestId("meeting-log")).toHaveCount(0);
+  await expect(room.getByText("Quelles sont exactement mes limites de risque ?")).toHaveCount(0);
   await expect(room.getByTestId("voice-listening")).toBeVisible({ timeout: 15000 });
-  expect(((await page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken)) as string[]).some((t) => t.includes("Bienvenue"))).toBe(true);
-  // Réponse libre, rapprochée de la bonne option
-  await page.evaluate(() => { (window as unknown as { __nextSay: string }).__nextSay = "Je voudrais savoir quelles sont mes limites de risque"; });
-  await expect(room.getByText("« Je voudrais savoir quelles sont mes limites de risque »")).toBeVisible({ timeout: 10000 });
-  await expect(room.getByText("(interprété comme : Quelles sont exactement mes limites de risque ?)")).toBeVisible();
-  // Réponse par ordinal
+  expect((await page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken)).some((t) => t.includes("Bienvenue"))).toBe(true);
+  await say(page, "Je voudrais savoir quelles sont mes limites de risque");
   await expect(room.getByTestId("voice-listening")).toBeVisible({ timeout: 15000 });
-  await page.evaluate(() => { (window as unknown as { __nextSay: string }).__nextSay = "la première"; });
-  await expect(room.getByText("(interprété comme : Pourquoi distinguer si strictement les deux comptes ?)")).toBeVisible({ timeout: 10000 });
-  // Phrase incompréhensible : le jeu demande de reformuler sans valider
+  await say(page, "la première");
   await expect(room.getByTestId("voice-listening")).toBeVisible({ timeout: 15000 });
-  await page.evaluate(() => { (window as unknown as { __nextSay: string }).__nextSay = "bonjour bonjour"; });
+  await say(page, "bonjour bonjour", false);
   await expect(room.getByText(/Pas sûr d'avoir compris/)).toBeVisible({ timeout: 10000 });
-  // Silence jusqu'à la fin du temps imparti (20 s en difficulté normale)
-  await expect(room.getByText("(silence — vous n'avez pas répondu à temps)")).toBeVisible({ timeout: 30000 });
-  await expect(room.getByText("Réunion terminée")).toBeVisible({ timeout: 15000 });
+  // Silence jusqu'au bout du temps (20 s en difficulté normale) → la réunion se termine sans vous
+  await expect(room.getByText("Réunion terminée")).toBeVisible({ timeout: 40000 });
+  // Plusieurs profils de voix ont été utilisés
+  const voices = await page.evaluate(() => (window as unknown as { __voices: string[] }).__voices);
+  expect(new Set(voices).size).toBeGreaterThan(1);
+  // Le compte rendu écrit, consultable après la réunion, confirme ce qui a été compris
+  await room.getByTestId("show-transcript").click();
+  const log = room.getByTestId("meeting-log");
+  await expect(log.getByText("« Je voudrais savoir quelles sont mes limites de risque »")).toBeVisible();
+  await expect(log.getByText("(interprété comme : Quelles sont exactement mes limites de risque ?)")).toBeVisible();
+  await expect(log.getByText("(interprété comme : Pourquoi distinguer si strictement les deux comptes ?)")).toBeVisible();
+  await expect(log.getByText("(silence — vous n'avez pas répondu à temps)")).toBeVisible();
+});
+
+test("mode écrit : historique avec les noms ; micro refusé → message clair", async ({ page }) => {
+  await page.addInitScript(fakeVoice(false));
+  const room = await startCareerAndJoin(page);
+  await room.getByTestId("mode-oral").click();
+  await expect(room.getByTestId("mic-error")).toContainText("micro");
+  await expect(room.getByTestId("mode-chooser")).toBeVisible();
+  await room.getByTestId("mode-ecrit").click();
+  await expect(room.getByTestId("meeting-log")).toBeVisible();
+  await expect(room.getByTestId("meeting-log").getByText(/Responsable du desk/).first()).toBeVisible();
+  await room.locator(".grid.gap-2 > button").first().click();
+  await expect(room.getByTestId("meeting-log").getByText("Quelles sont exactement mes limites de risque ?")).toBeVisible();
+  // Rien n'est prononcé en mode écrit
+  expect(await page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken.length)).toBe(0);
 });
