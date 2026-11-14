@@ -94,6 +94,31 @@ function Tutorial({ snap }: { snap: Snapshot }) {
   </div>;
 }
 
+const BOTTOM: [string, string, string, string?][] = [["/play", "Bureau", "🏢"], ["/play/terminal", "Marchés", "📈"], ["/play/portefeuille", "Portefeuille", "💼"], ["/play/missions", "Missions", "🎯", "missions"], ["/play/reunions", "Réunions", "🤝", "meeting"], ["/play/messagerie", "Messages", "✉️", "msgs"]];
+function BottomNav({ snap, path }: { snap: Snapshot; path: string }) {
+  const [more, setMore] = useState(false);
+  useEffect(() => { setMore(false); }, [path]);
+  const badge = (k?: string) => k === "msgs" ? snap.unreadMsgs : k === "missions" ? snap.missionsActive : k === "meeting" ? (snap.pendingMeeting || snap.activeMeetingId ? "!" : 0) : 0;
+  return <>
+    {more && <div className="fixed inset-0 z-40 bg-black/60" onClick={() => setMore(false)}>
+      <div className="scroll-thin absolute inset-x-0 bottom-16 max-h-[75vh] overflow-y-auto overscroll-contain rounded-t-2xl border-t border-ink-600 bg-ink-900 p-4 pb-6" onClick={(e) => e.stopPropagation()} data-testid="more-sheet">
+        <div className="mb-3 flex items-center justify-between"><div className="text-sm font-semibold text-white">Tous les onglets</div><button onClick={() => setMore(false)} className="text-ink-400">✕</button></div>
+        {NAV.map((g) => <div key={g.group} className="mb-3"><div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-500">{g.group}</div><div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 md:grid-cols-5">{g.items.map(([href, label, icon]) => <Link key={href} href={href} className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs ${path === href ? "bg-accent text-white" : "bg-ink-800 text-ink-200 hover:bg-ink-700"}`}><span className="text-base">{icon}</span><span className="truncate">{label}</span></Link>)}</div></div>)}
+      </div>
+    </div>}
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-ink-700 bg-ink-950/95 backdrop-blur" style={{ paddingBottom: "env(safe-area-inset-bottom)" }} data-testid="bottom-nav">
+      <div className="mx-auto grid max-w-3xl grid-cols-7">
+        {BOTTOM.map(([href, label, icon, k]) => { const b = badge(k); const on = path === href; return <Link key={href} href={href} className={`relative flex flex-col items-center gap-0.5 py-2 text-[10px] transition ${on ? "text-white" : "text-ink-400 hover:text-white"}`}>
+          {on && <span className="absolute inset-x-3 top-0 h-0.5 rounded bg-gold" />}
+          <span className="text-lg leading-none">{icon}</span><span className="truncate">{label}</span>
+          {b ? <span className={`absolute right-[22%] top-1 min-w-4 rounded-full px-1 text-center text-[9px] font-bold text-white ${k === "meeting" ? "bg-gold text-black" : k === "msgs" ? "bg-accent" : "bg-ink-500"}`}>{b}</span> : null}
+        </Link>; })}
+        <button onClick={() => setMore(!more)} className={`flex flex-col items-center gap-0.5 py-2 text-[10px] ${more ? "text-white" : "text-ink-400 hover:text-white"}`} data-testid="more-button"><span className="text-lg leading-none">☰</span><span>Plus</span></button>
+      </div>
+    </nav>
+  </>;
+}
+
 export function Shell({ children }: { children: ReactNode }) {
   const { gameId, snap, setGame, setSnap, toasts, dismiss } = useGame();
   const router = useRouter();
@@ -132,18 +157,19 @@ export function Shell({ children }: { children: ReactNode }) {
       <TopBar snap={snap} onMenu={() => setMenu(!menu)} />
       <Ticker snap={snap} />
       <div className="flex">
-        <nav className={`${menu ? "block" : "hidden"} scroll-thin fixed inset-y-0 left-0 z-40 w-64 overflow-y-auto border-r border-ink-700 bg-ink-950 p-3 pt-4 lg:sticky lg:top-[88px] lg:block lg:h-[calc(100vh-88px)]`}>
+        <nav className={`${menu ? "block" : "hidden"} scroll-thin fixed inset-y-0 left-0 z-40 w-64 overflow-y-auto overscroll-contain border-r border-ink-700 bg-ink-950 p-3 pb-24 pt-4 lg:pb-3 lg:sticky lg:top-[88px] lg:block lg:h-[calc(100vh-88px-64px)]`}>
           <div className="mb-3 rounded-lg bg-ink-850 p-3"><div className="text-sm font-semibold">{snap.player.name}</div><div className="text-xs text-ink-300">{snap.player.title}</div>{snap.player.bank && <div className="mt-1 text-[11px]" style={{ color: snap.player.bankColor }}>{snap.player.bank}</div>}</div>
           {NAV.map((g) => <div key={g.group} className="mb-3"><div className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-500">{g.group}</div>{g.items.map(([href, label, icon]) => <Link key={href} href={href} className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] ${path === href ? "bg-ink-700 text-white" : "text-ink-300 hover:bg-ink-800 hover:text-white"}`}><span className="w-5 text-center">{icon}</span>{label}</Link>)}</div>)}
           <Link href="/" className="mt-2 block px-2 text-xs text-ink-400 hover:text-white">← Menu principal</Link>
         </nav>
         {menu && <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setMenu(false)} />}
-        <main className="min-w-0 flex-1 p-3 md:p-5">
+        <main className="min-w-0 flex-1 p-3 pb-28 md:p-5 md:pb-28">
           <Tutorial snap={snap} />
           {children}
           <div className="mt-8 border-t border-ink-800 pt-3"><Disclaimer /></div>
         </main>
       </div>
+      <BottomNav snap={snap} path={path} />
       <MeetingLauncher />
       <div className="fixed right-4 top-24 z-[60] space-y-2">{toasts.map((t) => <div key={t.id} onClick={() => dismiss(t.id)} className={`fade-in max-w-sm cursor-pointer rounded-lg border px-3 py-2 text-sm shadow-xl ${t.kind === "err" ? "border-red-500/40 bg-red-950/90 text-red-100" : t.kind === "ok" ? "border-green-500/40 bg-green-950/90 text-green-100" : "border-ink-600 bg-ink-850 text-ink-100"}`}>{t.text}</div>)}</div>
     </div>

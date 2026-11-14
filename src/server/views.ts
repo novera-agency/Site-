@@ -73,7 +73,7 @@ export function snapshot(s: GameState, aiAvailable = false) {
     quotes, sessions: marketStatus(s),
     wealth: r2(wealth(s)), perso: r2(accountEquity(s, "perso")), persoCash: r2(cashEur(s, "perso")), desk: s.accounts.desk && s.career.employed ? r2(accountEquity(s, "desk")) : null,
     deskPnlWeek: s.accounts.desk && s.career.employed ? r2(accountEquity(s, "desk") - s.career.weekStartEquity) : null,
-    unread: s.notifications.filter((n) => !n.read).length, unreadMsgs: s.messages.filter((m) => !m.read).length,
+    unread: s.notifications.filter((n) => !n.read).length, missionsActive: s.missions.filter((m) => m.status === "active").length, unreadMsgs: s.messages.filter((m) => !m.read).length,
     notifications: s.notifications.slice(0, 6),
     activeMeetingId: s.activeMeetingId ?? null, pendingMeeting: pend ? { template: pend.template, title: pend.title, info: meetingInfo(s, pend.template, (pend as { params?: Record<string, string> }).params ?? {}) } : null,
     nextAgenda: nextAgenda ? { t: nextAgenda.t, title: nextAgenda.title } : null,

@@ -11,11 +11,13 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
   const act = useAction();
   const [val, setVal] = useState("");
   const [busy, setBusy] = useState(false);
+  const logRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" }); }, [m?.log.length]);
   if (!m) return null;
   const send = async (payload: Record<string, unknown>) => { setBusy(true); await act({ type: "answer_meeting", meetingId, ...payload }, { silent: true }); setVal(""); await reload(); setBusy(false); };
   return (
-    <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/75 p-0 backdrop-blur-sm md:p-6">
-      <div className="panel flex w-full max-w-6xl flex-col overflow-hidden md:rounded-xl">
+    <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/75 p-0 backdrop-blur-sm md:p-6" data-testid="meeting-room">
+      <div className="panel mx-auto flex min-h-full w-full max-w-6xl flex-col md:min-h-0 md:rounded-xl">
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-700 bg-ink-900 px-4 py-3">
           <div><div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gold">{m.location} · {m.type}</div><h2 className="text-lg font-semibold text-white">{m.title}</h2></div>
           <div className="flex items-center gap-2">{m.done ? <Button onClick={onClose}>Quitter la salle</Button> : <Button variant="outline" size="sm" onClick={async () => { await act({ type: "leave_meeting" }); onClose(); }}>Quitter (mal perçu)</Button>}</div>
@@ -25,7 +27,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
             <div className="flex gap-3 overflow-x-auto border-b border-ink-800 px-4 py-3 scroll-thin">
               {m.participants.map((p) => <div key={p.id} className="flex min-w-[170px] items-center gap-2 rounded-lg bg-ink-800 px-3 py-2"><span className="text-2xl">{p.avatar}</span><div className="min-w-0"><div className="truncate text-sm font-medium">{p.name}</div><div className="truncate text-[11px] text-ink-400">{p.role} · confiance {Math.round(p.trust)}</div></div></div>)}
             </div>
-            <div className="scroll-thin flex-1 space-y-3 overflow-y-auto p-4" style={{ maxHeight: "52vh" }}>
+            <div className="scroll-thin flex-1 space-y-3 overflow-y-auto p-4" ref={logRef} style={{ maxHeight: "52vh" }} data-testid="meeting-log">
               {m.log.map((l, i) => {
                 const who = m.participants.find((p) => p.name === l.who);
                 const mine = l.who.includes("(vous)"); const sys = l.who === "—" || l.who === "Correction" || l.who === "Exécution" || l.who === "Bilan";
@@ -45,7 +47,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
                 : <div className="grid gap-2">{m.choices.map((c) => <button key={c.id} disabled={busy} onClick={() => send({ choiceId: c.id })} className="rounded-lg border border-ink-600 bg-ink-850 px-3 py-2.5 text-left text-sm text-ink-100 transition hover:border-accent hover:bg-ink-800 disabled:opacity-50">{c.label}{c.detail && <span className="mt-0.5 block text-xs text-ink-400">{c.detail}</span>}</button>)}</div>}
             </div>
           </div>
-          <aside className="scroll-thin space-y-4 overflow-y-auto border-l border-ink-700 bg-ink-900/60 p-4" style={{ maxHeight: "80vh" }}>
+          <aside className="scroll-thin space-y-4 border-t border-ink-700 bg-ink-900/60 p-4 lg:max-h-[80vh] lg:overflow-y-auto lg:border-l lg:border-t-0">
             {m.tension && <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-200">⚠ {m.tension}</div>}
             <div><div className="mb-1 text-[11px] uppercase tracking-wider text-ink-400">Ordre du jour</div><ol className="list-decimal space-y-0.5 pl-4 text-sm text-ink-200">{m.agenda.map((a) => <li key={a}>{a}</li>)}</ol></div>
             <div><div className="mb-1 text-[11px] uppercase tracking-wider text-ink-400">Objectifs</div><ul className="space-y-0.5 text-sm text-ink-200">{m.objectives.map((a) => <li key={a}>◆ {a}</li>)}</ul></div>
@@ -81,7 +83,7 @@ export function MeetingLauncher() {
   // Toute réunion qui démarre (comité, appel client…) s'ouvre automatiquement, sauf si le joueur vient de la fermer
   useEffect(() => { if (active && !open && closed.current !== active) setOpen(active); }, [active, open, setOpen]);
   return <>
-    {pm && !active && !open && <div className="fixed bottom-4 left-1/2 z-40 w-[min(640px,94vw)] -translate-x-1/2 rounded-xl border border-gold/50 bg-ink-850 p-4 shadow-2xl fade-in">
+    {pm && !active && !open && <div className="fixed bottom-20 left-1/2 z-40 w-[min(640px,94vw)] -translate-x-1/2 rounded-xl border border-gold/50 bg-ink-850 p-4 shadow-2xl fade-in">
       <div className="flex items-start gap-3"><span className="text-2xl">📣</span><div className="min-w-0 flex-1">
         <div className="text-[11px] uppercase tracking-wider text-gold">On vous attend — {pm.info?.location ?? "salle de réunion"}</div>
         <div className="font-semibold text-white">{pm.info?.title ?? pm.title}</div>
@@ -89,7 +91,7 @@ export function MeetingLauncher() {
         {pm.info?.objectives?.length ? <div className="mt-1.5 text-xs text-ink-300">Votre objectif : {pm.info.objectives.join(" · ")}</div> : null}
       </div><Button onClick={join}>Rejoindre la réunion</Button></div>
     </div>}
-    {active && !open && <div className="fixed bottom-4 left-1/2 z-40 -translate-x-1/2"><Button onClick={() => setOpen(active)}>Retourner en réunion</Button></div>}
+    {active && !open && <div className="fixed bottom-20 left-1/2 z-40 -translate-x-1/2"><Button onClick={() => setOpen(active)}>Retourner en réunion</Button></div>}
     {(open ?? null) && <MeetingRoom meetingId={open!} onClose={() => { closed.current = open; setOpen(null); }} />}
   </>;
 }

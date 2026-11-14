@@ -12,6 +12,9 @@ const base = (el: HTMLElement, height: number) => createChart(el, {
   grid: { vertLines: { color: "rgba(36,48,70,.35)" }, horzLines: { color: "rgba(36,48,70,.35)" } },
   rightPriceScale: { borderColor: "#243046" }, timeScale: { borderColor: "#243046", timeVisible: true, secondsVisible: false },
   crosshair: { mode: 0 },
+  // La molette et le glissé vertical font défiler la page (et non zoomer le graphique) ; zoom au pincement / glisser horizontal
+  handleScroll: { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
+  handleScale: { mouseWheel: false, pinch: true, axisPressedMouseMove: true, axisDoubleClickReset: true },
   localization: { locale: "fr-FR", priceFormatter: (p: number) => (Math.abs(p) >= 100 ? p.toFixed(2) : Math.abs(p) >= 1 ? p.toFixed(3) : p.toPrecision(4)) },
 });
 
