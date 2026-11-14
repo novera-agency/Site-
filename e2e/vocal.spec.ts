@@ -80,7 +80,7 @@ test("mode écrit : historique avec les noms ; micro refusé → message clair",
   await room.locator(".grid.gap-2 > button").first().click();
   await expect(room.getByTestId("meeting-log").getByText("Quelles sont exactement mes limites de risque ?")).toBeVisible();
   // Rien n'est prononcé en mode écrit
-  expect(await page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken.length)).toBe(0);
+  expect(await page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken.filter((t) => t.trim()).length)).toBe(0);
 });
 
 test("mode oral : « Qu'est-ce que la VaR ? » expliqué par celui qui l'a dit ; trois hors-sujet = réunion ratée", async ({ page }) => {
@@ -91,7 +91,7 @@ test("mode oral : « Qu'est-ce que la VaR ? » expliqué par celui qui l'a dit ;
   await expect(room.getByTestId("voice-listening")).toBeVisible({ timeout: 15000 });
   await say(page, "Quelles sont mes limites de risque");
   await expect(room.getByTestId("voice-listening")).toBeVisible({ timeout: 15000 });
-  const n = await page.evaluate(() => (window as unknown as W).__spoken.length);
+  const n = await page.evaluate(() => (window as unknown as W).__spoken.filter((t) => t.trim()).length);
   await say(page, "Qu'est-ce que la VaR ?");
   const spoken = await page.evaluate((k) => (window as unknown as W).__spoken.slice(k).join(" "), n);
   expect(spoken).toMatch(/99 %/);
@@ -173,4 +173,24 @@ test("appel client : sonnerie, objectif de vente qui baisse à chaque faute, ver
   for (const label of [/votre objectif et votre horizon/, /C'est noté/, /allocation actuelle/, /chiffres honnêtes/, /bulletin de versement/]) await room.getByRole("button", { name: label }).click();
   await expect(gauge).toContainText("Obtenu");
   await expect(room.getByText(/vous confie/).first()).toBeVisible();
+});
+
+test("son bloqué par le navigateur : message clair et bouton pour réactiver, puis les voix sont entendues ; voix possibles en mode écrit", async ({ page }) => {
+  test.setTimeout(90000);
+  await page.addInitScript(fakeVoice(true));
+  // le navigateur « avale » les répliques sans jamais les lire (aucun onstart / onend)
+  await page.addInitScript(`window.__mute = true; const _sp = window.speechSynthesis.speak; window.speechSynthesis.speak = (u) => { if (window.__mute) return; _sp(u); };`);
+  const room = await startCareerAndJoin(page);
+  await room.getByTestId("mode-oral").click();
+  await expect(room.getByTestId("sound-blocked")).toBeVisible({ timeout: 15000 });
+  await page.evaluate(() => { (window as unknown as { __mute: boolean }).__mute = false; });
+  await room.getByTestId("sound-blocked").getByRole("button").click();
+  await expect(room.getByTestId("voice-listening")).toBeVisible({ timeout: 15000 });
+  expect((await page.evaluate(() => (window as unknown as W).__spoken)).some((t) => t.includes("Bienvenue"))).toBe(true);
+  // mode écrit : les voix peuvent être activées
+  await room.getByTestId("switch-ecrit").click();
+  const n = await page.evaluate(() => (window as unknown as W).__spoken.filter((t) => t.trim()).length);
+  await room.getByTestId("read-aloud").click();
+  await page.waitForFunction((b) => (window as unknown as W).__spoken.filter((t) => t.trim()).length > b, n, { timeout: 10000 });
+  await expect(room.getByTestId("meeting-log")).toBeVisible();
 });

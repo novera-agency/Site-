@@ -66,30 +66,88 @@ export function ringTone(rings = 2): Promise<void> {
   return new Promise((resolve) => {
     try {
       const AC = (window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext }).AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const ctx = new AC();
+      const ctx = audioCtx && audioCtx.state !== "closed" ? audioCtx : new AC();
+      void ctx.resume();
       const g = ctx.createGain(); g.gain.value = 0; g.connect(ctx.destination);
       const o = ctx.createOscillator(); o.frequency.value = 425; o.connect(g); o.start();
       for (let i = 0; i < rings; i++) { const t0 = ctx.currentTime + i * 1.4; g.gain.setValueAtTime(0.06, t0); g.gain.setValueAtTime(0, t0 + 0.9); }
-      setTimeout(() => { o.stop(); ctx.close(); resolve(); }, rings * 1400);
+      setTimeout(() => { o.stop(); o.disconnect(); g.disconnect(); if (ctx !== audioCtx) void ctx.close(); resolve(); }, rings * 1400);
     } catch { setTimeout(resolve, rings * 1400); }
   });
 }
 
-/** Prononce un texte ; la promesse se résout à la fin (ou à l'annulation) */
-export function speak(text: string, p: VoiceProfile, volume = 1): Promise<void> {
+/**
+ * Débloque le son : à appeler directement dans un clic / toucher (iOS et Android exigent un geste
+ * de l'utilisateur avant toute synthèse vocale ou sonnerie).
+ */
+let unlocked = false;
+export function unlockAudio() {
+  if (typeof window === "undefined") return;
+  try {
+    const ss = window.speechSynthesis;
+    if (ss) { ss.resume(); const u = new SpeechSynthesisUtterance(" "); u.volume = 0; u.lang = "fr-FR"; ss.speak(u); }
+    const AC = (window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext }).AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (AC) { audioCtx = audioCtx ?? new AC(); void audioCtx.resume(); }
+    unlocked = true;
+  } catch { /* */ }
+}
+export function audioUnlocked() { return unlocked; }
+// premier toucher / clic n'importe où sur la page : on débloque le son une fois pour toutes
+if (typeof window !== "undefined") {
+  const once = () => { if (!unlocked) unlockAudio(); if (unlocked) { window.removeEventListener("pointerdown", once, true); window.removeEventListener("keydown", once, true); } };
+  window.addEventListener("pointerdown", once, true); window.addEventListener("keydown", once, true);
+}
+let audioCtx: AudioContext | null = null;
+
+// Chrome libère parfois l'énoncé avant sa fin (onend jamais appelé) : on garde une référence
+const alive = new Set<SpeechSynthesisUtterance>();
+/** Découpe en phrases courtes : Chrome coupe les énoncés de plus de ~15 secondes */
+function chunks(text: string): string[] {
+  const parts = text.match(/[^.!?…;:]+[.!?…;:]*/g) ?? [text];
+  const out: string[] = [];
+  for (const raw of parts) { const t = raw.trim(); if (!t) continue; if (out.length && (out[out.length - 1].length + t.length) < 160) out[out.length - 1] += " " + t; else out.push(t); }
+  return out.length ? out : [text];
+}
+/** Signalé quand le navigateur refuse de parler (son bloqué) */
+export type SpeakResult = "ok" | "blocked" | "cancelled";
+let cancelGen = 0;
+function speakOne(text: string, p: VoiceProfile, volume: number, gen: number): Promise<SpeakResult> {
   return new Promise((resolve) => {
-    if (!voiceSupport().tts) return resolve();
-    const u = new SpeechSynthesisUtterance(text.replace(/[«»]/g, "").replace(/\s+/g, " "));
+    const ss = window.speechSynthesis;
+    const u = new SpeechSynthesisUtterance(text);
     u.lang = p.voice?.lang ?? "fr-FR"; if (p.voice) u.voice = p.voice;
     u.pitch = p.pitch; u.rate = p.rate; u.volume = volume;
-    let done = false; const end = () => { if (!done) { done = true; resolve(); } };
-    u.onend = end; u.onerror = end;
-    // filet de sécurité : certains navigateurs n'émettent jamais « onend »
-    setTimeout(end, Math.min(30000, 1500 + text.length * 85 / p.rate));
-    window.speechSynthesis.speak(u);
+    let started = false, done = false;
+    const finish = (r: SpeakResult) => { if (done) return; done = true; alive.delete(u); clearInterval(keep); clearTimeout(noStart); clearTimeout(cap); resolve(r); };
+    u.onstart = () => { started = true; };
+    u.onend = () => finish(gen === cancelGen ? "ok" : "cancelled");
+    u.onerror = (e) => finish((e as SpeechSynthesisErrorEvent).error === "not-allowed" ? "blocked" : gen === cancelGen ? "ok" : "cancelled");
+    // la lecture n'a jamais commencé → son bloqué par le navigateur
+    const noStart = setTimeout(() => { if (!started && !done) { ss.cancel(); finish(gen === cancelGen ? "blocked" : "cancelled"); } }, 5000);
+    // filet de sécurité si « onend » n'arrive jamais
+    const cap = setTimeout(() => finish("ok"), 6000 + text.length * 110 / p.rate);
+    // Chrome se met parfois en pause tout seul
+    const keep = setInterval(() => { if (ss.paused) ss.resume(); }, 1000);
+    alive.add(u);
+    ss.resume();
+    ss.speak(u);
   });
 }
-export function stopSpeaking() { if (voiceSupport().tts) window.speechSynthesis.cancel(); }
+/** Prononce un texte ; la promesse se résout à la fin, à l'annulation ou si le son est bloqué */
+export async function speak(text: string, p: VoiceProfile, volume = 1): Promise<SpeakResult> {
+  if (!voiceSupport().tts) return "ok";
+  if (!voices.length) loadVoices();
+  const gen = cancelGen;
+  const clean = text.replace(/[«»"]/g, "").replace(/\s+/g, " ").trim();
+  if (!clean) return "ok";
+  for (const c of chunks(clean)) {
+    if (gen !== cancelGen) return "cancelled";
+    const r = await speakOne(c, p, volume, gen);
+    if (r !== "ok") return r;
+  }
+  return "ok";
+}
+export function stopSpeaking() { cancelGen++; if (voiceSupport().tts) window.speechSynthesis.cancel(); }
 
 export interface Listener { stop(): void; }
 /** Écoute le micro en français. onText reçoit le texte provisoire puis final ; relance automatiquement jusqu'à stop(). */

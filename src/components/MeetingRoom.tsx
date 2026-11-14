@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useView, useAction } from "@/lib/hooks";
 import { useGame } from "@/lib/store";
 import { Button, Badge, inputCls } from "./ui";
-import { voiceSupport, voiceFor, voiceCast, ringTone, speak, stopSpeaking, listen, type Listener } from "@/lib/voice";
+import { voiceSupport, voiceFor, voiceCast, ringTone, speak, stopSpeaking, listen, unlockAudio, type Listener } from "@/lib/voice";
 import { matchChoice, parseFrenchNumber } from "@/lib/voice-match";
 import { isTermQuestion } from "@/engine/glossary";
 
@@ -41,6 +41,8 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
   const [hint, setHint] = useState("");
   const [left, setLeft] = useState(limit);
   const [replay, setReplay] = useState(0);
+  const [soundBlocked, setSoundBlocked] = useState(false);
+  const [readAloud, setReadAloud] = useState(false);
   const mRef = useRef<MView | null>(null); mRef.current = m;
   const spokenUpTo = useRef<number | null>(null);
   const runId = useRef(0);
@@ -112,7 +114,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
 
   // Mode oral : les participants prononcent leurs répliques (voix distinctes), puis le micro s'ouvre
   useEffect(() => {
-    if (!m || mode !== "oral") return;
+    if (!m || !(mode === "oral" || (mode === "ecrit" && readAloud))) return;
     const my = ++runId.current;
     if (spokenUpTo.current === null) { let k = 0; m.log.forEach((l, i) => { if (l.who.includes("(vous)")) k = i + 1; }); spokenUpTo.current = k; }
     const lines = m.log.slice(spokenUpTo.current);
@@ -126,14 +128,16 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
         setSpeaker(p?.id ?? "narrateur");
         const prefix = l.who === "Correction" ? "Correction. " : l.who === "Bilan" ? "Bilan de la réunion. " : "";
         const cast = voiceCast(m.participants);
-        await speak(prefix + l.text.replace(/^[✔✘]\s*/, ""), p ? cast.get(p.id)!.profile : voiceFor("narrateur"));
+        const r = await speak(prefix + l.text.replace(/^[✔✘]\s*/, ""), p ? cast.get(p.id)!.profile : voiceFor("narrateur"));
+        if (r === "blocked" && runId.current === my) { setSoundBlocked(true); setSpeaker(null); setPhase("idle"); return; }
+        if (r === "ok") setSoundBlocked(false);
       }
       if (runId.current !== my) return;
       setSpeaker(null);
-      if (!m.done) startListening(); else setPhase("idle");
+      if (!m.done && mode === "oral") startListening(); else setPhase("idle");
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [m?.log.length, m?.id, mode, replay]);
+  }, [m?.log.length, m?.id, mode, replay, readAloud]);
 
   // Compte à rebours : au bout du temps, le silence compte comme une absence de réponse
   useEffect(() => {
@@ -148,6 +152,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
   useEffect(() => () => { runId.current++; listener.current?.stop(); stopSpeaking(); }, []);
 
   const chooseOral = async () => {
+    unlockAudio(); // dans le clic : indispensable sur iPhone / Android
     setMicError("");
     if (!sup.stt) { setMicError("Votre navigateur ne sait pas écouter le micro. Utilisez Chrome, Edge ou Safari, ou choisissez le mode écrit."); return; }
     try {
@@ -159,7 +164,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
     } catch { setMicError("L'accès au micro a été refusé ou n'est pas disponible. Autorisez le micro dans votre navigateur (icône à gauche de l'adresse), puis réessayez — ou choisissez le mode écrit."); }
   };
   const toWritten = () => { stopVoice(); remember("ecrit"); setMode("ecrit"); };
-  const repeat = () => { const cur = mRef.current; if (!cur) return; listener.current?.stop(); stopSpeaking(); let k = 0; cur.log.forEach((l, i) => { if (l.who.includes("(vous)")) k = i + 1; }); spokenUpTo.current = k; setReplay((r) => r + 1); };
+  const repeat = () => { unlockAudio(); setSoundBlocked(false); const cur = mRef.current; if (!cur) return; listener.current?.stop(); stopSpeaking(); let k = 0; cur.log.forEach((l, i) => { if (l.who.includes("(vous)")) k = i + 1; }); spokenUpTo.current = k; setReplay((r) => r + 1); };
 
   if (!m) return null;
   const quit = m.done ? <Button onClick={() => { stopVoice(); onClose(); }}>Quitter la salle</Button> : <Button variant="outline" size="sm" onClick={async () => { stopVoice(); await act({ type: "leave_meeting" }); onClose(); }}>Quitter (mal perçu)</Button>;
@@ -229,6 +234,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
                         {hint && <div className="mt-1 text-sm text-amber-300">{hint}</div>}
                       </div>
                     : phase === "thinking" ? <div className="text-ink-400">…</div>
+                    : soundBlocked ? <div data-testid="sound-blocked" className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-amber-100"><div className="text-sm">Votre navigateur a bloqué le son.</div><button onClick={repeat} className="mt-3 rounded-full bg-gold px-5 py-2 font-semibold text-ink-950">🔊 Activer le son et réécouter</button><div className="mt-2 text-[11px] text-ink-400">Vérifiez aussi le volume et que le téléphone n'est pas en mode silencieux.</div></div>
                     : <div className="text-sm text-ink-400">{micError || "Préparation…"}</div>}
                 </div>
                 {micError && phase !== "listening" && !m.done && <div className="text-sm text-amber-200" data-testid="mic-error">{micError}</div>}
@@ -238,6 +244,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
               /* ───── Mode écrit : historique complet de la conversation ───── */
               <div className="flex min-h-0 flex-col">
                 <div className="flex gap-3 overflow-x-auto border-b border-ink-800 px-4 py-3 scroll-thin">
+                  {sup.tts && <button data-testid="read-aloud" onClick={() => { if (readAloud) { stopVoice(); setReadAloud(false); } else { unlockAudio(); let k = 0; m.log.forEach((l, i) => { if (l.who.includes("(vous)")) k = i + 1; }); spokenUpTo.current = k; setReadAloud(true); } }} className={`shrink-0 rounded-lg px-3 py-2 text-xs ${readAloud ? "bg-gold text-ink-950" : "bg-ink-800 text-ink-200 hover:bg-ink-700"}`}>{readAloud ? "🔊 Voix activées" : "🔈 Entendre les voix"}</button>}
                   {m.participants.map((p) => <div key={p.id} className="flex min-w-[170px] items-center gap-2 rounded-lg bg-ink-800 px-3 py-2"><span className="text-2xl">{p.avatar}</span><div className="min-w-0"><div className="truncate text-sm font-medium">{p.name}</div><div className="truncate text-[11px] text-ink-400">{p.role} · confiance {Math.round(p.trust)}</div></div></div>)}
                 </div>
                 <div className="scroll-thin flex-1 space-y-3 overflow-y-auto p-4" ref={logRef} style={{ maxHeight: "52vh" }} data-testid="meeting-log">
@@ -245,7 +252,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
                     const who = m.participants.find((p) => p.name === l.who);
                     const mine = l.who.includes("(vous)"); const sys = l.who === "—" || l.who === "Correction" || l.who === "Exécution" || l.who === "Bilan";
                     return <div key={i} className={`fade-in ${mine ? "ml-auto max-w-[80%] text-right" : "max-w-[90%]"}`}>
-                      <div className={`text-[11px] ${sys ? "text-gold" : "text-ink-400"}`}>{who ? <>{who.avatar} <b className="text-ink-200">{who.name}</b> · {who.role}</> : l.who}</div>
+                      <div className={`text-[11px] ${sys ? "text-gold" : "text-ink-400"}`}>{who ? <>{who.avatar} <b className="text-ink-200">{who.name}</b> · {who.role}{readAloud && speaker === who.id && <span className="ml-1 text-gold">🔊 parle…</span>}</> : l.who}</div>
                       <div className={`mt-0.5 inline-block rounded-lg px-3 py-2 text-sm leading-relaxed ${mine ? "bg-accent/20 text-blue-100" : sys ? "border border-ink-600 bg-ink-850 text-ink-200" : "bg-ink-800 text-ink-100"}`}>{l.text}</div>
                     </div>;
                   })}
