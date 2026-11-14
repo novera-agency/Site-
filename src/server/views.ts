@@ -7,8 +7,8 @@ import { quoteBook, marketStatus, bondYield, optionIV, rateFor, dividendYield, b
 import { bondPriceFromYield, blackScholes } from "@/engine/pricing";
 import { listExpiries, strikeGrid, optionId, optionable, buyingPower, canTradeOnDesk } from "@/engine/orders";
 import { tutorialChecklist, wealth, CHALLENGES } from "@/engine/engine";
-import { meetingView, allMeetingTemplates } from "@/engine/meetingEngine";
-import { missionQuestion } from "@/engine/missions";
+import { meetingView, allMeetingTemplates, meetingTemplate } from "@/engine/meetingEngine";
+import { missionQuestion, missionGuide } from "@/engine/missions";
 import { performanceScore, rankTitle } from "@/engine/career";
 import { currentAllocation, equityWeight, suitableEquityBand, totalAum } from "@/engine/clients";
 import { ALLOC_BUCKETS } from "@/engine/people";
@@ -29,6 +29,34 @@ function quoteLite(s: GameState, id: string) {
   return { id, n: d.name, c: d.cls, cur: d.currency, p: px(q.price), ch: q.prevClose ? r2((q.price / q.prevClose - 1) * 100) : 0, s: d.sector, z: d.zone };
 }
 
+export interface Person { id: string; name: string; role: string; avatar: string; trust: number; }
+export function person(s: GameState, id?: string): Person | null { const n = id ? s.npcs[id] : undefined; return n ? { id: n.id, name: n.name, role: n.role, avatar: n.avatar, trust: Math.round(n.trust) } : null; }
+/** Qui participe, où et de quoi il s'agit — pour annoncer une réunion de façon claire */
+export function meetingInfo(s: GameState, templateId?: string, params: Record<string, string> = {}) {
+  const tpl = templateId ? meetingTemplate(templateId) : undefined;
+  if (!tpl) return null;
+  const c = { s, m: { id: "", templateId: tpl.id, nodeId: tpl.start, startedT: s.t, vars: { ...params }, score: { finance: 0, risque: 0, communication: 0, ethique: 0 }, log: [], done: false } };
+  let title = tpl.type, participants: Person[] = [];
+  try { title = tpl.title(c); participants = tpl.participants(c).map((id) => person(s, id)).filter((x): x is Person => !!x); } catch { /* paramètres incomplets */ }
+  return { title, type: tpl.type, location: tpl.location, participants, objectives: tpl.objectives, agenda: tpl.agenda };
+}
+const withPeople = (s: GameState, list: GameState["agenda"]) => list.map((a) => ({ ...a, info: a.meetingTemplate ? meetingInfo(s, a.meetingTemplate, a.params) : null }));
+
+/** Prochaines actions conseillées, formulées avec les noms des personnes concernées */
+export function nextSteps(s: GameState) {
+  const out: { icon: string; text: string; link?: string; action?: string; urgent?: boolean }[] = [];
+  const pend = typeof s.flags["pendingMeeting"] === "string" ? JSON.parse(s.flags["pendingMeeting"] as string) as { template: string; params: Record<string, string>; title: string } : null;
+  const who = (ps?: Person[]) => (ps && ps.length ? ` avec ${ps.slice(0, 3).map((p) => `${p.name} (${p.role})`).join(", ")}` : "");
+  if (s.activeMeetingId) out.push({ icon: "🤝", text: "Une réunion est en cours : retournez-y pour la terminer.", action: "meeting", urgent: true });
+  else if (pend) { const i = meetingInfo(s, pend.template, pend.params); out.push({ icon: "📣", text: `On vous attend : ${pend.title}${who(i?.participants)}.`, action: "join", urgent: true }); }
+  const nx = s.agenda.find((a) => a.status === "prevu" && a.t >= s.t);
+  if (nx) { const i = nx.meetingTemplate ? meetingInfo(s, nx.meetingTemplate, nx.params) : null; out.push({ icon: "🗓️", text: `Prochain rendez-vous à ${String(Math.floor((nx.t % 1440) / 60)).padStart(2, "0")}h${String(nx.t % 60).padStart(2, "0")} : ${nx.title}${who(i?.participants)}.`, link: "/play/agenda" }); }
+  for (const m of s.messages.filter((x) => x.actions && !x.handled).slice(0, 2)) out.push({ icon: "✉️", text: `${m.from} attend votre réponse : « ${m.subject} ».`, link: "/play/messagerie", urgent: true });
+  for (const m of s.missions.filter((x) => x.status === "active").slice(0, 3)) { const g = missionGuide(s, m); const giver = person(s, m.giver); out.push({ icon: "🎯", text: `${giver ? `Mission de ${giver.name}` : "Mission"} : ${m.title} — ${g.steps[0]}`, link: g.link }); }
+  if (s.paused && !s.activeMeetingId && !pend) out.push({ icon: "▶", text: "Le temps est en pause : appuyez sur ▶ (en haut) pour faire avancer la journée." });
+  return out.slice(0, 7);
+}
+
 /** Instantané léger renvoyé à chaque tick */
 export function snapshot(s: GameState, aiAvailable = false) {
   const quotes: Record<string, [number, number]> = {};
@@ -47,7 +75,7 @@ export function snapshot(s: GameState, aiAvailable = false) {
     deskPnlWeek: s.accounts.desk && s.career.employed ? r2(accountEquity(s, "desk") - s.career.weekStartEquity) : null,
     unread: s.notifications.filter((n) => !n.read).length, unreadMsgs: s.messages.filter((m) => !m.read).length,
     notifications: s.notifications.slice(0, 6),
-    activeMeetingId: s.activeMeetingId ?? null, pendingMeeting: pend ? { template: pend.template, title: pend.title } : null,
+    activeMeetingId: s.activeMeetingId ?? null, pendingMeeting: pend ? { template: pend.template, title: pend.title, info: meetingInfo(s, pend.template, (pend as { params?: Record<string, string> }).params ?? {}) } : null,
     nextAgenda: nextAgenda ? { t: nextAgenda.t, title: nextAgenda.title } : null,
     tutorial: s.mode === "carriere" && !s.tutorial.done ? tutorialChecklist(s) : null,
     player: { name: `${s.profile.firstName} ${s.profile.lastName}`, title: s.career.employed ? rankTitle(s) : s.company ? `Fondateur — ${s.company.name}` : s.mode === "carriere" ? "Sans emploi" : "Investisseur", bank: s.career.employed ? BANK_BY_ID[s.career.bankId]?.short : null, bankColor: BANK_BY_ID[s.career.bankId]?.accent, stress: Math.round(s.career.stress) },
@@ -70,8 +98,10 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
       const day = dayIndex(s.t);
       return {
         accounts: ["perso", "desk"].map((id) => accountSummary(s, id)).filter(Boolean),
-        agenda: s.agenda.filter((a) => dayIndex(a.t) === day || (a.t > s.t && a.t < s.t + MIN_PER_DAY)).slice(0, 14),
-        missions: s.missions.filter((m) => m.status === "active").slice(0, 5),
+        agenda: withPeople(s, s.agenda.filter((a) => dayIndex(a.t) === day || (a.t > s.t && a.t < s.t + MIN_PER_DAY)).slice(0, 14)),
+        nextSteps: nextSteps(s),
+        team: s.mode === "carriere" && s.career.employed ? ["boss", "director", "senior", "analyst", "colleague", "risk", "compliance"].map((id) => person(s, id)).filter(Boolean) : [],
+        missions: s.missions.filter((m) => m.status === "active").slice(0, 5).map((m) => ({ ...m, giverInfo: person(s, m.giver), guide: missionGuide(s, m) })),
         news: s.news.slice(0, 6), messages: s.messages.slice(0, 4),
         calendar: s.calendar.filter((c) => c.day === day || c.day === day + 1).slice(0, 10),
         indices: ["IDX-EU", "IDX-US", "IDX-AS", "IDX-WD", "EURUSD", "BRENT", "GOLD", "AURC", "DE10Y", "US10Y"].filter((x) => s.instruments[x]).map((id) => quoteLite(s, id)),
@@ -164,14 +194,14 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
       return { active: active ? meetingView(s, active) : null, pending: pend, history: s.meetings.filter((m) => m.done).slice(0, 40).map((m) => ({ id: m.id, templateId: m.templateId, title: meetingView(s, m).title, startedT: m.startedT, outcome: m.outcome, score: m.score })), templates: allMeetingTemplates().map((t) => ({ id: t.id, type: t.type })) };
     }
     case "meeting": { const m = s.meetings.find((x) => x.id === p.id); return m ? meetingView(s, m) : { error: "Réunion introuvable" }; }
-    case "agenda": return { agenda: s.agenda.slice(-80), t: s.t };
+    case "agenda": return { agenda: withPeople(s, s.agenda.slice(-80)), t: s.t };
     case "messages": return { messages: s.messages.slice(0, 100) };
     case "notifications": return { notifications: s.notifications };
     case "clients": return {
       clients: s.clients.map((c) => ({ ...c, wealth: c.wealth / 100, aum: accountEquity(s, c.accountId), perf: performance(s.accounts[c.accountId]), equityWeight: equityWeight(s, c.accountId), band: suitableEquityBand(c.riskTolerance), allocation: currentAllocation(s, c), npc: s.npcs[c.npcId], history: c.history.slice(0, 15), equityHistory: s.accounts[c.accountId].equityHistory.slice(-120) })),
       buckets: ALLOC_BUCKETS.map((b) => ({ ...b, price: b.id === "CASH" ? 1 : s.quotes[b.id]?.price })), totalAum: totalAum(s), feesYtd: ((s.flags["feesYtd"] as number) ?? 0) / 100,
     };
-    case "missions": return { missions: s.missions.slice(0, 80).map((m) => ({ ...m, question: m.status === "active" ? missionQuestion(s, m) : null })) };
+    case "missions": return { missions: s.missions.slice(0, 80).map((m) => ({ ...m, question: m.status === "active" ? missionQuestion(s, m) : null, guide: missionGuide(s, m), giverInfo: person(s, m.giver) })) };
     case "learning": return { lessons: LESSONS, completed: s.learning.completed, attempts: s.learning.attempts };
     case "skills": return { skills: Object.entries(s.skills).map(([k, xp]) => ({ id: k, name: SKILL_NAMES[k as keyof typeof SKILL_NAMES], xp, level: skillLevel(xp), next: SKILL_LEVELS[skillLevel(xp) + 1] ?? null, prev: SKILL_LEVELS[skillLevel(xp)] })), log: s.skillLog.slice(0, 60), reputation: Object.entries(s.reputation).map(([k, v]) => ({ id: k, name: REP_NAMES[k as keyof typeof REP_NAMES], value: v })), avgRep: avgRep(s), decisions: s.decisions.slice(0, 80) };
     case "network": return { npcs: Object.values(s.npcs).map((n) => ({ ...n, client: n.relation === "client" })) };

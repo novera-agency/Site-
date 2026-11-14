@@ -67,13 +67,30 @@ function Ticker({ snap }: { snap: Snapshot }) {
   return <div className="overflow-hidden border-b border-ink-800 bg-ink-900/70 py-1"><div className="ticker flex w-max">{items}{items}</div></div>;
 }
 
+const TUTO: Record<number, { hint: string; link?: string }> = {
+  1: { hint: "Vous êtes arrivé·e dans votre banque." },
+  2: { hint: "Appuyez sur ▶ : à 7 h 15, votre responsable vous accueille en réunion. Cliquez « Rejoindre la réunion » quand le bandeau apparaît.", link: "/play/agenda" },
+  3: { hint: "Ouvrez la Salle des marchés pour découvrir le terminal.", link: "/play/terminal" },
+  4: { hint: "À 8 h 30, rejoignez la réunion du desk avec votre responsable et vos collègues.", link: "/play/agenda" },
+  5: { hint: "Mission de votre responsable : ouvrez la fiche Maison Valombre et répondez à la question dans Missions.", link: "/play/missions" },
+  6: { hint: "Achetez un instrument (par exemple 10 parts de l'ETF Monde XWLD).", link: "/play/actif?id=XWLD" },
+  7: { hint: "À 11 h, une nouvelle économique tombe : lisez-la dans Actualités.", link: "/play/actualites" },
+  8: { hint: "30 minutes après la nouvelle, observez la réaction de l'action Maison Valombre.", link: "/play/actif?id=MAIS" },
+  9: { hint: "À 14 h, un client mécontent vous appelle : rejoignez l'appel.", link: "/play/clients" },
+  10: { hint: "À 16 h 15, votre responsable vous pose une question technique.", link: "/play/agenda" },
+  11: { hint: "Laissez la journée avancer jusqu'à 17 h 30." },
+  12: { hint: "À 18 h, votre responsable évalue votre première journée.", link: "/play/carriere" },
+};
 function Tutorial({ snap }: { snap: Snapshot }) {
   const [hide, setHide] = useState(false);
   if (!snap.tutorial || hide) return null;
   const done = snap.tutorial.filter((x) => x.done).length;
+  const cur = snap.tutorial.find((x) => !x.done);
+  const tip = cur ? TUTO[cur.id] : null;
   return <div className="mb-4 rounded-lg border border-gold/40 bg-gradient-to-r from-yellow-900/20 to-transparent p-3">
     <div className="mb-2 flex items-center justify-between"><div className="text-xs font-semibold uppercase tracking-wider text-gold">Première journée — {done}/12 étapes</div><button onClick={() => setHide(true)} className="text-xs text-ink-400">masquer</button></div>
-    <div className="flex flex-wrap gap-1.5">{snap.tutorial.map((s) => <span key={s.id} className={`rounded px-2 py-0.5 text-[11px] ${s.done ? "bg-green-600/20 text-green-300 line-through" : "bg-ink-800 text-ink-200"}`}>{s.id}. {s.label}</span>)}</div>
+    {cur && tip && <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md bg-ink-900/80 px-3 py-2 text-sm"><span className="font-semibold text-gold">Étape {cur.id} — {cur.label} :</span><span className="text-ink-100">{tip.hint}</span>{tip.link && <Link href={tip.link} className="rounded bg-accent px-2 py-0.5 text-xs text-white">Y aller →</Link>}</div>}
+    <div className="flex flex-wrap gap-1.5">{snap.tutorial.map((s) => { const t = TUTO[s.id]; const cls = `rounded px-2 py-0.5 text-[11px] ${s.done ? "bg-green-600/20 text-green-300 line-through" : s.id === cur?.id ? "bg-gold/20 text-gold" : "bg-ink-800 text-ink-200"}`; return t?.link && !s.done ? <Link key={s.id} href={t.link} title={t.hint} className={cls + " hover:bg-ink-700"}>{s.id}. {s.label}</Link> : <span key={s.id} title={t?.hint} className={cls}>{s.id}. {s.label}</span>; })}</div>
   </div>;
 }
 

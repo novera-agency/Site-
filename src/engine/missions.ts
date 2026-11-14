@@ -93,6 +93,37 @@ const TEMPLATES: Tpl[] = [
 const BY_ID = Object.fromEntries(TEMPLATES.map((t) => [t.id, t]));
 export function missionTemplate(id: string) { return BY_ID[id]; }
 
+
+/** Mode d'emploi de chaque mission : étapes concrètes + écran où agir */
+export interface MissionGuide { steps: string[]; link: string; linkLabel: string; }
+export function missionGuide(s: GameState, m: Mission): MissionGuide {
+  const p = m.params;
+  const inst = (id: unknown) => s.instruments[String(id)]?.name ?? String(id);
+  const client = s.clients.find((c) => c.id === p.client);
+  switch (m.templateId) {
+    case "premier_ordre": return { steps: ["Ouvrez le terminal (menu Marchés → Salle des marchés).", "Choisissez un instrument, par exemple l'ETF Monde « XWLD ».", "Dans le cadre « Passer un ordre », laissez « Acheter », indiquez une quantité (ex. 10) puis validez.", "Si le marché est fermé, l'ordre s'exécutera à l'ouverture (9 h pour l'Europe)."], link: "/play/actif?id=XWLD", linkLabel: "Ouvrir XWLD et acheter" };
+    case "analyse_actif": return { steps: [`Ouvrez la fiche de ${inst(p.instrument)}.`, "Repérez dans « Données fondamentales » le PER actuel et le PER normatif.", "Revenez ici et répondez à la question ci-dessous."], link: `/play/actif?id=${p.instrument}`, linkLabel: `Ouvrir la fiche ${p.instrument}` };
+    case "vendre_position": return { steps: ["Ouvrez votre portefeuille et choisissez une ligne.", "Cliquez « Trader », sélectionnez « Vendre » et la quantité détenue.", "Consultez ensuite le P&L réalisé dans Transactions."], link: "/play/portefeuille", linkLabel: "Voir mon portefeuille" };
+    case "diversifier": return { steps: ["Achetez au moins 5 instruments différents sur votre compte personnel.", "Mélangez au moins 3 secteurs ou classes (actions, ETF, obligations, or…).", "Aucune ligne ne doit dépasser 30 % du portefeuille (colonne « Poids »)."], link: "/play/recherche", linkLabel: "Chercher des instruments" };
+    case "reduire_secteur": return { steps: [`Allez dans Portefeuille → compte « Book du desk ».`, `Vendez une partie des positions du secteur ${p.sector}.`, `Vérifiez dans « Expositions » que le secteur est sous ${p.target} %.`], link: "/play/portefeuille", linkLabel: "Ouvrir le book du desk" };
+    case "couvrir_change": return { steps: ["Le book détient trop d'actifs en dollars.", "Vendez la paire EURUSD sur le compte du desk : cela revient à vendre des dollars contre des euros.", "Vérifiez l'exposition « Devise » USD dans le portefeuille du desk (objectif < 5 %)."], link: "/play/actif?id=EURUSD", linkLabel: "Ouvrir EURUSD" };
+    case "rendement_obligation": case "duration_obligation": return { steps: [`Ouvrez la fiche de ${inst(p.instrument)}.`, "La section « Données fondamentales » donne prix, coupon, échéance (et le résultat, si vous voulez vérifier votre calcul).", "Saisissez votre réponse ci-dessous."], link: `/play/actif?id=${p.instrument}`, linkLabel: `Ouvrir ${p.instrument}` };
+    case "pnl_semaine": return { steps: ["Passez des ordres sur le compte « Book du desk » (pas sur votre compte personnel).", `Objectif : +${Number(p.target).toLocaleString("fr-FR")} € de gain cette semaine.`, "Surveillez la VaR dans « Gestion des risques » : un dépassement fait échouer la mission."], link: "/play/terminal", linkLabel: "Ouvrir le terminal" };
+    case "respect_var": return { steps: ["Gardez au moins 3 positions sur le book du desk.", "Chaque jour, la VaR doit rester sous 90 % de la limite (jauge dans « Gestion des risques »).", "Si elle monte trop, réduisez la plus grosse position."], link: "/play/risques", linkLabel: "Voir la VaR du desk" };
+    case "satisfaction_client": case "allocation_client": return { steps: [`Ouvrez la fiche du client ${client?.name ?? ""}.`, "Adaptez l'allocation à son profil de risque (la page indique si vous êtes dans la bonne bande).", "Appelez-le régulièrement (bouton « Appeler le client »)."], link: "/play/clients", linkLabel: "Ouvrir mes clients" };
+    case "prevision_bc": return { steps: ["Consultez la page Macroéconomie : inflation, croissance, chômage de la zone.", "Inflation au-dessus de la cible → plutôt hausse ; économie faible → plutôt baisse.", "Choisissez votre prévision ci-dessous avant la date de réunion."], link: "/play/macro", linkLabel: "Voir la macroéconomie" };
+    case "prevision_resultats": return { steps: [`Étudiez ${inst(p.instrument)} : valorisation, perspectives, actualités.`, "Choisissez ci-dessous si l'action montera ou baissera après la publication."], link: `/play/actif?id=${p.instrument}`, linkLabel: `Ouvrir ${p.instrument}` };
+    case "recommandation": return { steps: [`Votre recommandation sur ${inst(p.instrument)} a été validée en comité.`, "Rien à faire : la mission réussit si l'action fait mieux que l'indice MONDE dans 20 jours.", "Vous pouvez suivre son évolution sur sa fiche."], link: `/play/actif?id=${p.instrument}`, linkLabel: "Suivre l'action" };
+    case "strategie_options": return { steps: ["Achetez au moins 100 unités d'un ETF ou d'une action (compte personnel).", "Dans Options, choisissez ce même sous-jacent et la stratégie « Protective put ».", "Exécutez la stratégie."], link: "/play/options", linkLabel: "Ouvrir les options" };
+    case "formation": return { steps: ["Ouvrez le centre de formation.", `Lisez un module puis réussissez son exercice — ${p.count} fois.`], link: "/play/formation", linkLabel: "Centre de formation" };
+    case "watchlist": return { steps: ["Sur la fiche d'un instrument, cliquez « ☆ Surveiller » (5 instruments au total).", "Sur une fiche, saisissez un prix dans « Alerte à… » puis cliquez 🔔."], link: "/play/actif?id=MAIS", linkLabel: "Ouvrir une fiche" };
+    case "concentration": return { steps: ["Ouvrez « Gestion des risques » : le graphique « Concentration » classe les positions du desk.", "Répondez ci-dessous."], link: "/play/risques", linkLabel: "Voir la concentration" };
+    case "battre_benchmark": return { steps: ["Gérez votre compte personnel pour faire mieux que l'ETF Monde (XWLD) sur 20 jours.", "Le graphique « Évolution vs benchmark » du portefeuille montre l'écart."], link: "/play/portefeuille", linkLabel: "Voir mon portefeuille" };
+    case "creer_societe": case "encours_societe": return { steps: ["Accumulez le capital requis et la réputation.", "Créez puis développez votre société."], link: "/play/entreprise", linkLabel: "Entrepreneuriat" };
+    default: return { steps: [m.description], link: "/play/missions", linkLabel: "Missions" };
+  }
+}
+
 export function createMission(s: GameState, templateId: string, params: Record<string, number | string> = {}, giver?: string): Mission | null {
   const t = BY_ID[templateId];
   if (!t) return null;
@@ -103,7 +134,12 @@ export function createMission(s: GameState, templateId: string, params: Record<s
   const m: Mission = { id: nextId(s, "mis"), templateId, title: made.title, category: t.category, description: made.description, criteria: made.criteria, params: made.params, startT: s.t, deadlineT: s.t + t.days * MIN_PER_DAY, status: "active", reward: { xp: t.xp, rep: t.rep, trust: giver ? { npc: giver, delta: 5 } : undefined }, progress: 0, baseline: made.baseline, giver };
   s.missions.unshift(m);
   if (s.missions.length > 150) s.missions = s.missions.filter((x, i) => i < 120 || x.status === "active");
-  notify(s, "info", `Nouvelle mission : ${m.title}`, m.description, "/play/missions");
+  const g = giver ? s.npcs[giver] : undefined;
+  notify(s, "info", g ? `${g.name} vous confie une mission` : `Nouvelle mission : ${m.title}`, g ? `« ${m.title} » — ${g.role}` : m.description, "/play/missions");
+  if (g && g.relation !== "client") {
+    const guide = missionGuide(s, m);
+    s.messages.unshift({ id: nextId(s, "msg"), t: s.t, from: `${g.name} — ${g.role}`, subject: `Mission : ${m.title}`, body: `${s.profile.firstName},\n\n${m.description}\n\nComment procéder :\n${guide.steps.map((x, i) => `${i + 1}. ${x}`).join("\n")}\n\nÉchéance : ${fmtShortDate(m.deadlineT)}.\n\n${g.name}`, read: false });
+  }
   return m;
 }
 

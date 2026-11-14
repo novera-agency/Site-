@@ -3,8 +3,8 @@ import { test, expect, type Page } from "@playwright/test";
 /** Gère toute réunion en attente/en cours : rejoindre, répondre (premier choix ou valeur chiffrée), quitter. */
 async function handleMeetings(page: Page, answer = "0") {
   for (let guard = 0; guard < 4; guard++) {
-    const join = page.getByRole("button", { name: "Rejoindre" });
-    const back = page.getByRole("button", { name: "Retourner en réunion" });
+    const join = page.getByRole("button", { name: "Rejoindre" }).first();
+    const back = page.getByRole("button", { name: "Retourner en réunion" }).first();
     if (await join.isVisible().catch(() => false)) await join.click();
     else if (await back.isVisible().catch(() => false)) await back.click();
     else return;
