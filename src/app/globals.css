@@ -37,3 +37,6 @@ body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
 @keyframes tick { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 .grid-bg { background-image: radial-gradient(circle at 1px 1px, rgba(90,106,133,.14) 1px, transparent 0); background-size: 22px 22px; }
 input, select, textarea { color-scheme: dark; }
+.chartline { stroke-dasharray: 2600; stroke-dashoffset: 2600; animation: draw 6s ease-out forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .chartline { animation: none; stroke-dashoffset: 0; } .ticker { animation: none; } }
