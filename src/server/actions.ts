@@ -27,7 +27,7 @@ export const ActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("alert_delete"), id: z.string().max(64) }),
   z.object({ type: z.literal("join_meeting") }),
   z.object({ type: z.literal("start_meeting"), template: z.string().max(64), params: z.record(z.string()).optional() }),
-  z.object({ type: z.literal("answer_meeting"), meetingId: z.string().max(64), choiceId: z.string().max(32).optional(), value: num.optional() }),
+  z.object({ type: z.literal("answer_meeting"), meetingId: z.string().max(64), choiceId: z.string().max(32).optional(), value: num.optional(), spoken: z.string().max(500).optional(), timeout: z.boolean().optional() }),
   z.object({ type: z.literal("answer_mission"), missionId: z.string().max(64), value: num.optional(), choice: num.int().optional(), forecast: z.string().max(20).optional() }),
   z.object({ type: z.literal("rebalance"), clientId: z.string().max(64), target: z.record(num.min(0).max(1)) }),
   z.object({ type: z.literal("contact_client"), clientId: z.string().max(64) }),
@@ -98,7 +98,7 @@ export function applyAction(s: GameState, a: Action): ActionResult {
       const m = startMeeting(s, a.template, a.params ?? {});
       return m ? { ok: true, data: { meetingId: m.id } } : { ok: false, error: "Réunion indisponible." };
     }
-    case "answer_meeting": { const r = answerMeeting(s, a.meetingId, { choiceId: a.choiceId, value: a.value }); return r.ok ? { ok: true } : { ok: false, error: r.error }; }
+    case "answer_meeting": { const r = answerMeeting(s, a.meetingId, { choiceId: a.choiceId, value: a.value, spoken: a.spoken, timeout: a.timeout }); return r.ok ? { ok: true } : { ok: false, error: r.error }; }
     case "leave_meeting": { if (!s.activeMeetingId) return { ok: false, error: "Aucune réunion." }; const m = s.meetings.find((x) => x.id === s.activeMeetingId); if (m) { m.done = true; m.outcome = "Vous avez quitté la réunion avant la fin."; } s.activeMeetingId = undefined; s.reputation.interne = Math.max(0, s.reputation.interne - 4); s.reputation.fiabilite = Math.max(0, s.reputation.fiabilite - 3); return { ok: true, message: "Vous quittez la réunion. Votre départ est mal perçu." }; }
     case "answer_mission": { const r = answerMission(s, a.missionId, { value: a.value, choice: a.choice, forecast: a.forecast }); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error }; }
     case "rebalance": { const r = rebalanceClient(s, a.clientId, a.target); return r.ok ? { ok: true, message: `Rééquilibrage transmis (${r.orders.length} ordres).${r.warnings.length ? " ⚠ " + r.warnings.join(" ") : ""}`, data: r } : { ok: false, error: r.error }; }

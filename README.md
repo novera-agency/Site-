@@ -50,6 +50,7 @@ Le workflow `.github/workflows/pages.yml` vérifie le code (TypeScript, 37 tests
 - Ordres marché / limite / stop / stop-limite, stop-loss & take-profit attachés (OCO), validité, exécutions partielles, frais, spread, slippage, marge, liquidation.
 - Grand livre en partie double (centimes entiers), comptes personnels / desk / clients / société strictement séparés.
 - Carrière : salaires, bonus, évaluations hebdomadaires / trimestrielles / annuelles, promotions multicritères, licenciement, offres, entretiens, burnout, congés.
+- Réunions **vocales** : chaque personnage a sa voix, vous répondez au micro dans un temps limité (ou au clic).
 - 17 réunions jouables, 12 PNJ persistants + clients, 22 modèles de missions paramétrables, 35 modules de formation, crises à phases.
 - Création de société (6 types) avec bilan, compte de résultat, flux de trésorerie et risque de faillite.
 

@@ -11,7 +11,7 @@ async function handleMeetings(page: Page, answer = "0") {
     for (let i = 0; i < 20; i++) {
       const quit = page.getByRole("button", { name: "Quitter la salle" });
       if (await quit.isVisible().catch(() => false)) { await quit.click(); break; }
-      const input = page.locator('input[placeholder^="Réponse"]');
+      const input = page.getByTestId("meeting-room").locator('input[inputmode="decimal"]');
       if (await input.isVisible().catch(() => false)) { await input.fill(answer); await page.getByRole("button", { name: "Répondre" }).click(); }
       else { const choice = page.locator(".fixed.inset-0 .grid.gap-2 > button").first(); if (await choice.isVisible().catch(() => false)) await choice.click(); }
       await page.waitForTimeout(400);

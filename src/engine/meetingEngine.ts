@@ -73,16 +73,43 @@ export function meetingChoices(s: GameState, m: MeetingInstance) {
   return (node.choices ?? []).filter((ch) => !ch.requires || ch.requires(c)).map((ch) => ({ id: ch.id, label: ch.label || labelResolver(s, m.templateId, m.nodeId, m.vars, ch.id, ch.label), detail: ch.detail }));
 }
 
-export function answerMeeting(s: GameState, meetingId: string, input: { choiceId?: string; value?: number }) {
+/**
+ * Réponse à une réunion. Trois formes : un choix (clic), une valeur chiffrée,
+ * une phrase prononcée à voix haute (`spoken`, déjà rapprochée d'un choix ou d'un nombre par le client),
+ * ou un silence (`timeout` : temps de réponse écoulé — pénalité et la discussion continue sans vous).
+ */
+export function answerMeeting(s: GameState, meetingId: string, input: { choiceId?: string; value?: number; spoken?: string; timeout?: boolean }) {
   const m = s.meetings.find((x) => x.id === meetingId);
   if (!m || m.done) return { ok: false as const, error: "Réunion terminée ou introuvable." };
   const tpl = REGISTRY[m.templateId];
   const node = tpl.nodes[m.nodeId];
   const c = { s, m };
+  const me = speakerName(c, "vous");
+  const spoken = input.spoken?.trim().slice(0, 500);
+  if (input.timeout) {
+    m.log.push({ who: me, text: "(silence — vous n'avez pas répondu à temps)" });
+    m.score.communication -= 2;
+    const sp = typeof node.speaker === "function" ? node.speaker(c) : node.speaker;
+    if (s.npcs[sp]) { const n = s.npcs[sp]; n.trust = Math.max(0, n.trust - 2); n.memory.unshift({ t: s.t, text: "N'a pas su répondre en réunion", impact: -2 }); }
+    if (node.numeric) {
+      node.numeric.onWrong(c, NaN);
+      m.log.push({ who: "Correction", text: `Pas de réponse. ${node.numeric.explain(c)}` });
+      m.nodeId = node.numeric.next;
+      pushNodeText(c);
+      return { ok: true as const, meeting: m };
+    }
+    // Sans réponse, la discussion se poursuit sur l'option la plus passive (dernière proposée)
+    const avail = (node.choices ?? []).filter((x) => !x.requires || x.requires(c));
+    const fallback = avail[avail.length - 1];
+    if (!fallback) { finish(c); return { ok: true as const, meeting: m }; }
+    m.log.push({ who: "—", text: `Faute de réponse de votre part, la discussion continue : « ${fallback.label || labelResolver(s, m.templateId, m.nodeId, m.vars, fallback.id, fallback.label)} »` });
+    return applyChoice(c, tpl, fallback);
+  }
   if (node.numeric) {
     if (input.value === undefined || !Number.isFinite(input.value)) return { ok: false as const, error: "Réponse chiffrée attendue." };
     const ans = node.numeric.answer(c), tol = node.numeric.tolerance(c);
-    m.log.push({ who: speakerName(c, "vous"), text: `${input.value.toLocaleString("fr-FR")} ${node.numeric.unit}` });
+    m.log.push({ who: me, text: spoken ? `« ${spoken} »` : `${input.value.toLocaleString("fr-FR")} ${node.numeric.unit}` });
+    if (spoken) m.log.push({ who: "—", text: `(compris : ${input.value.toLocaleString("fr-FR")} ${node.numeric.unit})` });
     const ok = Math.abs(input.value - ans) <= tol;
     if (ok) node.numeric.onCorrect(c); else node.numeric.onWrong(c, input.value);
     m.log.push({ who: "Correction", text: `${ok ? "✔ Juste." : "✘ Inexact."} ${node.numeric.explain(c)}` });
@@ -92,7 +119,14 @@ export function answerMeeting(s: GameState, meetingId: string, input: { choiceId
   }
   const ch = (node.choices ?? []).find((x) => x.id === input.choiceId && (!x.requires || x.requires(c)));
   if (!ch) return { ok: false as const, error: "Choix invalide." };
-  m.log.push({ who: speakerName(c, "vous"), text: ch.label || labelResolver(s, m.templateId, m.nodeId, m.vars, ch.id, ch.label) });
+  const label = ch.label || labelResolver(s, m.templateId, m.nodeId, m.vars, ch.id, ch.label);
+  if (spoken) { m.log.push({ who: me, text: `« ${spoken} »` }); m.log.push({ who: "—", text: `(interprété comme : ${label})` }); }
+  else m.log.push({ who: me, text: label });
+  return applyChoice(c, tpl, ch);
+}
+
+function applyChoice(c: MeetingCtx, tpl: MeetingTemplate, ch: Choice) {
+  const m = c.m;
   ch.apply?.(c);
   if (ch.reply) { const r = ch.reply(c); if (r) m.log.push({ who: "—", text: r }); }
   m.nodeId = typeof ch.next === "function" ? ch.next(c) : ch.next;

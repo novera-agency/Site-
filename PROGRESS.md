@@ -31,6 +31,7 @@ Légende : ✅ fonctionnel et relié au moteur · 🟡 partiel · ❌ non réali
 | Dividendes, coupons, remboursements, défauts, échéances | ✅ | |
 | Hiérarchie de 9 rangs par métier, salaires, bonus, promotions multicritères, revues | ✅ | |
 | Réunions (17) avec contexte, participants, ordre du jour, documents, questions chiffrées, actions exécutées, conséquences | ✅ | |
+| Réunions vocales : voix distinctes par personnage, réponse au micro en temps limité (30/20/15/12 s selon la difficulté), compréhension par mots-clés et ordinaux, nombres dits en lettres, silence sanctionné | ✅ | API vocales du navigateur (Chrome, Edge, Safari pour le micro ; Firefox : voix seulement). Compréhension hors ligne par mots-clés, sans IA |
 | PNJ (12 + clients) avec état persistant, mémoire, opinion | ✅ | |
 | IA conversationnelle (propose, le moteur valide) + mode hors ligne | 🟡 | Code complet ; non exercé contre l'API réelle dans cet environnement (pas de clé) |
 | Clients difficiles (pertes, produit risqué, retrait, frais, rendement irréaliste, conformité, panique) | ✅ | |
