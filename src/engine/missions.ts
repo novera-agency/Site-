@@ -95,8 +95,35 @@ export function missionTemplate(id: string) { return BY_ID[id]; }
 
 
 /** Mode d'emploi de chaque mission : étapes concrètes + écran où agir */
-export interface MissionGuide { steps: string[]; link: string; linkLabel: string; }
+export interface MissionGuide { steps: string[]; link: string; linkLabel: string; tip?: string; }
+const TIPS: Record<string, string> = {
+  premier_ordre: "Commencez petit : un ETF diversifié comme XWLD limite le risque pendant que vous apprenez le terminal.",
+  analyse_actif: "Un PER bas ne veut pas forcément dire « bonne affaire » : regardez aussi la croissance et la dette.",
+  vendre_position: "Le P&L réalisé n'apparaît qu'une fois la position vendue ; avant, c'est un P&L latent.",
+  diversifier: "Combinez un ETF actions, une obligation et un peu d'or : trois classes d'un coup, poids faciles à équilibrer.",
+  reduire_secteur: "Vendez d'abord les lignes les plus volatiles du secteur : la VaR baisse plus vite.",
+  couvrir_change: "Vendre EURUSD = acheter des euros contre des dollars : votre exposition au dollar diminue d'autant.",
+  rendement_obligation: "Si le prix est sous 100, le taux actuariel est au-dessus du coupon (et inversement).",
+  duration_obligation: "Ordre de grandeur : une obligation à 10 ans a une duration modifiée d'environ 8 à 9.",
+  pnl_semaine: "Mieux vaut plusieurs petites positions disciplinées (avec stop-loss) qu'un gros pari qui fait exploser la VaR.",
+  respect_var: "Gardez une marge de sécurité : visez 60–70 % de la limite plutôt que 89 %.",
+  satisfaction_client: "Un client apprécie surtout d'être appelé et d'avoir une allocation conforme à son profil.",
+  allocation_client: "La page Clients calcule pour vous l'exposition actions cible : restez dans la bande verte.",
+  prevision_bc: "Inflation au-dessus de 2 % et chômage bas → hausse probable ; croissance faible → statu quo ou baisse.",
+  prevision_resultats: "Une entreprise dont la zone a une croissance forte surprend plus souvent à la hausse.",
+  recommandation: "Patience : la mission se juge à l'échéance, pas sur les mouvements d'un jour.",
+  strategie_options: "Un put proche du cours (ATM) protège mieux mais coûte plus cher qu'un put lointain.",
+  formation: "Lisez l'exemple chiffré avant de répondre : l'exercice reprend presque toujours le même calcul.",
+  watchlist: "Mettez une alerte un peu au-dessus et un peu en dessous du cours pour être prévenu des mouvements.",
+  concentration: "Le graphique « Concentration » de la gestion des risques donne directement la réponse.",
+  battre_benchmark: "Battre l'indice passe souvent par éviter les grosses pertes plutôt que par chercher le gros gain.",
+  creer_societe: "Commencez par une société de conseil : le capital minimum est le plus faible.",
+  encours_societe: "Le marketing et un commercial de plus font grimper l'encours, mais surveillez la trésorerie.",
+};
 export function missionGuide(s: GameState, m: Mission): MissionGuide {
+  return { ...guideSteps(s, m), tip: TIPS[m.templateId] };
+}
+function guideSteps(s: GameState, m: Mission): MissionGuide {
   const p = m.params;
   const inst = (id: unknown) => s.instruments[String(id)]?.name ?? String(id);
   const client = s.clients.find((c) => c.id === p.client);
@@ -137,8 +164,7 @@ export function createMission(s: GameState, templateId: string, params: Record<s
   const g = giver ? s.npcs[giver] : undefined;
   notify(s, "info", g ? `${g.name} vous confie une mission` : `Nouvelle mission : ${m.title}`, g ? `« ${m.title} » — ${g.role}` : m.description, "/play/missions");
   if (g && g.relation !== "client") {
-    const guide = missionGuide(s, m);
-    s.messages.unshift({ id: nextId(s, "msg"), t: s.t, from: `${g.name} — ${g.role}`, subject: `Mission : ${m.title}`, body: `${s.profile.firstName},\n\n${m.description}\n\nComment procéder :\n${guide.steps.map((x, i) => `${i + 1}. ${x}`).join("\n")}\n\nÉchéance : ${fmtShortDate(m.deadlineT)}.\n\n${g.name}`, read: false });
+    s.messages.unshift({ id: nextId(s, "msg"), t: s.t, from: `${g.name} — ${g.role}`, subject: `Mission : ${m.title}`, body: `${s.profile.firstName},\n\n${m.description}\n\nÉchéance : ${fmtShortDate(m.deadlineT)}.\n\n${g.name}\n\n(Besoin d'aide ? Dans l'onglet Missions, cliquez « 💡 Activer l'aide » sur cette mission.)`, read: false });
   }
   return m;
 }

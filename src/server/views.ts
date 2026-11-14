@@ -44,7 +44,7 @@ const withPeople = (s: GameState, list: GameState["agenda"]) => list.map((a) => 
 
 /** Prochaines actions conseillées, formulées avec les noms des personnes concernées */
 export function nextSteps(s: GameState) {
-  const out: { icon: string; text: string; link?: string; action?: string; urgent?: boolean }[] = [];
+  const out: { icon: string; text: string; link?: string; action?: string; urgent?: boolean; mission?: string }[] = [];
   const pend = typeof s.flags["pendingMeeting"] === "string" ? JSON.parse(s.flags["pendingMeeting"] as string) as { template: string; params: Record<string, string>; title: string } : null;
   const who = (ps?: Person[]) => (ps && ps.length ? ` avec ${ps.slice(0, 3).map((p) => `${p.name} (${p.role})`).join(", ")}` : "");
   if (s.activeMeetingId) out.push({ icon: "🤝", text: "Une réunion est en cours : retournez-y pour la terminer.", action: "meeting", urgent: true });
@@ -52,7 +52,7 @@ export function nextSteps(s: GameState) {
   const nx = s.agenda.find((a) => a.status === "prevu" && a.t >= s.t);
   if (nx) { const i = nx.meetingTemplate ? meetingInfo(s, nx.meetingTemplate, nx.params) : null; out.push({ icon: "🗓️", text: `Prochain rendez-vous à ${String(Math.floor((nx.t % 1440) / 60)).padStart(2, "0")}h${String(nx.t % 60).padStart(2, "0")} : ${nx.title}${who(i?.participants)}.`, link: "/play/agenda" }); }
   for (const m of s.messages.filter((x) => x.actions && !x.handled).slice(0, 2)) out.push({ icon: "✉️", text: `${m.from} attend votre réponse : « ${m.subject} ».`, link: "/play/messagerie", urgent: true });
-  for (const m of s.missions.filter((x) => x.status === "active").slice(0, 3)) { const g = missionGuide(s, m); const giver = person(s, m.giver); out.push({ icon: "🎯", text: `${giver ? `Mission de ${giver.name}` : "Mission"} : ${m.title} — ${g.steps[0]}`, link: g.link }); }
+  for (const m of s.missions.filter((x) => x.status === "active").slice(0, 3)) { const g = missionGuide(s, m); const giver = person(s, m.giver); out.push({ icon: "🎯", text: `${giver ? `Mission de ${giver.name}` : "Mission"} : ${m.title}`, link: "/play/missions", mission: m.id }); void g; }
   if (s.paused && !s.activeMeetingId && !pend) out.push({ icon: "▶", text: "Le temps est en pause : appuyez sur ▶ (en haut) pour faire avancer la journée." });
   return out.slice(0, 7);
 }
@@ -193,6 +193,7 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
       const pend = typeof s.flags["pendingMeeting"] === "string" ? JSON.parse(s.flags["pendingMeeting"] as string) : null;
       return { active: active ? meetingView(s, active) : null, pending: pend, history: s.meetings.filter((m) => m.done).slice(0, 40).map((m) => ({ id: m.id, templateId: m.templateId, title: meetingView(s, m).title, startedT: m.startedT, outcome: m.outcome, score: m.score })), templates: allMeetingTemplates().map((t) => ({ id: t.id, type: t.type })) };
     }
+    case "mission": { const m = s.missions.find((x) => x.id === p.id); return m ? { ...m, question: m.status === "active" ? missionQuestion(s, m) : null, guide: missionGuide(s, m), giverInfo: person(s, m.giver) } : { error: "Mission introuvable" }; }
     case "meeting": { const m = s.meetings.find((x) => x.id === p.id); return m ? meetingView(s, m) : { error: "Réunion introuvable" }; }
     case "agenda": return { agenda: withPeople(s, s.agenda.slice(-80)), t: s.t };
     case "messages": return { messages: s.messages.slice(0, 100) };

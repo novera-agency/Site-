@@ -8,6 +8,7 @@ import { useAction } from "@/lib/hooks";
 import { fmtDate, fmtTime } from "@/engine/time";
 import { fmtEur, fmtPct, clsChange } from "@/lib/format";
 import { MeetingLauncher } from "./MeetingRoom";
+import { MissionHelpPanel } from "./MissionHelp";
 import { Badge, Disclaimer } from "./ui";
 import type { Snapshot } from "@/server/views";
 
@@ -170,6 +171,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </main>
       </div>
       <BottomNav snap={snap} path={path} />
+      <MissionHelpPanel />
       <MeetingLauncher />
       <div className="fixed right-4 top-24 z-[60] space-y-2">{toasts.map((t) => <div key={t.id} onClick={() => dismiss(t.id)} className={`fade-in max-w-sm cursor-pointer rounded-lg border px-3 py-2 text-sm shadow-xl ${t.kind === "err" ? "border-red-500/40 bg-red-950/90 text-red-100" : t.kind === "ok" ? "border-green-500/40 bg-green-950/90 text-green-100" : "border-ink-600 bg-ink-850 text-ink-100"}`}>{t.text}</div>)}</div>
     </div>
