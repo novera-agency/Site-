@@ -7,12 +7,17 @@ import { bondStats, futureDv01, frontFuture, sectorExposureEur } from "./analyti
 import { placeOrder } from "./orders";
 import { REGIMES } from "./regimes";
 import { createMission } from "./missions";
-import { equityWeight, suitableEquityBand, loseClient } from "./clients";
+import { equityWeight, suitableEquityBand, loseClient, rebalanceClient } from "./clients";
 import { rankTitle, joinBank, salaryFor } from "./career";
 import { BANK_BY_ID, TRACKS } from "./data/banks";
 import { toCents, fromCents } from "./money";
 import { dayIndex, fmtTime, MIN_PER_DAY } from "./time";
 import { Rng } from "./rng";
+import { salesFault } from "./meetingEngine";
+import { cashAcc, post } from "./ledger";
+import { addAgendaItem } from "./agenda";
+import { minuteOfDay, isWeekend, tOfDay, nextBusinessDay } from "./time";
+
 
 const eur = (v: number) => `${Math.round(v).toLocaleString("fr-FR")} €`;
 const pct = (v: number, d = 1) => `${v.toFixed(d).replace(".", ",")} %`;
@@ -411,3 +416,104 @@ export function dynamicLabels(s: GameState, templateId: string, nodeId: string, 
 export function deskAnswerCorrect(vars: Record<string, number | string>, choiceId: string) { const order = Number(vars.order ?? 0); const keys = ["n0", "n1", "n2"]; return keys[(keys.indexOf(choiceId) + order) % 3] === "n0"; }
 setLabelResolver(dynamicLabels);
 export { ZONE_NAMES, salaryFor, joinBank };
+
+/* ═════════════════ Appel téléphonique commercial ═════════════════ */
+
+const roundNice = (x: number) => { const step = x > 1e6 ? 50000 : x > 2e5 ? 10000 : 5000; return Math.max(step, Math.round(x / step) * step); };
+const EVENT: Record<string, string[]> = {
+  particulier: ["la vente d'un appartement", "une succession", "une prime exceptionnelle"],
+  institutionnel: ["les cotisations encaissées ce trimestre", "le remboursement d'une obligation arrivée à échéance"],
+  entreprise: ["une trésorerie excédentaire ce trimestre", "la cession d'une filiale"],
+};
+registerMeeting({
+  id: "appel_client", type: "Appel téléphonique", location: "Au téléphone", title: (c) => `Appel à ${cl(c)?.name ?? "un client"}`,
+  participants: (c) => [cl(c)?.npcId ?? ""].filter(Boolean),
+  agenda: ["Prise de contact", "Besoins du client", "Proposition", "Objection", "Conclusion"],
+  objectives: ["Comprendre le besoin avant de proposer", "Proposer une solution adaptée au profil", "Obtenir un versement sans faute"],
+  tension: "Chaque maladresse fait baisser l'objectif de vente. Sous 30 % de l'objectif, le client raccroche.",
+  init: (c) => {
+    const x = cl(c); if (!x) return;
+    const rng = new Rng(c.s.rng);
+    const aum = accountEquity(c.s, x.accountId);
+    const free = Math.max(0, x.wealth / 100 - aum);
+    const obj = roundNice(Math.max(10000, Math.min(aum * 0.18, free * 0.4 || aum * 0.18)));
+    c.m.vars.event = rng.pick(EVENT[x.kind] ?? EVENT.particulier);
+    const m = minuteOfDay(c.s.t);
+    const open = !isWeekend(c.s.t) && m >= 8 * 60 && m < 20 * 60;
+    const p = 0.45 + x.satisfaction / 200 + (c.s.npcs[x.npcId]?.trust ?? 50) / 400;
+    const pickup = c.m.vars.callback ? 1 : open && rng.chance(Math.min(0.95, p)) ? 1 : 0;
+    c.m.vars.pickup = pickup;
+    if (pickup) { c.m.vars.objInit = obj; c.m.vars.objective = obj; c.m.vars.faults = 0; } // pas d'objectif de vente sur une messagerie
+    else c.m.nodeId = "repondeur";
+    x.lastContactT = c.s.t;
+  },
+  docs: (c) => { const x = cl(c); if (!x) return []; return [...clientDocs(c), ...(v(c, "pickup") ? [{ title: "Objectif de l'appel", rows: [["Montant visé", eur(v(c, "objInit"))], ["Origine probable des fonds", String(c.m.vars.event)], ["Règle", "Chaque faute réduit l'objectif ; sous 30 %, le client raccroche."]] as [string, string][] }] : [])]; },
+  start: "decroche",
+  nodes: {
+    decroche: { speaker: (c) => cl(c)?.npcId ?? "narrateur", text: (c) => c.m.vars.callback ? `Allô, ${me(c)} ? Vous m'aviez laissé un message, je vous rappelle. Je vous écoute.` : `Allô ? ${cl(c)?.name}, j'écoute.`, choices: [
+      { id: "a", label: "Bonjour, je vous appelle pour faire le point sur votre portefeuille et vos projets.", apply: (c) => { sc(c, "communication", 2); }, next: "besoins" },
+      { id: "b", label: "J'ai un produit exceptionnel qui rapporte énormément, vous allez adorer !", apply: (c) => { sc(c, "communication", -2); salesFault(c, 0.15, "démarchage trop agressif"); }, next: "besoins" },
+      { id: "c", label: "Euh… je voulais juste prendre des nouvelles.", apply: (c) => { salesFault(c, 0.05, "appel sans objet clair"); }, next: "besoins" },
+    ] },
+    besoins: { speaker: (c) => cl(c)?.npcId ?? "narrateur", text: (c) => `Ça tombe bien. Suite à ${c.m.vars.event}, j'ai environ ${eur(v(c, "objInit"))} disponibles. Je me demandais quoi en faire.`, choices: [
+      { id: "a", label: "Avant de vous proposer quoi que ce soit : votre objectif et votre horizon ont-ils changé ?", apply: (c) => { sc(c, "communication", 3); gainXp(c.s, "client", 10, "Découverte des besoins client"); }, next: "besoins2" },
+      { id: "b", label: "Parlons directement de ce que je peux vous vendre.", apply: (c) => { sc(c, "communication", -2); salesFault(c, 0.15, "pas d'écoute des besoins"); }, next: "proposition" },
+    ] },
+    besoins2: { speaker: (c) => cl(c)?.npcId ?? "narrateur", text: (c) => { const x = cl(c)!; return `Mon objectif reste le même : ${x.objective.toLowerCase()}. Mon horizon, c'est environ ${x.horizonYears} ans. Et je tiens à ceci : ${x.constraints[0]?.toLowerCase() ?? "pas de mauvaise surprise"}.`; }, choices: [
+      { id: "a", label: "C'est noté, je vous fais une proposition qui respecte ces contraintes.", apply: (c) => sc(c, "communication", 1), next: "proposition" },
+    ] },
+    proposition: { speaker: (c) => cl(c)?.npcId ?? "narrateur", text: (c) => `Concrètement, que feriez-vous de ces ${eur(v(c, "objective"))} ?`, choices: [
+      { id: "a", label: "Les investir progressivement selon votre allocation actuelle, qui est adaptée à votre profil.", apply: (c) => { sc(c, "finance", 2); sc(c, "ethique", 1); }, next: "objection" },
+      { id: "b", label: "Tout placer sur les valeurs technologiques : c'est là que se fait la performance.", apply: (c) => { const r = cl(c)!.riskTolerance; if (r >= 6) sc(c, "finance", 1); else { sc(c, "ethique", -2); salesFault(c, r <= 3 ? 0.3 : 0.2, "proposition inadaptée au profil de risque"); } }, next: "objection" },
+      { id: "c", label: "Souscrire un produit structuré à capital protégé à 95 % à l'échéance.", apply: (c) => { const r = cl(c)!.riskTolerance; if (r >= 2 && r <= 4) sc(c, "finance", 2); else salesFault(c, 0.1, "produit peu adapté"); }, next: "objection" },
+      { id: "d", label: "Les laisser sur un compte rémunéré en attendant d'y voir plus clair.", apply: (c) => { const x = cl(c)!; if (x.riskTolerance <= 2 || x.liquidityNeed >= 0.3) sc(c, "finance", 1); else salesFault(c, 0.1, "proposition sans valeur ajoutée"); }, next: "objection" },
+    ] },
+    objection: { speaker: (c) => cl(c)?.npcId ?? "narrateur", text: (c) => { const x = cl(c)!; const p = performance(c.s.accounts[x.accountId]); return p.totalReturn < -0.03 ? `Hum. Mon portefeuille a perdu ${pct(Math.abs(p.totalReturn * 100))} depuis l'ouverture. Pourquoi vous confierais-je davantage ?` : x.feeBps >= 80 ? `Vos frais de ${x.feeBps} points de base par an me paraissent élevés. Pourquoi payer ça ?` : "Et si les marchés baissent juste après ? J'ai peur de mal tomber."; }, choices: [
+      { id: "a", label: "Je comprends. Voici les chiffres honnêtes : les risques, ce que vous pouvez perdre, et pourquoi c'est cohérent avec votre horizon.", apply: (c) => { sc(c, "communication", 2); sc(c, "ethique", 2); }, next: "closing" },
+      { id: "b", label: "Je vous garantis que vous ne perdrez rien.", apply: (c) => { sc(c, "ethique", -3); changeRep(c.s, "conformite", -3, "Promesse de garantie interdite au téléphone"); salesFault(c, 0.25, "promesse de garantie trompeuse"); }, next: "closing" },
+      { id: "c", label: "Je peux vous accorder une remise de 20 % sur les frais.", apply: (c) => { const x = cl(c)!; x.feeBps = Math.round(x.feeBps * 0.8); sc(c, "communication", 1); }, next: "closing" },
+      { id: "d", label: "Si vous ne décidez pas aujourd'hui, l'occasion sera passée.", apply: (c) => { sc(c, "communication", -2); salesFault(c, 0.15, "pression commerciale"); }, next: "closing" },
+    ] },
+    closing: { speaker: (c) => cl(c)?.npcId ?? "narrateur", text: () => "Bon… Et maintenant, comment on procède ?", choices: [
+      { id: "a", label: "Je vous envoie le bulletin de versement par écrit et je m'occupe de l'investissement dès réception.", apply: (c) => { c.m.vars.closeMult = 1; sc(c, "communication", 1); }, next: "fin" },
+      { id: "b", label: "Prenez le temps d'y réfléchir, je vous rappelle la semaine prochaine.", apply: (c) => { c.m.vars.closeMult = 0.6; }, next: "fin" },
+    ] },
+    fin: { speaker: "narrateur", text: () => "L'appel se termine.", end: true },
+    repondeur: { speaker: "narrateur", text: (c) => `Ça sonne… Pas de réponse. Vous tombez sur la messagerie de ${cl(c)?.name}.`, choices: [
+      { id: "a", label: "Laisser un message clair : motif de l'appel et proposition de rappel.", apply: (c) => { c.m.vars.message = 1; sc(c, "communication", 1); }, next: "fin_rep" },
+      { id: "b", label: "Raccrocher sans laisser de message.", next: "fin_rep" },
+    ] },
+    fin_rep: { speaker: "narrateur", text: () => "Vous raccrochez.", end: true },
+  },
+  conclude: (c) => {
+    const x = cl(c); if (!x) return "Appel terminé.";
+    if (!v(c, "pickup")) {
+      if (v(c, "message")) {
+        const d = nextBusinessDay(dayIndex(c.s.t) + 1);
+        addAgendaItem(c.s, { t: tOfDay(d, 10, 30), durationMin: 20, title: `Rappel de ${x.name}`, kind: "appel", meetingTemplate: "appel_client", params: { client: x.id, callback: "1" } });
+        return `Message laissé. ${x.name} vous rappellera demain matin.`;
+      }
+      return `${x.name} n'a pas décroché. Vous pourrez rappeler un autre jour.`;
+    }
+    const ini = v(c, "objInit"), cur = v(c, "objective");
+    const amount = roundNice(cur * (Number(c.m.vars.closeMult ?? 1))) * (cur > 0 ? 1 : 0);
+    const ratio = ini ? amount / ini : 0;
+    const acc = c.s.accounts[x.accountId];
+    if (amount > 0 && ratio >= SALES_MIN) {
+      post(c.s, cashAcc(acc.id), "ext:depots_clients", toCents(amount), "EUR", `Versement complémentaire de ${x.name} (appel commercial)`);
+      acc.capitalAllocated = (acc.capitalAllocated ?? 0) + toCents(amount);
+      rebalanceClient(c.s, x.id, x.targetAllocation);
+      c.m.vars.obtained = amount;
+      c.s.flags["salesYtd"] = ((c.s.flags["salesYtd"] as number) ?? 0) + amount;
+      x.history.unshift({ t: c.s.t, text: `Versement de ${eur(amount)} obtenu par téléphone (${Math.round(ratio * 100)} % de l'objectif)` });
+      clientEffect(c, ratio > 0.9 ? 6 : 2, ratio > 0.9 ? 5 : 2, `Appel commercial réussi : ${eur(amount)} confiés`);
+      changeRep(c.s, "commerciale", ratio > 0.9 ? 3 : 1);
+      gainXp(c.s, "client", 30, "Appel commercial");
+      return `${x.name} vous confie ${eur(amount)}, soit ${Math.round(ratio * 100)} % de l'objectif (${eur(ini)}) — ${v(c, "faults")} faute(s). Les fonds sont investis selon son mandat.`;
+    }
+    c.m.vars.obtained = 0;
+    clientEffect(c, -3, -2, "Appel commercial sans suite");
+    return `${x.name} ne donne pas suite (objectif ${eur(ini)}, ${v(c, "faults")} faute(s)).`;
+  },
+});
+const SALES_MIN = 0.3;

@@ -29,6 +29,52 @@ export function voiceFor(id: string, role = ""): VoiceProfile {
   if (id === "narrateur") { pitch = 1; rate = 1.02; }
   return { voice: voices.length ? voices[h % voices.length] : undefined, pitch: Math.max(0.5, Math.min(1.6, pitch)), rate: Math.max(0.8, Math.min(1.25, rate)) };
 }
+/** Combinaisons hauteur / débit bien séparées à l'oreille */
+const BANDS: [number, number][] = [[1.0, 1.0], [0.7, 0.94], [1.32, 1.06], [0.86, 1.12], [1.16, 0.9], [0.6, 1.02], [1.45, 0.98]];
+export interface Cast { profile: VoiceProfile; label: string; }
+/**
+ * Distribution des voix d'une réunion : chaque participant reçoit une combinaison unique
+ * (voix française différente si l'appareil en propose plusieurs, sinon hauteur et débit nettement différents).
+ * Stable d'une réunion à l'autre pour une même personne quand c'est possible.
+ */
+export function voiceCast(people: { id: string; role?: string }[]): Map<string, Cast> {
+  if (!voices.length) loadVoices();
+  const V = Math.max(1, voices.length), slots = V * BANDS.length;
+  const used: number[] = [];
+  const out = new Map<string, Cast>();
+  for (const p of [...people].sort((a, b) => a.id.localeCompare(b.id))) {
+    const start = hash(p.id) % slots;
+    const ok = (sl: number, strict: boolean) => !used.some((u) => u === sl || (strict && u % V === sl % V && Math.abs(BANDS[Math.floor(u / V)][0] - BANDS[Math.floor(sl / V)][0]) < 0.2));
+    // d'abord une voix bien séparée à l'oreille, sinon au moins un réglage unique
+    let slot = start;
+    for (const strict of [true, false]) {
+      let found = -1;
+      for (let k = 0; k < slots; k++) { const sl = (start + k) % slots; if (ok(sl, strict)) { found = sl; break; } }
+      if (found >= 0) { slot = found; break; }
+    }
+    used.push(slot);
+    const [pitch, rate] = BANDS[Math.floor(slot / V)];
+    const voice = voices.length ? voices[slot % V] : undefined;
+    const tone = pitch < 0.8 ? "grave" : pitch > 1.2 ? "aiguë" : pitch < 0.95 ? "posée" : pitch > 1.05 ? "claire" : "médium";
+    out.set(p.id, { profile: { voice, pitch, rate }, label: `${voice ? voice.name.replace(/^(Microsoft|Google)\s*/, "").split(/[-–(]/)[0].trim() + " · " : ""}${tone}` });
+  }
+  return out;
+}
+
+/** Sonnerie d'appel (tonalité française 425 Hz) — renvoie une promesse résolue à la fin */
+export function ringTone(rings = 2): Promise<void> {
+  return new Promise((resolve) => {
+    try {
+      const AC = (window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext }).AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new AC();
+      const g = ctx.createGain(); g.gain.value = 0; g.connect(ctx.destination);
+      const o = ctx.createOscillator(); o.frequency.value = 425; o.connect(g); o.start();
+      for (let i = 0; i < rings; i++) { const t0 = ctx.currentTime + i * 1.4; g.gain.setValueAtTime(0.06, t0); g.gain.setValueAtTime(0, t0 + 0.9); }
+      setTimeout(() => { o.stop(); ctx.close(); resolve(); }, rings * 1400);
+    } catch { setTimeout(resolve, rings * 1400); }
+  });
+}
+
 /** Prononce un texte ; la promesse se résout à la fin (ou à l'annulation) */
 export function speak(text: string, p: VoiceProfile, volume = 1): Promise<void> {
   return new Promise((resolve) => {

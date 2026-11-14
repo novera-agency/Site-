@@ -50,6 +50,8 @@ Légende : ✅ fonctionnel et relié au moteur · 🟡 partiel · ❌ non réali
 | Difficulté (4 niveaux) | ✅ | Assistance, marges, vente à découvert, fréquence d'événements |
 | Sauvegardes : auto, 3 emplacements, export/import, versions + migration | ✅ | |
 | Authentification, sessions signées, autorisations, limitation de débit, validation Zod | ✅ | Comptes locaux (fichier `data/users.json`) |
+| Réunions vocales (mode oral / écrit, voix distincte par collaborateur, « qu'est-ce que… ») | ✅ | Web Speech API du navigateur |
+| Appels clients (sonnerie, décroché ou messagerie, rappel, objectif de vente qui baisse à chaque faute) | ✅ | Le client raccroche sous 30 % de l'objectif |
 | Mode données réelles | ❌ | Volontairement absent |
 | PostgreSQL / Prisma | ❌ | Remplacé par des fichiers JSON (voir ARCHITECTURE) |
 | Responsive (ordinateur, tablette, mobile) | ✅ | Menu latéral repliable |
@@ -63,8 +65,8 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 
 ## Vérifications (dernière exécution)
 - `npm run lint` : OK
-- `npm test` : 37/37
-- `npm run e2e` : 1/1 (20 étapes)
+- `npm test` : 50/50
+- `npm run e2e` : 9/9 (dont parcours 20 étapes et appel client)
 - `npm run build` : OK
 
 ## Bugs corrigés pendant les tests

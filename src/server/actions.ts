@@ -32,6 +32,7 @@ export const ActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("answer_mission"), missionId: z.string().max(64), value: num.optional(), choice: num.int().optional(), forecast: z.string().max(20).optional() }),
   z.object({ type: z.literal("rebalance"), clientId: z.string().max(64), target: z.record(num.min(0).max(1)) }),
   z.object({ type: z.literal("contact_client"), clientId: z.string().max(64) }),
+  z.object({ type: z.literal("call_client"), clientId: z.string().max(64) }),
   z.object({ type: z.literal("subscribe"), productId: z.string().max(64), nominal: num.positive() }),
   z.object({ type: z.literal("message_action"), messageId: z.string().max(64), action: z.string().max(40), payload: z.record(z.string()).optional() }),
   z.object({ type: z.literal("read"), what: z.enum(["notifications", "messages"]), id: z.string().max(64).optional() }),
@@ -110,6 +111,16 @@ export function applyAction(s: GameState, a: Action): ActionResult {
       if (s.t - c.lastContactT < MIN_PER_DAY) return { ok: false, error: "Vous avez déjà contacté ce client aujourd'hui." };
       const m = startMeeting(s, "client_point_regulier", { client: c.id });
       return m ? { ok: true, data: { meetingId: m.id } } : { ok: false, error: "Réunion indisponible." };
+    }
+    case "call_client": {
+      const c = s.clients.find((x) => x.id === a.clientId);
+      if (!c || c.lost) return { ok: false, error: "Client introuvable." };
+      if (s.activeMeetingId) return { ok: false, error: "Vous êtes déjà en réunion." };
+      const lastCall = (s.flags[`call_${c.id}`] as number | undefined) ?? -1e9;
+      if (dayIndex(s.t) === dayIndex(lastCall)) return { ok: false, error: `Vous avez déjà appelé ${c.name} aujourd'hui. Rappelez demain.` };
+      s.flags[`call_${c.id}`] = s.t;
+      const m = startMeeting(s, "appel_client", { client: c.id });
+      return m ? { ok: true, data: { meetingId: m.id } } : { ok: false, error: "Appel impossible." };
     }
     case "subscribe": { const r = subscribe(s, "perso", a.productId, a.nominal); return r.ok ? { ok: true, message: "Souscription enregistrée." } : { ok: false, error: r.error }; }
     case "message_action": { const r = handleMessageAction(s, a.messageId, a.action, a.payload ?? {}); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error }; }

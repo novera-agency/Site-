@@ -80,7 +80,7 @@ function failMeeting(c: MeetingCtx, reason: string) {
   const tpl = REGISTRY[c.m.templateId];
   if (c.m.done) return;
   const main = tpl.participants(c)[0];
-  c.m.log.push({ who: speakerName(c, main), text: "Je crois qu'on va s'arrêter là. On en reparlera." });
+  c.m.log.push({ who: speakerName(c, main), text: c.m.vars.objInit ? "Écoutez, je n'ai plus le temps. Au revoir." : "Je crois qu'on va s'arrêter là. On en reparlera." });
   c.m.done = true;
   applyFailure(c, reason);
   c.m.outcome = `Réunion ratée — ${reason} La confiance des participants baisse et votre image en interne en pâtit.`;
@@ -89,6 +89,21 @@ function failMeeting(c: MeetingCtx, reason: string) {
   c.s.stats.meetingsCount++;
   logDecision(c.s, "reunion", `${tpl.title(c)} : réunion ratée (${reason})`);
 }
+/**
+ * Objectif de vente (appels commerciaux) : chaque faute le fait baisser d'une fraction de l'objectif initial.
+ * Sous 30 % de l'objectif initial, le client met fin à l'appel.
+ */
+export const SALES_FLOOR = 0.3;
+export function salesFault(c: MeetingCtx, pct: number, why: string) {
+  const ini = Number(c.m.vars.objInit ?? 0);
+  if (!ini) return;
+  const cur = Math.max(0, Number(c.m.vars.objective ?? ini) - ini * pct);
+  c.m.vars.objective = Math.round(cur);
+  c.m.vars.faults = Number(c.m.vars.faults ?? 0) + 1;
+  c.m.log.push({ who: "—", text: `(faute : ${why} — objectif de vente −${Math.round(pct * 100)} % → ${Math.round(cur).toLocaleString("fr-FR")} €)` });
+}
+function salesBroken(c: MeetingCtx) { const ini = Number(c.m.vars.objInit ?? 0); return ini > 0 && Number(c.m.vars.objective ?? ini) < ini * SALES_FLOOR; }
+
 function addPenalty(c: MeetingCtx) {
   c.m.vars.penalites = Number(c.m.vars.penalites ?? 0) + 1;
   return Number(c.m.vars.penalites) >= MAX_PENALTIES;
@@ -130,6 +145,8 @@ export function answerMeeting(s: GameState, meetingId: string, input: { choiceId
   if (input.timeout) {
     m.log.push({ who: me, text: "(silence — vous n'avez pas répondu à temps)" });
     m.score.communication -= 2;
+    salesFault(c, 0.1, "silence au téléphone");
+    if (salesBroken(c)) { failMeeting(c, "Le client, lassé, a mis fin à l'appel."); return { ok: true as const, meeting: m }; }
     if (addPenalty(c)) { failMeeting(c, "Trop de silences et de réponses hors sujet."); return { ok: true as const, meeting: m }; }
     const sp = typeof node.speaker === "function" ? node.speaker(c) : node.speaker;
     if (s.npcs[sp]) { const n = s.npcs[sp]; n.trust = Math.max(0, n.trust - 2); n.memory.unshift({ t: s.t, text: "N'a pas su répondre en réunion", impact: -2 }); }
@@ -147,11 +164,18 @@ export function answerMeeting(s: GameState, meetingId: string, input: { choiceId
     m.log.push({ who: "—", text: `Faute de réponse de votre part, la discussion continue : « ${fallback.label || labelResolver(s, m.templateId, m.nodeId, m.vars, fallback.id, fallback.label)} »` });
     return applyChoice(c, tpl, fallback);
   }
+  if (input.offtopic && m.vars.pickup !== undefined && Number(m.vars.pickup) === 0) {
+    // Messagerie : tout ce qui est dit est enregistré comme un message laissé au client
+    const leave = (node.choices ?? [])[0];
+    if (leave) { m.log.push({ who: me, text: `« ${spoken ?? ""} »` }); m.log.push({ who: "—", text: "(message enregistré sur la messagerie)" }); return applyChoice(c, tpl, leave); }
+  }
   if (input.offtopic) {
     m.log.push({ who: me, text: spoken ? `« ${spoken} »` : "(réponse incompréhensible)" });
     m.score.communication -= 2;
     const sp = typeof node.speaker === "function" ? node.speaker(c) : node.speaker;
     if (s.npcs[sp]) changeTrust(s, sp, -1);
+    salesFault(c, 0.1, "réponse hors sujet");
+    if (salesBroken(c)) { failMeeting(c, "Le client, agacé, a mis fin à l'appel."); return { ok: true as const, meeting: m }; }
     if (addPenalty(c)) { failMeeting(c, "Trop de réponses hors sujet."); return { ok: true as const, meeting: m }; }
     const reactions = ["Je ne vois pas le rapport avec ma question.", "Pardon ? Restons concentrés, s'il vous plaît.", "Ce n'est pas ce que je vous demande.", "Je ne vous suis pas. Soyez précis."];
     const left = MAX_PENALTIES - Number(m.vars.penalites);
@@ -182,6 +206,7 @@ export function answerMeeting(s: GameState, meetingId: string, input: { choiceId
 function applyChoice(c: MeetingCtx, tpl: MeetingTemplate, ch: Choice) {
   const m = c.m;
   ch.apply?.(c);
+  if (salesBroken(c)) { failMeeting(c, "Trop de maladresses : le client a mis fin à l'appel."); return { ok: true as const, meeting: m }; }
   if (ch.reply) { const r = ch.reply(c); if (r) m.log.push({ who: "—", text: r }); }
   m.nodeId = typeof ch.next === "function" ? ch.next(c) : ch.next;
   if (!tpl.nodes[m.nodeId]) { finish(c); return { ok: true as const, meeting: m }; }
@@ -226,7 +251,9 @@ export function meetingView(s: GameState, m: MeetingInstance) {
   return {
     id: m.id, templateId: m.templateId, title: tpl.title(c), type: tpl.type, location: tpl.location, done: m.done, outcome: m.outcome, startedT: m.startedT,
     participants: tpl.participants(c).map((p) => ({ id: p, name: s.npcs[p]?.name ?? p, role: s.npcs[p]?.role ?? "", avatar: s.npcs[p]?.avatar ?? "👤", trust: s.npcs[p]?.trust ?? 50 })),
-    agenda: tpl.agenda, objectives: tpl.objectives, penalties: Number(m.vars.penalites ?? 0), maxPenalties: MAX_PENALTIES, failed: !!m.vars.failed, tension: tpl.tension, docs: tpl.docs ? tpl.docs(c) : [], log: m.log, score: m.score,
+    agenda: tpl.agenda, objectives: tpl.objectives, penalties: Number(m.vars.penalites ?? 0), maxPenalties: MAX_PENALTIES, failed: !!m.vars.failed,
+    sales: m.vars.objInit ? { initial: Number(m.vars.objInit), current: Number(m.vars.objective), faults: Number(m.vars.faults ?? 0), floor: SALES_FLOOR, obtained: m.vars.obtained !== undefined ? Number(m.vars.obtained) : null } : null,
+    phone: tpl.type === "Appel téléphonique", pickup: m.vars.pickup === undefined ? null : Number(m.vars.pickup) === 1, tension: tpl.tension, docs: tpl.docs ? tpl.docs(c) : [], log: m.log, score: m.score,
     choices: m.done ? [] : meetingChoices(s, m), numeric: !m.done && node?.numeric ? { prompt: node.numeric.prompt, unit: node.numeric.unit, hint: s.difficulty === "debutant" || s.settings.explanations ? node.numeric.hint : undefined } : null,
   };
 }

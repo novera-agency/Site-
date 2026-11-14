@@ -51,6 +51,7 @@ Le workflow `.github/workflows/pages.yml` vérifie le code (TypeScript, 37 tests
 - Grand livre en partie double (centimes entiers), comptes personnels / desk / clients / société strictement séparés.
 - Carrière : salaires, bonus, évaluations hebdomadaires / trimestrielles / annuelles, promotions multicritères, licenciement, offres, entretiens, burnout, congés.
 - Réunions en **mode oral** (les personnages parlent avec des voix différentes, vous répondez au micro en temps limité, sans texte à l'écran) ou en **mode écrit** (historique de la conversation, réponses au clic).
+- **Appeler vos clients** depuis l'écran Clients : sonnerie, le client décroche (ou messagerie et rappel le lendemain), et **chaque faute fait baisser l'objectif de vente** (−5 à −30 %) ; sous 30 % de l'objectif initial, il raccroche. Chaque collaborateur a sa propre voix.
 - 17 réunions jouables, 12 PNJ persistants + clients, 22 modèles de missions paramétrables, 35 modules de formation, crises à phases.
 - Création de société (6 types) avec bilan, compte de résultat, flux de trésorerie et risque de faillite.
 

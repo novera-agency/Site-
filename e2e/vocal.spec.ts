@@ -127,3 +127,50 @@ test("mode écrit : poser une question de vocabulaire ; l'avis des collaborateur
   await go(page, "/play/reseau");
   await expect(page.getByTestId("relation-effect")).toContainText("Son avis sur vous");
 });
+
+test("appel client : sonnerie, objectif de vente qui baisse à chaque faute, versement obtenu", async ({ page }) => {
+  test.setTimeout(120000);
+  await page.addInitScript(fakeVoice(true));
+  await go(page, "/");
+  await page.getByTestId("new-career").click();
+  await page.getByTestId("next").click();
+  await page.getByTestId("first-name").fill("Paul");
+  await page.getByTestId("last-name").fill("Vente");
+  for (let i = 0; i < 4; i++) await page.getByTestId("next").click();
+  await page.getByTestId("create").click();
+  await page.waitForURL(/\/play\/?$/);
+  // Avancer jusqu'aux heures ouvrées (les clients décrochent en journée)
+  await page.getByTestId("speed-100").click();
+  await page.waitForTimeout(1500);
+  if ((await page.getByTestId("play-pause").textContent())?.includes("▶")) await page.getByTestId("play-pause").click();
+  for (let i = 0; i < 60; i++) {
+    const join = page.getByRole("button", { name: "Rejoindre la réunion" }).first();
+    if (await join.isVisible().catch(() => false)) { await join.click(); await page.getByTestId("mode-ecrit").click(); while (!(await page.getByRole("button", { name: "Quitter la salle" }).isVisible().catch(() => false))) { await page.locator("[data-testid=meeting-room] .grid.gap-2 > button").first().click(); await page.waitForTimeout(250); } await page.getByRole("button", { name: "Quitter la salle" }).click(); }
+    const t = (await page.locator(".num.text-lg").first().textContent())?.trim() ?? "";
+    if (t >= "09:40") break;
+    if ((await page.getByTestId("play-pause").textContent())?.includes("▶")) await page.getByTestId("play-pause").click();
+    await page.waitForTimeout(700);
+  }
+  if ((await page.getByTestId("play-pause").textContent())?.includes("❚❚")) await page.getByTestId("play-pause").click();
+  await go(page, "/play/clients");
+  await page.getByTestId("call-client").click();
+  const room = page.getByTestId("meeting-room");
+  await expect(room.getByTestId("ringing")).toBeVisible();
+  await expect(room.getByTestId("mode-chooser")).toBeVisible({ timeout: 10000 });
+  const picked = await room.getByText(/décroche/).isVisible();
+  console.log("CLIENT_DECROCHE=" + picked);
+  await room.getByTestId("mode-ecrit").click();
+  if (!picked) { await expect(room.getByText(/messagerie/i).first()).toBeVisible(); return; } // le client peut ne pas répondre
+  const gauge = room.getByTestId("sales-objective");
+  await expect(gauge).toContainText("0 faute");
+  const full = (await gauge.textContent()) ?? "";
+  // Faute : démarchage agressif
+  await room.getByRole("button", { name: /produit exceptionnel/ }).click();
+  await expect(gauge).toContainText("1 faute");
+  expect((await gauge.textContent()) ?? "").not.toBe(full);
+  await expect(room.getByTestId("meeting-log").getByText(/objectif de vente −15 %/)).toBeVisible();
+  // Puis un appel bien mené
+  for (const label of [/votre objectif et votre horizon/, /C'est noté/, /allocation actuelle/, /chiffres honnêtes/, /bulletin de versement/]) await room.getByRole("button", { name: label }).click();
+  await expect(gauge).toContainText("Obtenu");
+  await expect(room.getByText(/vous confie/).first()).toBeVisible();
+});

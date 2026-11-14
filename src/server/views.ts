@@ -201,7 +201,7 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
     case "notifications": return { notifications: s.notifications };
     case "clients": return {
       clients: s.clients.map((c) => ({ ...c, wealth: c.wealth / 100, aum: accountEquity(s, c.accountId), perf: performance(s.accounts[c.accountId]), equityWeight: equityWeight(s, c.accountId), band: suitableEquityBand(c.riskTolerance), allocation: currentAllocation(s, c), npc: s.npcs[c.npcId], history: c.history.slice(0, 15), equityHistory: s.accounts[c.accountId].equityHistory.slice(-120) })),
-      buckets: ALLOC_BUCKETS.map((b) => ({ ...b, price: b.id === "CASH" ? 1 : s.quotes[b.id]?.price })), totalAum: totalAum(s), feesYtd: ((s.flags["feesYtd"] as number) ?? 0) / 100,
+      buckets: ALLOC_BUCKETS.map((b) => ({ ...b, price: b.id === "CASH" ? 1 : s.quotes[b.id]?.price })), totalAum: totalAum(s), feesYtd: ((s.flags["feesYtd"] as number) ?? 0) / 100, salesYtd: (s.flags["salesYtd"] as number) ?? 0,
     };
     case "missions": return { missions: s.missions.slice(0, 80).map((m) => ({ ...m, question: m.status === "active" ? missionQuestion(s, m) : null, guide: missionGuide(s, m), giverInfo: person(s, m.giver) })) };
     case "learning": return { lessons: LESSONS, completed: s.learning.completed, attempts: s.learning.attempts };

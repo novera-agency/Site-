@@ -3,11 +3,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useView, useAction } from "@/lib/hooks";
 import { useGame } from "@/lib/store";
 import { Button, Badge, inputCls } from "./ui";
-import { voiceSupport, voiceFor, speak, stopSpeaking, listen, type Listener } from "@/lib/voice";
+import { voiceSupport, voiceFor, voiceCast, ringTone, speak, stopSpeaking, listen, type Listener } from "@/lib/voice";
 import { matchChoice, parseFrenchNumber } from "@/lib/voice-match";
 import { isTermQuestion } from "@/engine/glossary";
 
-interface MView { id: string; title: string; type: string; location: string; done: boolean; outcome?: string; participants: { id: string; name: string; role: string; avatar: string; trust: number }[]; agenda: string[]; objectives: string[]; tension?: string; docs: { title: string; rows: [string, string][]; note?: string }[]; log: { who: string; text: string }[]; choices: { id: string; label: string; detail?: string }[]; numeric: { prompt: string; unit: string; hint?: string } | null; score: Record<string, number>; penalties: number; maxPenalties: number; failed: boolean; }
+interface MView { id: string; title: string; type: string; location: string; done: boolean; outcome?: string; participants: { id: string; name: string; role: string; avatar: string; trust: number }[]; agenda: string[]; objectives: string[]; tension?: string; docs: { title: string; rows: [string, string][]; note?: string }[]; log: { who: string; text: string }[]; choices: { id: string; label: string; detail?: string }[]; numeric: { prompt: string; unit: string; hint?: string } | null; score: Record<string, number>; penalties: number; maxPenalties: number; failed: boolean; sales: { initial: number; current: number; faults: number; floor: number; obtained: number | null } | null; phone: boolean; pickup: boolean | null; }
 type Mode = "oral" | "ecrit";
 
 /** Temps de réponse à l'oral selon la difficulté (secondes) */
@@ -16,7 +16,7 @@ const LIMIT: Record<string, number> = { debutant: 30, normal: 20, expert: 15, si
 /** Documents et ordre du jour : utiles dans les deux modes (les chiffres demandés s'y trouvent) */
 function Dossier({ m }: { m: MView }) {
   return <aside className="scroll-thin space-y-4 border-t border-ink-700 bg-ink-900/60 p-4 lg:max-h-[80vh] lg:overflow-y-auto lg:border-l lg:border-t-0">
-    {m.tension && <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-200">⚠ {m.tension}</div>}
+    {m.tension && !(m.phone && m.pickup === false) && <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-200">⚠ {m.tension}</div>}
     <div><div className="mb-1 text-[11px] uppercase tracking-wider text-ink-400">Ordre du jour</div><ol className="list-decimal space-y-0.5 pl-4 text-sm text-ink-200">{m.agenda.map((a) => <li key={a}>{a}</li>)}</ol></div>
     <div><div className="mb-1 text-[11px] uppercase tracking-wider text-ink-400">Objectifs</div><ul className="space-y-0.5 text-sm text-ink-200">{m.objectives.map((a) => <li key={a}>◆ {a}</li>)}</ul></div>
     {m.docs.map((d) => <div key={d.title} className="rounded-lg border border-ink-700 bg-ink-850 p-3"><div className="mb-2 text-xs font-semibold text-white">📄 {d.title}</div><dl className="space-y-1 text-xs">{d.rows.map(([k, v], i) => <div key={i} className="grid grid-cols-[minmax(0,40%)_1fr] gap-2"><dt className="text-ink-400">{k}</dt><dd className={`${/^[-+−]?[0-9]/.test(v) ? "num " : ""}text-ink-100`}>{v}</dd></div>)}</dl>{d.note && <div className="mt-2 text-[11px] text-ink-300">{d.note}</div>}</div>)}
@@ -48,6 +48,11 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
   const deadline = useRef(0);
   const busyRef = useRef(false);
 
+  const [ringing, setRinging] = useState<boolean | null>(null);
+  const [callStart] = useState(() => Date.now());
+  const [, tick] = useState(0);
+  useEffect(() => { if (!m?.phone) return; const id = setInterval(() => tick((x) => x + 1), 1000); return () => clearInterval(id); }, [m?.phone]);
+  useEffect(() => { if (!m || ringing !== null) return; if (m.phone && !m.done && m.log.length <= 1) { setRinging(true); ringTone(2).then(() => setRinging(false)); } else setRinging(false); }, [m, ringing]);
   useEffect(() => { try { const x = localStorage.getItem("fe_meeting_mode"); if (x === "oral" || x === "ecrit") setLastMode(x); } catch { /* */ } }, []);
   useEffect(() => { if (m?.done && mode === null) setMode("ecrit"); }, [m?.done, mode]);
   useEffect(() => { if (mode === "ecrit") logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" }); }, [m?.log.length, mode]);
@@ -120,7 +125,8 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
         const p = m.participants.find((x) => x.name === l.who);
         setSpeaker(p?.id ?? "narrateur");
         const prefix = l.who === "Correction" ? "Correction. " : l.who === "Bilan" ? "Bilan de la réunion. " : "";
-        await speak(prefix + l.text.replace(/^[✔✘]\s*/, ""), voiceFor(p?.id ?? "narrateur", p?.role));
+        const cast = voiceCast(m.participants);
+        await speak(prefix + l.text.replace(/^[✔✘]\s*/, ""), p ? cast.get(p.id)!.profile : voiceFor("narrateur"));
       }
       if (runId.current !== my) return;
       setSpeaker(null);
@@ -158,21 +164,37 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
   if (!m) return null;
   const quit = m.done ? <Button onClick={() => { stopVoice(); onClose(); }}>Quitter la salle</Button> : <Button variant="outline" size="sm" onClick={async () => { stopVoice(); await act({ type: "leave_meeting" }); onClose(); }}>Quitter (mal perçu)</Button>;
   const speakingP = m.participants.find((p) => p.id === speaker);
+  const cast = voiceCast(m.participants);
+  const elapsed = Math.floor((Date.now() - callStart) / 1000);
+  const callee = m.participants[0];
+  const salesBar = m.sales && <div data-testid="sales-objective" className="w-full max-w-xl rounded-lg border border-ink-700 bg-ink-900/80 p-3 text-left">
+    <div className="flex items-baseline justify-between gap-2 text-xs"><span className="uppercase tracking-wider text-ink-400">Objectif de vente</span><span className="num text-sm font-semibold text-white">{m.sales.obtained !== null ? `Obtenu : ${m.sales.obtained.toLocaleString("fr-FR")} €` : `${m.sales.current.toLocaleString("fr-FR")} €`} <span className="text-ink-500">/ {m.sales.initial.toLocaleString("fr-FR")} €</span></span></div>
+    <div className="relative mt-1.5 h-2 overflow-hidden rounded-full bg-ink-700"><div className={`h-full transition-all duration-700 ${m.sales.current / m.sales.initial < 0.5 ? "bg-loss" : m.sales.current / m.sales.initial < 0.8 ? "bg-amber-400" : "bg-gain"}`} style={{ width: `${(m.sales.current / m.sales.initial) * 100}%` }} /><div className="absolute inset-y-0 w-0.5 bg-white/60" style={{ left: `${m.sales.floor * 100}%` }} title="Sous ce seuil, le client raccroche" /></div>
+    <div className="mt-1 text-[11px] text-ink-400">{m.sales.faults} faute{m.sales.faults > 1 ? "s" : ""} · chaque maladresse fait baisser l'objectif · sous le trait blanc ({Math.round(m.sales.floor * 100)} %), le client raccroche</div>
+  </div>;
   const warn = !m.done && m.penalties > 0 && <div data-testid="penalties" className={`rounded-full px-3 py-1 text-xs ${m.penalties >= m.maxPenalties - 1 ? "bg-red-500/20 text-red-200" : "bg-amber-500/15 text-amber-200"}`}>⚠ Avertissements : {m.penalties}/{m.maxPenalties} — {m.maxPenalties - m.penalties === 1 ? "encore un et la réunion est ratée" : "réponses hors sujet ou silences"}</div>;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/80 p-0 backdrop-blur-sm md:p-6" data-testid="meeting-room">
       <div className="panel mx-auto flex min-h-full w-full max-w-6xl flex-col md:min-h-0 md:rounded-xl">
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-700 bg-ink-900 px-4 py-3">
-          <div><div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gold">{m.location} · {m.type}{mode && <span className="ml-2 rounded bg-ink-700 px-1.5 py-0.5 text-[10px] tracking-normal text-ink-200">{mode === "oral" ? "🎙️ mode oral" : "💬 mode écrit"}</span>}</div><h2 className="text-lg font-semibold text-white">{m.title}</h2></div>
+          <div><div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gold">{m.location} · {m.type}{mode && <span className="ml-2 rounded bg-ink-700 px-1.5 py-0.5 text-[10px] tracking-normal text-ink-200">{mode === "oral" ? "🎙️ mode oral" : "💬 mode écrit"}</span>}</div><h2 className="text-lg font-semibold text-white">{m.phone && callee ? <>📞 {m.done ? "Appel terminé avec" : m.pickup === false ? "Messagerie de" : "En ligne avec"} {callee.name} {!m.done && <span className="num ml-2 text-sm font-normal text-ink-400">{String(Math.floor(elapsed / 60)).padStart(2, "0")}:{String(elapsed % 60).padStart(2, "0")}</span>}</> : m.title}</h2></div>
           <div className="flex items-center gap-2">{quit}</div>
         </header>
 
-        {mode === null ? (
+        {ringing ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 p-10 text-center" data-testid="ringing">
+            <span className="text-6xl animate-pulse">{callee?.avatar ?? "📞"}</span>
+            <div className="text-xl font-semibold text-white">Appel de {callee?.name}…</div>
+            <div className="text-sm text-ink-400">Ça sonne</div>
+          </div>
+        ) : mode === null ? (
           /* ───── Choix du mode à l'entrée ───── */
           <div className="flex flex-1 flex-col items-center justify-center gap-6 p-6 text-center" data-testid="mode-chooser">
             <div><div className="text-sm text-ink-400">Autour de la table</div><div className="mt-3 flex flex-wrap justify-center gap-3">{m.participants.map((p) => <div key={p.id} className="flex items-center gap-2 rounded-lg bg-ink-800 px-3 py-2 text-left"><span className="text-2xl">{p.avatar}</span><div><div className="text-sm font-medium text-white">{p.name}</div><div className="text-[11px] text-ink-400">{p.role}</div></div></div>)}</div></div>
-            <div className="text-lg font-semibold text-white">Comment voulez-vous mener cette réunion ?</div>
+            {m.phone && <div className="text-sm text-ink-200">{m.pickup ? `📞 ${callee?.name} décroche.` : `📞 ${callee?.name} ne répond pas : vous tombez sur la messagerie.`}</div>}
+            {salesBar && m.pickup && <div className="flex w-full justify-center">{salesBar}</div>}
+            <div className="text-lg font-semibold text-white">{m.phone ? "Comment voulez-vous mener cet appel ?" : "Comment voulez-vous mener cette réunion ?"}</div>
             <div className="grid w-full max-w-2xl gap-3 md:grid-cols-2">
               <button data-testid="mode-oral" onClick={chooseOral} className={`rounded-xl border p-5 text-left transition hover:border-gold ${lastMode === "oral" ? "border-gold/70 bg-yellow-500/10" : "border-ink-600 bg-ink-850"}`}>
                 <div className="text-3xl">🎙️</div><div className="mt-2 text-lg font-semibold text-white">Mode oral</div>
@@ -192,8 +214,9 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
               /* ───── Mode oral : pas d'historique, on écoute et on répond ───── */
               <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 p-6" data-testid="oral-stage">
                 {warn}
+                {salesBar}
                 <div className="flex flex-wrap justify-center gap-4">{m.participants.map((p) => <div key={p.id} className={`flex w-36 flex-col items-center rounded-xl px-3 py-4 text-center transition ${speaker === p.id ? "bg-yellow-500/15 ring-2 ring-gold" : "bg-ink-800/80"}`}>
-                  <span className={`text-4xl ${speaker === p.id ? "animate-pulse" : ""}`}>{p.avatar}</span><div className="mt-2 text-sm font-medium text-white">{p.name}</div><div className="text-[11px] text-ink-400">{p.role}</div>{speaker === p.id && <div className="mt-1 text-[11px] font-semibold text-gold">parle…</div>}</div>)}</div>
+                  <span className={`text-4xl ${speaker === p.id ? "animate-pulse" : ""}`}>{p.avatar}</span><div className="mt-2 text-sm font-medium text-white">{p.name}</div><div className="text-[11px] text-ink-400">{p.role}</div><div className="mt-1 text-[10px] text-ink-500" data-testid="voice-label">🔊 {cast.get(p.id)?.label}</div>{speaker === p.id && <div className="mt-1 text-[11px] font-semibold text-gold">parle…</div>}</div>)}</div>
                 <div className="w-full max-w-xl text-center">
                   {m.done ? <div><Badge tone={m.failed ? "loss" : "gold"}>{m.failed ? "Réunion ratée" : "Réunion terminée"}</Badge><p className="mt-3 text-sm text-ink-200">{m.outcome}</p><button onClick={() => setMode("ecrit")} className="mt-4 rounded-full bg-ink-800 px-4 py-2 text-sm text-ink-200 hover:bg-ink-700" data-testid="show-transcript">📄 Voir le compte rendu écrit</button></div>
                     : phase === "speaking" ? <div className="text-ink-200"><div className="text-lg">🔊 {speakingP ? `${speakingP.name} vous parle…` : "Écoutez…"}</div><button onClick={() => { runId.current++; stopSpeaking(); setSpeaker(null); startListening(); }} className="mt-2 text-xs text-ink-400 underline">passer</button></div>
@@ -229,6 +252,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
                 </div>
                 <div className="border-t border-ink-700 bg-ink-900 p-4">
                   {warn && <div className="mb-3">{warn}</div>}
+                  {salesBar && <div className="mb-3">{salesBar}</div>}
                   {!m.done && <form data-testid="ask-term" onSubmit={(e) => { e.preventDefault(); const q = (e.currentTarget.elements.namedItem("q") as HTMLInputElement); if (q.value.trim().length > 1) { askTerm(/\?$/.test(q.value) || isTermQuestion(q.value) ? q.value : `Qu'est-ce que ${q.value} ?`); q.value = ""; } }} className="mb-3 flex gap-2"><input name="q" className={inputCls + " py-1.5 text-xs"} placeholder="Un terme vous échappe ? Demandez : « Qu'est-ce que la duration ? »" /><Button size="sm" variant="ghost" type="submit" disabled={busy}>❓ Demander</Button></form>}
                   {m.done ? <div className="text-sm"><Badge tone={m.failed ? "loss" : "gold"}>{m.failed ? "Réunion ratée" : "Réunion terminée"}</Badge> <span className="ml-2 text-ink-200">{m.outcome}</span></div>
                     : m.numeric ? <form onSubmit={(e) => { e.preventDefault(); const v = Number(val.replace(/\s/g, "").replace(",", ".")); if (Number.isFinite(v)) send({ value: v }); }} className="space-y-2">

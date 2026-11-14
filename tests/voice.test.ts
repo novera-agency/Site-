@@ -26,3 +26,15 @@ describe("Compréhension orale", () => {
     expect(matchChoice("bonjour", choices).ambiguous).toBe(true);
   });
 });
+
+import { voiceCast } from "@/lib/voice";
+describe("Voix des participants", () => {
+  it("chaque participant d'une réunion a une voix distincte (même sans voix française installée)", () => {
+    const people = ["boss", "director", "senior", "analyst", "colleague", "risk", "compliance"].map((id) => ({ id }));
+    const cast = voiceCast(people);
+    const keys = people.map((p) => { const c = cast.get(p.id)!.profile; return `${c.voice?.name ?? "-"}|${c.pitch}|${c.rate}`; });
+    expect(new Set(keys).size).toBe(people.length);
+    // stable : même distribution à chaque appel
+    expect(voiceCast(people).get("boss")!.profile.pitch).toBe(cast.get("boss")!.profile.pitch);
+  });
+});
