@@ -179,6 +179,8 @@ export function completeMission(s: GameState, m: Mission, success: boolean) {
     for (const [k, d] of Object.entries(m.reward.rep)) changeRep(s, k as RepKey, d!);
     if (m.reward.trust) changeTrust(s, m.reward.trust.npc, m.reward.trust.delta, `Mission réussie : ${m.title}`);
     s.career.missionsDone++;
+    const col = s.npcs.colleague;
+    if (col && col.trust <= 25 && m.giver && s.mode === "carriere") { s.reputation.interne = Math.max(0, s.reputation.interne - 1); notify(s, "alerte", `${col.name} s'attribue une part du mérite`, `Votre collègue laisse entendre qu'il a beaucoup contribué à « ${m.title} ».`, "/play/reseau"); }
     notify(s, "succes", `Mission réussie : ${m.title}`, `+${m.reward.xp} XP`, "/play/missions");
   } else {
     s.career.missionsFailed++;

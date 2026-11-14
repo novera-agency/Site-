@@ -31,6 +31,7 @@ import { toCents } from "./money";
 import { changeRep, gainXp, notify, pushNews, nextId, fx, logDecision } from "./core";
 import { dayIndex, minuteOfDay, MIN_PER_DAY, START_T, STEP_MIN, tOfDay, weekday, isWeekend, firstBusinessDayOfMonth, dateOf, nextBusinessDay } from "./time";
 import "./meetings";
+import { isAlly, isHostile, mondayRelations, monthlyRelations, checkRelationChanges } from "./relations";
 
 export interface NewGameOptions {
   ownerId: string; name?: string; mode: GameMode; difficulty: Difficulty; seed?: string; profile: Profile; bankId: string; track: Track;
@@ -243,7 +244,8 @@ function newDay(s: GameState, rng: Rng) {
     dailyCompetitors(s, rng);
     maybeTriggerCrises(s, rng);
     if (!s.flags["vacationUntil"] || s.t >= (s.flags["vacationUntil"] as number)) { delete s.flags["vacationUntil"]; maybeCareerEvent(s, rng); planDay(s, rng); }
-    if (weekday(s.t) === 1) assignWeeklyMissions(s, rng);
+    if (weekday(s.t) === 1) { assignWeeklyMissions(s, rng); mondayRelations(s); }
+    checkRelationChanges(s);
   }
   scheduleCalendar(s, day + 30);
   updateConsensus(s);
@@ -258,7 +260,8 @@ function newDay(s: GameState, rng: Rng) {
     const mo = dateOf(s.t).getUTCMonth();
     if ([0, 3, 6, 9].includes(mo) && day > (s.flags["startDay"] as number) + 20) quarterlyReview(s);
     if (mo === 0) { s.flags["vacationDaysYear"] = 0; s.flags["feesYtd"] = 0; }
-    if (s.mode === "carriere" && rng.chance(0.25)) generateOffer(s, rng);
+    if (s.mode === "carriere" && rng.chance(0.25 * (isAlly(s, "recruiter") ? 2 : isHostile(s, "recruiter") ? 0.5 : 1))) generateOffer(s, rng);
+    monthlyRelations(s);
   }
   const date = dateOf(s.t);
   if (!weekend && date.getUTCMonth() === 11 && day === nextBusinessDay(Math.floor((Date.UTC(date.getUTCFullYear(), 11, 15) - Date.UTC(2027, 0, 1)) / 86400000))) annualReview(s);

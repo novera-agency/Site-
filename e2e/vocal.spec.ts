@@ -37,7 +37,7 @@ async function startCareerAndJoin(page: Page) {
   return room;
 }
 
-test("mode oral : micro autorisé, voix distinctes, aucun historique affiché, réponses parlées, silence sanctionné", async ({ page }) => {
+test("mode oral : micro autorisé, voix distinctes, aucun historique affiché, réponses parlées, hors-sujet et silence sanctionnés", async ({ page }) => {
   test.setTimeout(120000);
   await page.addInitScript(fakeVoice(true));
   const room = await startCareerAndJoin(page);
@@ -53,7 +53,7 @@ test("mode oral : micro autorisé, voix distinctes, aucun historique affiché, r
   await say(page, "la première");
   await expect(room.getByTestId("voice-listening")).toBeVisible({ timeout: 15000 });
   await say(page, "bonjour bonjour", false);
-  await expect(room.getByText(/Pas sûr d'avoir compris/)).toBeVisible({ timeout: 10000 });
+  await expect(room.getByTestId("penalties")).toContainText("1/3", { timeout: 10000 }); // hors sujet : avertissement
   // Silence jusqu'au bout du temps (20 s en difficulté normale) → la réunion se termine sans vous
   await expect(room.getByText("Réunion terminée")).toBeVisible({ timeout: 40000 });
   // Plusieurs profils de voix ont été utilisés
@@ -81,4 +81,49 @@ test("mode écrit : historique avec les noms ; micro refusé → message clair",
   await expect(room.getByTestId("meeting-log").getByText("Quelles sont exactement mes limites de risque ?")).toBeVisible();
   // Rien n'est prononcé en mode écrit
   expect(await page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken.length)).toBe(0);
+});
+
+test("mode oral : « Qu'est-ce que la VaR ? » expliqué par celui qui l'a dit ; trois hors-sujet = réunion ratée", async ({ page }) => {
+  test.setTimeout(120000);
+  await page.addInitScript(fakeVoice(true));
+  const room = await startCareerAndJoin(page);
+  await room.getByTestId("mode-oral").click();
+  await expect(room.getByTestId("voice-listening")).toBeVisible({ timeout: 15000 });
+  await say(page, "Quelles sont mes limites de risque");
+  await expect(room.getByTestId("voice-listening")).toBeVisible({ timeout: 15000 });
+  const n = await page.evaluate(() => (window as unknown as W).__spoken.length);
+  await say(page, "Qu'est-ce que la VaR ?");
+  const spoken = await page.evaluate((k) => (window as unknown as W).__spoken.slice(k).join(" "), n);
+  expect(spoken).toMatch(/99 %/);
+  // Aucun avertissement pour une question de vocabulaire
+  await expect(room.getByTestId("voice-listening")).toBeVisible({ timeout: 15000 });
+  await expect(room.getByTestId("penalties")).toHaveCount(0);
+  await say(page, "il fait vraiment beau aujourd'hui");
+  await expect(room.getByTestId("penalties")).toContainText("1/3");
+  await expect(room.getByTestId("voice-listening")).toBeVisible({ timeout: 15000 });
+  await say(page, "mon chat adore les croquettes");
+  await expect(room.getByTestId("penalties")).toContainText("2/3");
+  await expect(room.getByTestId("voice-listening")).toBeVisible({ timeout: 15000 });
+  await say(page, "le match de football était génial", false);
+  await expect(room.getByText("Réunion ratée").first()).toBeVisible({ timeout: 15000 });
+  await room.getByTestId("show-transcript").click();
+  await expect(room.getByTestId("meeting-log").getByText(/réponse hors sujet/).first()).toBeVisible();
+});
+
+test("mode écrit : poser une question de vocabulaire ; l'avis des collaborateurs est affiché", async ({ page }) => {
+  await page.addInitScript(fakeVoice(true));
+  const room = await startCareerAndJoin(page);
+  await room.getByTestId("mode-ecrit").click();
+  await room.locator(".grid.gap-2 > button").first().click(); // « Quelles sont exactement mes limites de risque ? »
+  await room.getByTestId("ask-term").locator("input").fill("Qu'est-ce que la VaR ?");
+  await room.getByTestId("ask-term").getByRole("button").click();
+  const log = room.getByTestId("meeting-log");
+  await expect(log.getByText(/99 %/).last()).toBeVisible();
+  // Réponse donnée par le responsable du desk, qui avait employé le terme
+  const who = await log.locator("div.fade-in").last().locator("div").first().textContent();
+  expect(who).toMatch(/Responsable du desk/);
+  await page.keyboard.press("Escape");
+  await room.getByRole("button", { name: /Quitter/ }).click();
+  await go(page, "/play/reseau");
+  await expect(page.getByTestId("relation-effect")).toContainText("Son avis sur vous");
 });

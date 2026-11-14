@@ -16,6 +16,7 @@ import { companyStatements, hireCandidates, COMPANY_TYPES, OFFICES, TOOLS } from
 import { structuredScenarios } from "@/engine/structured";
 import { CRISIS_LABELS } from "@/engine/crisis";
 import { vixLike } from "@/engine/macro";
+import { relationStatus } from "@/engine/relations";
 import { BANKS, BANK_BY_ID, TRACKS, BASE_SALARY } from "@/engine/data/banks";
 import { LESSONS } from "@/engine/data/learning";
 import { skillLevel, SKILL_LEVELS, SKILL_NAMES, REP_NAMES, avgRep, toEur, multiplier } from "@/engine/core";
@@ -29,8 +30,8 @@ function quoteLite(s: GameState, id: string) {
   return { id, n: d.name, c: d.cls, cur: d.currency, p: px(q.price), ch: q.prevClose ? r2((q.price / q.prevClose - 1) * 100) : 0, s: d.sector, z: d.zone };
 }
 
-export interface Person { id: string; name: string; role: string; avatar: string; trust: number; }
-export function person(s: GameState, id?: string): Person | null { const n = id ? s.npcs[id] : undefined; return n ? { id: n.id, name: n.name, role: n.role, avatar: n.avatar, trust: Math.round(n.trust) } : null; }
+export interface Person { id: string; name: string; role: string; avatar: string; trust: number; status?: ReturnType<typeof relationStatus>; }
+export function person(s: GameState, id?: string): Person | null { const n = id ? s.npcs[id] : undefined; return n ? { id: n.id, name: n.name, role: n.role, avatar: n.avatar, trust: Math.round(n.trust), status: relationStatus(s, n.id) } : null; }
 /** Qui participe, où et de quoi il s'agit — pour annoncer une réunion de façon claire */
 export function meetingInfo(s: GameState, templateId?: string, params: Record<string, string> = {}) {
   const tpl = templateId ? meetingTemplate(templateId) : undefined;
@@ -205,7 +206,7 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
     case "missions": return { missions: s.missions.slice(0, 80).map((m) => ({ ...m, question: m.status === "active" ? missionQuestion(s, m) : null, guide: missionGuide(s, m), giverInfo: person(s, m.giver) })) };
     case "learning": return { lessons: LESSONS, completed: s.learning.completed, attempts: s.learning.attempts };
     case "skills": return { skills: Object.entries(s.skills).map(([k, xp]) => ({ id: k, name: SKILL_NAMES[k as keyof typeof SKILL_NAMES], xp, level: skillLevel(xp), next: SKILL_LEVELS[skillLevel(xp) + 1] ?? null, prev: SKILL_LEVELS[skillLevel(xp)] })), log: s.skillLog.slice(0, 60), reputation: Object.entries(s.reputation).map(([k, v]) => ({ id: k, name: REP_NAMES[k as keyof typeof REP_NAMES], value: v })), avgRep: avgRep(s), decisions: s.decisions.slice(0, 80) };
-    case "network": return { npcs: Object.values(s.npcs).map((n) => ({ ...n, client: n.relation === "client" })) };
+    case "network": return { npcs: Object.values(s.npcs).map((n) => ({ ...n, client: n.relation === "client", status: relationStatus(s, n.id) })) };
     case "hr": {
       const sc = s.career.employed ? performanceScore(s, "quarter") : null;
       return { career: { ...s.career, salaryAnnual: s.career.salaryAnnual / 100, ytdBonusPool: s.career.ytdBonusPool / 100, deskLimitVaR: s.career.deskLimitVaR / 100, title: rankTitle(s), offers: s.career.pendingOffers.map((o) => ({ ...o, salary: o.salary / 100, bank: BANK_BY_ID[o.bankId], title: TRACKS[o.track].ranks[o.rank], ready: !!s.flags[`offerReady_${o.id}`] })) }, track: TRACKS[s.career.track], bank: BANK_BY_ID[s.career.bankId], score: sc, banks: BANKS, tracks: TRACKS, baseSalary: BASE_SALARY, vacationLeft: 25 - ((s.flags["vacationDaysYear"] as number) ?? 0), mode: s.mode };

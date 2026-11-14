@@ -10,6 +10,7 @@ import { addAgendaItem } from "./agenda";
 import { newAccount, totalAum } from "./clients";
 import { dayIndex, MIN_PER_DAY, tOfDay, nextBusinessDay, fmtDate } from "./time";
 import { liquidate } from "./orders";
+import { isAlly, isHostile } from "./relations";
 
 const EXT_EMPLOYER = "ext:employeur", EXT_LIVING = "ext:depenses_vie", EXT_BANK = "ext:capital_banque", EXT_TAX = "ext:fisc";
 
@@ -95,8 +96,9 @@ export function performanceScore(s: GameState, since: "week" | "quarter" | "year
     : c.track === "risk" ? { pnl: 0.05, risk: 0.35, client: 0.05, mission: 0.3, rep: 0.15, comp: 0.1 }
     : c.track === "analyste" || c.track === "ib" ? { pnl: 0.1, risk: 0.1, client: 0.1, mission: 0.4, rep: 0.2, comp: 0.1 }
     : { pnl: 0.35, risk: 0.25, client: 0.05, mission: 0.15, rep: 0.1, comp: 0.1 };
-  const total = pnlScore * w.pnl + riskScore * w.risk + clientScore * w.client + missionScore * w.mission + repScore * w.rep + compliance * w.comp;
-  return { total: Math.round(total), details: { pnl: Math.round(pnlScore), risque: Math.round(riskScore), clients: Math.round(clientScore), missions: Math.round(missionScore), reputation: Math.round(repScore), conformite: Math.round(compliance) }, pnl, varv, limit };
+  const bossAdj = isAlly(s, "boss") ? 5 : isHostile(s, "boss") ? -5 : 0; // le jugement du manager pèse dans toute évaluation
+  const total = clamp(pnlScore * w.pnl + riskScore * w.risk + clientScore * w.client + missionScore * w.mission + repScore * w.rep + compliance * w.comp + bossAdj, 0, 100);
+  return { total: Math.round(total), bossAdj, details: { pnl: Math.round(pnlScore), risque: Math.round(riskScore), clients: Math.round(clientScore), missions: Math.round(missionScore), reputation: Math.round(repScore), conformite: Math.round(compliance) }, pnl, varv, limit };
 }
 
 /** Bilan hebdomadaire (vendredi 18 h) */
@@ -124,7 +126,7 @@ export function quarterlyReview(s: GameState) {
   const skillSum = track.skills.reduce((a, k) => a + skillLevel(s.skills[k as keyof typeof s.skills]), 0);
   const repOk = avgRep(s) >= 40 + c.rank * 5;
   const riskOk = sc.details.risque >= 60 && sc.details.conformite >= 50;
-  const minDays = 80 / b.promoSpeed * (1 + c.rank * 0.25);
+  const minDays = 80 / b.promoSpeed * (1 + c.rank * 0.25) * (isAlly(s, "boss") ? 0.8 : 1);
   let outcome = "";
   let promoted = false;
   const reasons: string[] = [];
@@ -134,6 +136,7 @@ export function quarterlyReview(s: GameState) {
   if (!repOk) reasons.push(`réputation insuffisante (moyenne ${Math.round(avgRep(s))}, ${40 + c.rank * 5} requis)`);
   if (daysInRank < minDays) reasons.push(`ancienneté au poste insuffisante (${Math.round(daysInRank)}/${Math.round(minDays)} jours)`);
   if (c.rank >= 8) reasons.push("vous occupez déjà le poste le plus élevé");
+  if (c.rank >= 3 && (s.npcs.director?.trust ?? 50) < 45) reasons.push(`pas de soutien du Managing Director (${s.npcs.director?.name}) pour passer au-delà du rang Associate`);
   if (reasons.length === 0) {
     promoted = true;
     promote(s);
@@ -177,7 +180,8 @@ export function annualReview(s: GameState) {
   const desk = s.accounts.desk;
   const pnl = desk ? accountEquity(s, "desk") - c.yearStartEquity : 0;
   const pnlShare = Math.max(0, pnl) * (c.track === "trader" ? 0.04 : 0.015) * b.bonusMult * (sc.details.risque >= 60 ? 1 : 0.3);
-  const bonus = Math.round(c.ytdBonusPool + toCents(pnlShare) * (sc.total >= 40 ? 1 : 0));
+  const mdMult = isAlly(s, "director") ? 1.15 : isHostile(s, "director") ? 0.85 : 1;
+  const bonus = Math.round((c.ytdBonusPool + toCents(pnlShare) * (sc.total >= 40 ? 1 : 0)) * mdMult);
   if (bonus > 0) { post(s, cashAcc("perso"), EXT_EMPLOYER, Math.round(bonus * 0.6), "EUR", `Bonus annuel net (brut ${fromCents(bonus).toLocaleString("fr-FR")} €)`); post(s, EXT_TAX, EXT_EMPLOYER, Math.round(bonus * 0.4), "EUR", "Prélèvements sur bonus"); }
   c.reviews.unshift({ t: s.t, kind: "annuelle", score: sc.total, details: sc.details, outcome: bonus > 0 ? `Bonus attribué : ${fromCents(bonus).toLocaleString("fr-FR")} € brut` : "Aucun bonus cette année.", bonus, comment: `P&L annuel du desk : ${Math.round(pnl).toLocaleString("fr-FR")} €` });
   c.ytdBonusPool = 0;
@@ -268,7 +272,13 @@ export function checkRiskLimits(s: GameState) {
   const c = s.career;
   if (!c.employed || !s.accounts.desk) return;
   const v = valueAtRisk(s, "desk").var;
-  const limit = c.deskLimitVaR / 100;
+  const limit = c.deskLimitVaR / 100 * (isHostile(s, "risk") ? 0.9 : 1);
+  if (v > limit && isAlly(s, "risk") && v <= limit * 1.1 && !s.flags["riskGraceT"]) {
+    s.flags["riskGraceT"] = s.t;
+    notify(s, "alerte", `${s.npcs.risk.name} ferme les yeux… une fois`, "Votre VaR dépasse légèrement la limite. Réduisez le risque : la tolérance ne durera pas.", "/play/risques");
+    return;
+  }
+  if (v <= limit) delete s.flags["riskGraceT"];
   if (v > limit) {
     const last = c.lastBreachT ?? 0;
     if (s.t - last > 2 * MIN_PER_DAY) {

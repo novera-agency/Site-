@@ -1,6 +1,7 @@
 /** Moteur de réunions : graphe de nœuds (dialogues, choix, questions chiffrées, actions structurées) évalué par le moteur. */
 import type { GameState, MeetingInstance } from "./types";
-import { nextId, notify, logDecision } from "./core";
+import { nextId, notify, logDecision, changeRep, changeTrust } from "./core";
+import { findTerm, usesTerm, normalize } from "./glossary";
 
 export interface MeetingCtx { s: GameState; m: MeetingInstance; }
 export interface Doc { title: string; rows: [string, string][]; note?: string; }
@@ -43,6 +44,7 @@ export function startMeeting(s: GameState, templateId: string, params: Record<st
   s.paused = true; s.pauseReason = `Réunion : ${tpl.title({ s, m })}`;
   const c = { s, m };
   tpl.init?.(c);
+  if (templateId === "comite_investissement" && (s.npcs.analyst?.trust ?? 50) <= 25) { m.score.communication -= 1; m.log.push({ who: "—", text: `(${s.npcs.analyst.name} se méfie de vous et contestera vos idées : −1 point de départ)` }); }
   pushNodeText(c);
   return m;
 }
@@ -54,11 +56,50 @@ function pushNodeText(c: MeetingCtx) {
   c.m.log.push({ who: speakerName(c, sp), text: node.text(c) });
   if (node.end) finish(c);
 }
+/** Nombre d'avertissements (hors-sujet, silences) qui fait échouer la réunion */
+export const MAX_PENALTIES = 3;
+/** Score total en dessous duquel une réunion menée jusqu'au bout est malgré tout jugée ratée */
+const FAIL_SCORE = -6;
+const total = (m: MeetingInstance) => m.score.finance + m.score.risque + m.score.communication + m.score.ethique;
+
+/** Conséquences d'une réunion ratée : réalistes et proportionnées (confiance des participants, image interne) */
+function applyFailure(c: MeetingCtx, reason: string) {
+  const tpl = REGISTRY[c.m.templateId];
+  c.m.vars.failed = 1;
+  const parts = tpl.participants(c);
+  for (const id of parts) changeTrust(c.s, id, -4, `Réunion ratée : ${tpl.title(c)}`);
+  changeRep(c.s, "interne", -3, "Réunion ratée");
+  changeRep(c.s, "fiabilite", -2);
+  const client = c.s.clients.find((x) => x.id === c.m.vars.client);
+  if (client) { client.satisfaction = Math.max(0, client.satisfaction - 8); client.history.unshift({ t: c.s.t, text: "Entretien raté : le client repart insatisfait" }); }
+  c.s.flags["meetingsFailed"] = ((c.s.flags["meetingsFailed"] as number) ?? 0) + 1;
+  if (c.m.templateId === "entretien_embauche") c.s.career.pendingOffers = c.s.career.pendingOffers.filter((o) => o.id !== c.m.vars.offer);
+  notify(c.s, "critique", `Réunion ratée : ${tpl.title(c)}`, reason, "/play/reunions");
+}
+function failMeeting(c: MeetingCtx, reason: string) {
+  const tpl = REGISTRY[c.m.templateId];
+  if (c.m.done) return;
+  const main = tpl.participants(c)[0];
+  c.m.log.push({ who: speakerName(c, main), text: "Je crois qu'on va s'arrêter là. On en reparlera." });
+  c.m.done = true;
+  applyFailure(c, reason);
+  c.m.outcome = `Réunion ratée — ${reason} La confiance des participants baisse et votre image en interne en pâtit.`;
+  c.m.log.push({ who: "Bilan", text: c.m.outcome });
+  c.s.activeMeetingId = undefined;
+  c.s.stats.meetingsCount++;
+  logDecision(c.s, "reunion", `${tpl.title(c)} : réunion ratée (${reason})`);
+}
+function addPenalty(c: MeetingCtx) {
+  c.m.vars.penalites = Number(c.m.vars.penalites ?? 0) + 1;
+  return Number(c.m.vars.penalites) >= MAX_PENALTIES;
+}
+
 function finish(c: MeetingCtx) {
   const tpl = REGISTRY[c.m.templateId];
   if (c.m.done) return;
   c.m.done = true;
   c.m.outcome = tpl.conclude(c);
+  if (total(c.m) <= FAIL_SCORE && !c.m.vars.failed) { applyFailure(c, "Vos réponses ont été jugées très insuffisantes."); c.m.outcome = `Réunion ratée — vos réponses ont été jugées très insuffisantes. ${c.m.outcome}`; }
   c.m.log.push({ who: "Bilan", text: c.m.outcome });
   c.s.activeMeetingId = undefined;
   c.s.stats.meetingsCount++;
@@ -78,7 +119,7 @@ export function meetingChoices(s: GameState, m: MeetingInstance) {
  * une phrase prononcée à voix haute (`spoken`, déjà rapprochée d'un choix ou d'un nombre par le client),
  * ou un silence (`timeout` : temps de réponse écoulé — pénalité et la discussion continue sans vous).
  */
-export function answerMeeting(s: GameState, meetingId: string, input: { choiceId?: string; value?: number; spoken?: string; timeout?: boolean }) {
+export function answerMeeting(s: GameState, meetingId: string, input: { choiceId?: string; value?: number; spoken?: string; timeout?: boolean; offtopic?: boolean }) {
   const m = s.meetings.find((x) => x.id === meetingId);
   if (!m || m.done) return { ok: false as const, error: "Réunion terminée ou introuvable." };
   const tpl = REGISTRY[m.templateId];
@@ -89,6 +130,7 @@ export function answerMeeting(s: GameState, meetingId: string, input: { choiceId
   if (input.timeout) {
     m.log.push({ who: me, text: "(silence — vous n'avez pas répondu à temps)" });
     m.score.communication -= 2;
+    if (addPenalty(c)) { failMeeting(c, "Trop de silences et de réponses hors sujet."); return { ok: true as const, meeting: m }; }
     const sp = typeof node.speaker === "function" ? node.speaker(c) : node.speaker;
     if (s.npcs[sp]) { const n = s.npcs[sp]; n.trust = Math.max(0, n.trust - 2); n.memory.unshift({ t: s.t, text: "N'a pas su répondre en réunion", impact: -2 }); }
     if (node.numeric) {
@@ -104,6 +146,18 @@ export function answerMeeting(s: GameState, meetingId: string, input: { choiceId
     if (!fallback) { finish(c); return { ok: true as const, meeting: m }; }
     m.log.push({ who: "—", text: `Faute de réponse de votre part, la discussion continue : « ${fallback.label || labelResolver(s, m.templateId, m.nodeId, m.vars, fallback.id, fallback.label)} »` });
     return applyChoice(c, tpl, fallback);
+  }
+  if (input.offtopic) {
+    m.log.push({ who: me, text: spoken ? `« ${spoken} »` : "(réponse incompréhensible)" });
+    m.score.communication -= 2;
+    const sp = typeof node.speaker === "function" ? node.speaker(c) : node.speaker;
+    if (s.npcs[sp]) changeTrust(s, sp, -1);
+    if (addPenalty(c)) { failMeeting(c, "Trop de réponses hors sujet."); return { ok: true as const, meeting: m }; }
+    const reactions = ["Je ne vois pas le rapport avec ma question.", "Pardon ? Restons concentrés, s'il vous plaît.", "Ce n'est pas ce que je vous demande.", "Je ne vous suis pas. Soyez précis."];
+    const left = MAX_PENALTIES - Number(m.vars.penalites);
+    m.log.push({ who: speakerName(c, sp), text: `${reactions[Number(m.vars.penalites) % reactions.length]} Je répète : ${node.text(c)}` });
+    m.log.push({ who: "—", text: `(réponse hors sujet : −2 en communication · encore ${left} avertissement${left > 1 ? "s" : ""} avant l'échec de la réunion)` });
+    return { ok: true as const, meeting: m };
   }
   if (node.numeric) {
     if (input.value === undefined || !Number.isFinite(input.value)) return { ok: false as const, error: "Réponse chiffrée attendue." };
@@ -135,6 +189,36 @@ function applyChoice(c: MeetingCtx, tpl: MeetingTemplate, ch: Choice) {
   return { ok: true as const, meeting: m };
 }
 
+/**
+ * « Qu'est-ce que… ? » : la personne qui a employé le terme l'explique (à défaut, celle qui pose la question en cours).
+ * Ne consomme pas le tour de parole et n'entraîne aucune pénalité.
+ */
+export function explainTerm(s: GameState, meetingId: string, question: string) {
+  const m = s.meetings.find((x) => x.id === meetingId);
+  if (!m || m.done) return { ok: false as const, error: "Réunion terminée ou introuvable." };
+  const tpl = REGISTRY[m.templateId];
+  const c = { s, m };
+  const node = tpl.nodes[m.nodeId];
+  const q = question.trim().slice(0, 300);
+  m.log.push({ who: speakerName(c, "vous"), text: `« ${q} »` });
+  const term = findTerm(q);
+  const ids = tpl.participants(c);
+  const nameToId = new Map(ids.map((id) => [speakerName(c, id), id]));
+  let by: string | undefined;
+  if (term) for (let i = m.log.length - 2; i >= 0 && !by; i--) { const id = nameToId.get(m.log[i].who); if (id && usesTerm(m.log[i].text, term)) by = id; }
+  if (!by) { const sp = typeof node.speaker === "function" ? node.speaker(c) : node.speaker; by = s.npcs[sp] ? sp : ids[0]; }
+  const n = s.npcs[by];
+  if (!term) {
+    m.log.push({ who: speakerName(c, by), text: "De quel terme parlez-vous exactement ? Reformulez votre question." });
+    return { ok: true as const, term: null, by };
+  }
+  const asked = Number(m.vars[`def_${normalize(term.term)}`] ?? 0) + 1;
+  m.vars[`def_${normalize(term.term)}`] = asked;
+  const intro = asked > 1 ? "Comme je vous le disais : " : n?.relation === "hierarchie" && s.difficulty !== "debutant" ? "C'est une notion de base, retenez-la. " : "Bonne question. ";
+  m.log.push({ who: speakerName(c, by), text: `${intro}${term.simple}${term.example ? ` Par exemple : ${term.example}` : ""}` });
+  return { ok: true as const, term: term.term, by };
+}
+
 export function meetingView(s: GameState, m: MeetingInstance) {
   const tpl = REGISTRY[m.templateId];
   const c = { s, m };
@@ -142,7 +226,7 @@ export function meetingView(s: GameState, m: MeetingInstance) {
   return {
     id: m.id, templateId: m.templateId, title: tpl.title(c), type: tpl.type, location: tpl.location, done: m.done, outcome: m.outcome, startedT: m.startedT,
     participants: tpl.participants(c).map((p) => ({ id: p, name: s.npcs[p]?.name ?? p, role: s.npcs[p]?.role ?? "", avatar: s.npcs[p]?.avatar ?? "👤", trust: s.npcs[p]?.trust ?? 50 })),
-    agenda: tpl.agenda, objectives: tpl.objectives, tension: tpl.tension, docs: tpl.docs ? tpl.docs(c) : [], log: m.log, score: m.score,
+    agenda: tpl.agenda, objectives: tpl.objectives, penalties: Number(m.vars.penalites ?? 0), maxPenalties: MAX_PENALTIES, failed: !!m.vars.failed, tension: tpl.tension, docs: tpl.docs ? tpl.docs(c) : [], log: m.log, score: m.score,
     choices: m.done ? [] : meetingChoices(s, m), numeric: !m.done && node?.numeric ? { prompt: node.numeric.prompt, unit: node.numeric.unit, hint: s.difficulty === "debutant" || s.settings.explanations ? node.numeric.hint : undefined } : null,
   };
 }

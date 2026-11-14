@@ -74,6 +74,12 @@ export function stepAgenda(s: GameState) {
 }
 function missItem(s: GameState, a: AgendaItem) {
   a.status = "manque";
+  const col = s.npcs.colleague;
+  if (col && col.trust >= 70 && s.t - ((s.flags["coverT"] as number) ?? -1e9) > 30 * 1440) {
+    s.flags["coverT"] = s.t;
+    notify(s, "succes", `${col.name} vous a couvert`, `Absent à « ${a.title} » : votre collègue a pris le relais, personne ne vous en tient rigueur.`, "/play/reseau");
+    return;
+  }
   notify(s, "alerte", `Rendez-vous manqué : ${a.title}`, "Votre absence a été remarquée.", "/play/agenda");
   changeRep(s, "interne", -2); changeRep(s, "fiabilite", -3);
   if (a.params?.client) { const c = s.clients.find((x) => x.id === a.params!.client); if (c) { c.satisfaction = Math.max(0, c.satisfaction - 8); changeTrust(s, c.npcId, -6, "Rendez-vous manqué"); } }

@@ -57,6 +57,7 @@ export function gainXp(s: GameState, branch: SkillBranch, xp: number, reason: st
   if (after > before) notify(s, "succes", `Compétence améliorée : ${SKILL_NAMES[branch]} niveau ${after}`, reason, "/play/competences");
 }
 export function changeRep(s: GameState, key: RepKey, delta: number, why?: string) {
+  if (key === "conformite" && delta < 0 && s.npcs.compliance) { const t = s.npcs.compliance.trust; if (t >= 70) delta = Math.round(delta * 0.75); else if (t <= 25) delta = Math.round(delta * 1.25); }
   const v = s.reputation[key] + delta;
   s.reputation[key] = Math.max(0, Math.min(100, v));
   if (why && Math.abs(delta) >= 4) notify(s, delta > 0 ? "succes" : "alerte", `Réputation ${REP_NAMES[key]} ${delta > 0 ? "+" : ""}${delta}`, why, "/play/reputation");

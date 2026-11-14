@@ -5,8 +5,9 @@ import { useGame } from "@/lib/store";
 import { Button, Badge, inputCls } from "./ui";
 import { voiceSupport, voiceFor, speak, stopSpeaking, listen, type Listener } from "@/lib/voice";
 import { matchChoice, parseFrenchNumber } from "@/lib/voice-match";
+import { isTermQuestion } from "@/engine/glossary";
 
-interface MView { id: string; title: string; type: string; location: string; done: boolean; outcome?: string; participants: { id: string; name: string; role: string; avatar: string; trust: number }[]; agenda: string[]; objectives: string[]; tension?: string; docs: { title: string; rows: [string, string][]; note?: string }[]; log: { who: string; text: string }[]; choices: { id: string; label: string; detail?: string }[]; numeric: { prompt: string; unit: string; hint?: string } | null; score: Record<string, number>; }
+interface MView { id: string; title: string; type: string; location: string; done: boolean; outcome?: string; participants: { id: string; name: string; role: string; avatar: string; trust: number }[]; agenda: string[]; objectives: string[]; tension?: string; docs: { title: string; rows: [string, string][]; note?: string }[]; log: { who: string; text: string }[]; choices: { id: string; label: string; detail?: string }[]; numeric: { prompt: string; unit: string; hint?: string } | null; score: Record<string, number>; penalties: number; maxPenalties: number; failed: boolean; }
 type Mode = "oral" | "ecrit";
 
 /** Temps de réponse à l'oral selon la difficulté (secondes) */
@@ -62,20 +63,31 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
     setVal(""); await reload(); busyRef.current = false; setBusy(false);
   }, [act, meetingId, reload]);
 
+  /** « Qu'est-ce que… ? » : la personne qui a employé le terme l'explique (pas de pénalité, le temps repart à zéro) */
+  const askTerm = useCallback(async (question: string) => {
+    if (busyRef.current) return;
+    busyRef.current = true; setBusy(true);
+    listener.current?.stop(); listener.current = null; setPhase("thinking"); setHeard(""); setHint("");
+    await act({ type: "ask_term", meetingId, question }, { silent: true });
+    await reload(); busyRef.current = false; setBusy(false);
+  }, [act, meetingId, reload]);
+
   const onFinal = useCallback((t: string) => {
     const cur = mRef.current;
     if (!cur || busyRef.current) return;
     setHeard(t);
+    if (isTermQuestion(t)) { askTerm(t); return; }
     if (cur.numeric) {
       const v = parseFrenchNumber(t);
-      if (v === null) { setHint("Je n'ai pas entendu de nombre. Donnez un chiffre, par exemple « quarante mille »."); return; }
+      if (v === null) { send({ offtopic: true, spoken: t }); return; } // ni nombre ni question : hors sujet
       send({ value: v, spoken: t });
       return;
     }
     const r = matchChoice(t, cur.choices.map((c) => c.label));
-    if (r.index < 0 || r.ambiguous) { setHint("Pas sûr d'avoir compris. Reformulez votre réponse plus précisément."); return; }
+    if (r.index < 0 || r.score < 0.3) { send({ offtopic: true, spoken: t }); return; } // trop éloigné de la question : pénalité
+    if (r.ambiguous) { setHint("Votre réponse hésite entre deux idées. Précisez votre position."); return; } // proche mais ambigu : on demande de préciser, sans pénalité
     send({ choiceId: cur.choices[r.index].id, spoken: t });
-  }, [send]);
+  }, [send, askTerm]);
 
   const startListening = useCallback(() => {
     const cur = mRef.current;
@@ -146,6 +158,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
   if (!m) return null;
   const quit = m.done ? <Button onClick={() => { stopVoice(); onClose(); }}>Quitter la salle</Button> : <Button variant="outline" size="sm" onClick={async () => { stopVoice(); await act({ type: "leave_meeting" }); onClose(); }}>Quitter (mal perçu)</Button>;
   const speakingP = m.participants.find((p) => p.id === speaker);
+  const warn = !m.done && m.penalties > 0 && <div data-testid="penalties" className={`rounded-full px-3 py-1 text-xs ${m.penalties >= m.maxPenalties - 1 ? "bg-red-500/20 text-red-200" : "bg-amber-500/15 text-amber-200"}`}>⚠ Avertissements : {m.penalties}/{m.maxPenalties} — {m.maxPenalties - m.penalties === 1 ? "encore un et la réunion est ratée" : "réponses hors sujet ou silences"}</div>;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/80 p-0 backdrop-blur-sm md:p-6" data-testid="meeting-room">
@@ -178,12 +191,14 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
             {mode === "oral" ? (
               /* ───── Mode oral : pas d'historique, on écoute et on répond ───── */
               <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 p-6" data-testid="oral-stage">
+                {warn}
                 <div className="flex flex-wrap justify-center gap-4">{m.participants.map((p) => <div key={p.id} className={`flex w-36 flex-col items-center rounded-xl px-3 py-4 text-center transition ${speaker === p.id ? "bg-yellow-500/15 ring-2 ring-gold" : "bg-ink-800/80"}`}>
                   <span className={`text-4xl ${speaker === p.id ? "animate-pulse" : ""}`}>{p.avatar}</span><div className="mt-2 text-sm font-medium text-white">{p.name}</div><div className="text-[11px] text-ink-400">{p.role}</div>{speaker === p.id && <div className="mt-1 text-[11px] font-semibold text-gold">parle…</div>}</div>)}</div>
                 <div className="w-full max-w-xl text-center">
-                  {m.done ? <div><Badge tone="gold">Réunion terminée</Badge><p className="mt-3 text-sm text-ink-200">{m.outcome}</p><button onClick={() => setMode("ecrit")} className="mt-4 rounded-full bg-ink-800 px-4 py-2 text-sm text-ink-200 hover:bg-ink-700" data-testid="show-transcript">📄 Voir le compte rendu écrit</button></div>
+                  {m.done ? <div><Badge tone={m.failed ? "loss" : "gold"}>{m.failed ? "Réunion ratée" : "Réunion terminée"}</Badge><p className="mt-3 text-sm text-ink-200">{m.outcome}</p><button onClick={() => setMode("ecrit")} className="mt-4 rounded-full bg-ink-800 px-4 py-2 text-sm text-ink-200 hover:bg-ink-700" data-testid="show-transcript">📄 Voir le compte rendu écrit</button></div>
                     : phase === "speaking" ? <div className="text-ink-200"><div className="text-lg">🔊 {speakingP ? `${speakingP.name} vous parle…` : "Écoutez…"}</div><button onClick={() => { runId.current++; stopSpeaking(); setSpeaker(null); startListening(); }} className="mt-2 text-xs text-ink-400 underline">passer</button></div>
                     : phase === "listening" ? <div data-testid="voice-listening" className="rounded-xl border border-gold/50 bg-yellow-500/5 p-5">
+                        <div className="mb-2 text-[11px] text-ink-500">Un mot vous échappe ? Demandez : « Qu'est-ce que… ? »</div>
                         <div className="flex items-center justify-center gap-4"><span className="relative flex h-14 w-14 items-center justify-center"><span className="absolute inset-0 animate-ping rounded-full bg-red-500/40" /><span className="relative rounded-full bg-red-600 p-3 text-xl">🎙️</span></span><span className={`num text-4xl font-bold ${left <= 5 ? "text-loss" : "text-gold"}`}>{left}s</span></div>
                         <div className="mt-3 text-base font-semibold text-white">À vous — répondez à voix haute</div>
                         <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-ink-700"><div className={`h-full transition-all ${left <= 5 ? "bg-loss" : "bg-gold"}`} style={{ width: `${(left / limit) * 100}%` }} /></div>
@@ -213,7 +228,9 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
                   })}
                 </div>
                 <div className="border-t border-ink-700 bg-ink-900 p-4">
-                  {m.done ? <div className="text-sm"><Badge tone="gold">Réunion terminée</Badge> <span className="ml-2 text-ink-200">{m.outcome}</span></div>
+                  {warn && <div className="mb-3">{warn}</div>}
+                  {!m.done && <form data-testid="ask-term" onSubmit={(e) => { e.preventDefault(); const q = (e.currentTarget.elements.namedItem("q") as HTMLInputElement); if (q.value.trim().length > 1) { askTerm(/\?$/.test(q.value) || isTermQuestion(q.value) ? q.value : `Qu'est-ce que ${q.value} ?`); q.value = ""; } }} className="mb-3 flex gap-2"><input name="q" className={inputCls + " py-1.5 text-xs"} placeholder="Un terme vous échappe ? Demandez : « Qu'est-ce que la duration ? »" /><Button size="sm" variant="ghost" type="submit" disabled={busy}>❓ Demander</Button></form>}
+                  {m.done ? <div className="text-sm"><Badge tone={m.failed ? "loss" : "gold"}>{m.failed ? "Réunion ratée" : "Réunion terminée"}</Badge> <span className="ml-2 text-ink-200">{m.outcome}</span></div>
                     : m.numeric ? <form onSubmit={(e) => { e.preventDefault(); const v = Number(val.replace(/\s/g, "").replace(",", ".")); if (Number.isFinite(v)) send({ value: v }); }} className="space-y-2">
                       <div className="text-sm text-ink-200">{m.numeric.prompt}</div>
                       {m.numeric.hint && <div className="text-xs text-ink-400">💡 {m.numeric.hint}</div>}

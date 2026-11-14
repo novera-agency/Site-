@@ -51,6 +51,9 @@ VaR historique 99 % 1 jour sur les 100 dernières séances simulées (exposition
 ## Carrière
 Score composite pondéré selon le métier (P&L vs capital, consommation de VaR et incidents, satisfaction clients, réussite des missions, réputation, conformité). Promotion trimestrielle seulement si : score ≥ 60, risque ≥ 60 et conformité ≥ 50, compétences clés suffisantes, réputation moyenne ≥ 40 + 5×rang, ancienneté minimale. Bonus : provisions trimestrielles + part du P&L annuel, réduite de 70 % si la gestion du risque est insuffisante.
 
+## Relations professionnelles
+Chaque personnage a une confiance de 0 à 100 envers le joueur, qui évolue avec les réponses en réunion, les résultats, le respect des règles et les missions. Allié à partir de 70, défavorable sous 25. Les effets (voir `src/engine/relations.ts`) restent réalistes : ils jouent sur des leviers qu'un collègue maîtrise vraiment (évaluation par le N+1, enveloppe de bonus et parrainage par le Managing Director, tolérance ou sévérité du contrôle des risques et de la conformité, partage d'informations, couverture d'une absence, offres d'un chasseur de têtes).
+
 ## Limites connues du modèle
 - Pas de carnet d'ordres multi-agents : l'impact de marché du joueur est temporaire et n'affecte pas le cours de référence.
 - Les banques concurrentes influencent la liquidité de façon agrégée, pas instrument par instrument.
