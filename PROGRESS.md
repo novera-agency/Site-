@@ -55,7 +55,7 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 
 ## Mise en ligne
 - Édition navigateur (export statique, moteur côté client, sauvegardes IndexedDB) : ✅ parcours e2e 20/20 validé sur un serveur statique avec le préfixe `/Site-`.
-- Workflow GitHub Pages : ✅ ajouté. Prérequis côté dépôt : Pages réglé sur « GitHub Actions ».
+- Workflow GitHub Pages : ✅ ajouté (build + tests verts sur GitHub). Prérequis côté dépôt : Pages réglé sur « GitHub Actions ». Adresse : https://novera-agency.github.io/Site-/
 
 ## Vérifications (dernière exécution)
 - `npm run lint` : OK
