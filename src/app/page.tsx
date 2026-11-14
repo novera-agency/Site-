@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/api";
+import { api, STATIC } from "@/lib/api";
 import { Button, inputCls, Disclaimer, Field } from "@/components/ui";
 
 interface Meta { gameId: string; name: string; mode: string; bank: string; t: number; updatedAt: string; rank?: string; }
@@ -30,7 +30,7 @@ export default function Home() {
       <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-8">
         <header className="flex items-center justify-between">
           <div className="text-xs font-semibold tracking-[0.3em] text-ink-300">SIMULATION · CARRIÈRE · MARCHÉS</div>
-          <div className="text-xs text-ink-300">{session ? <>Connecté : <b className="text-white">{session.name}</b>{session.guest && <> · <button onClick={() => setAuth("register")} className="text-accent">créer un compte</button></>} · <button onClick={async () => { await api("/api/auth", { action: "logout" }); setSession(null); setSaves([]); }} className="text-ink-400 hover:text-white">déconnexion</button></> : <><button onClick={() => setAuth("login")} className="text-accent">Se connecter</button> · <button onClick={() => setAuth("register")} className="text-accent">Créer un compte</button></>}</div>
+          <div className="text-xs text-ink-300">{STATIC ? <span>Édition navigateur — parties enregistrées dans ce navigateur</span> : session ? <>Connecté : <b className="text-white">{session.name}</b>{session.guest && <> · <button onClick={() => setAuth("register")} className="text-accent">créer un compte</button></>} · <button onClick={async () => { await api("/api/auth", { action: "logout" }); setSession(null); setSaves([]); }} className="text-ink-400 hover:text-white">déconnexion</button></> : <><button onClick={() => setAuth("login")} className="text-accent">Se connecter</button> · <button onClick={() => setAuth("register")} className="text-accent">Créer un compte</button></>}</div>
         </header>
         <div className="mt-16 grid flex-1 grid-cols-1 gap-10 lg:grid-cols-[1.2fr_1fr]">
           <div>

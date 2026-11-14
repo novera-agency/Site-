@@ -53,6 +53,10 @@ Légende : ✅ fonctionnel et relié au moteur · 🟡 partiel · ❌ non réali
 ## Écrans (30 demandés)
 Accueil · Création de carrière · Choix de banque · Création de personnage · Bureau · Tableau de bord carrière · Terminal · Recherche · Fiche d'actif · Passage d'ordres · Portefeuille · Transactions · Risques · Actualités · Calendrier · Réunions · Messagerie · Clients · Missions · Formation · Dictionnaire · Compétences · Relations · RH · Rémunération · Patrimoine · Entrepreneuriat · Gestion de société · Paramètres · Sauvegardes — **tous présents** (+ Options, Produits structurés, Macroéconomie, Agenda, Réputation, Établissements).
 
+## Mise en ligne
+- Édition navigateur (export statique, moteur côté client, sauvegardes IndexedDB) : ✅ parcours e2e 20/20 validé sur un serveur statique avec le préfixe `/Site-`.
+- Workflow GitHub Pages : ✅ ajouté. Prérequis côté dépôt : Pages réglé sur « GitHub Actions ».
+
 ## Vérifications (dernière exécution)
 - `npm run lint` : OK
 - `npm test` : 37/37

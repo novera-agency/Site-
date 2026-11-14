@@ -191,7 +191,7 @@ function tutorialStep(s: GameState) {
   if (s.flags["tutNews"] && !s.flags["tutMove"] && s.t - (s.flags["tutNews"] as number) >= 30) {
     s.flags["tutMove"] = true;
     const ch = (s.quotes["MAIS"].price / (s.flags["tutNewsPrice"] as number) - 1) * 100;
-    notify(s, "info", "Variation du marché", `MAIS a varié de ${ch.toFixed(2)} % depuis la publication. Les nouvelles sont intégrées progressivement dans les prix.`, "/play/actif/MAIS");
+    notify(s, "info", "Variation du marché", `MAIS a varié de ${ch.toFixed(2)} % depuis la publication. Les nouvelles sont intégrées progressivement dans les prix.`, "/play/actif?id=MAIS");
   }
   if (dayIndex(s.t) === d0 && m === 18 * 60 && !s.flags["tutReview"]) {
     s.flags["tutReview"] = true;
@@ -301,7 +301,7 @@ function checkAlerts(s: GameState) {
     if (a.triggered) continue;
     const q = s.quotes[a.instrumentId];
     if (!q) continue;
-    if ((a.above && q.price >= a.level) || (!a.above && q.price <= a.level)) { a.triggered = true; notify(s, "alerte", `Alerte de prix : ${a.instrumentId} ${a.above ? "≥" : "≤"} ${a.level}`, `Cours actuel ${q.price.toFixed(4)}`, `/play/actif/${a.instrumentId}`); }
+    if ((a.above && q.price >= a.level) || (!a.above && q.price <= a.level)) { a.triggered = true; notify(s, "alerte", `Alerte de prix : ${a.instrumentId} ${a.above ? "≥" : "≤"} ${a.level}`, `Cours actuel ${q.price.toFixed(4)}`, `/play/actif?id=${a.instrumentId}`); }
   }
 }
 

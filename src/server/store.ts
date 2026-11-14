@@ -6,8 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import type { Bar, GameState } from "@/engine/types";
-import { migrate } from "@/engine/engine";
+import type { GameState } from "@/engine/types";
 
 export function dataDir() { return process.env.SAVE_DIR || path.join(process.cwd(), "data"); }
 const savesDir = (uid: string) => path.join(dataDir(), "saves", uid.replace(/[^a-zA-Z0-9_-]/g, ""));
@@ -16,20 +15,9 @@ interface Runtime { state: GameState; lastTickReal: number; accMinutes: number; 
 const g = globalThis as unknown as { __fe_games?: Map<string, Runtime> };
 const games: Map<string, Runtime> = g.__fe_games ?? (g.__fe_games = new Map());
 
-/* ── Compaction des séries de prix (taille des sauvegardes) ── */
-const r = (x: number) => (Math.abs(x) >= 1 ? Math.round(x * 10000) / 10000 : Number(x.toPrecision(6)));
-function packBars(b: Bar[]) { const o: number[] = []; for (const x of b) o.push(x.t, r(x.o), r(x.h), r(x.l), r(x.c), Math.round(x.v)); return o; }
-function unpackBars(a: number[] | Bar[]): Bar[] { if (!a.length || typeof a[0] === "object") return a as Bar[]; const o: Bar[] = []; const n = a as number[]; for (let i = 0; i < n.length; i += 6) o.push({ t: n[i], o: n[i + 1], h: n[i + 2], l: n[i + 3], c: n[i + 4], v: n[i + 5] }); return o; }
-export function serialize(s: GameState) {
-  const quotes: Record<string, unknown> = {};
-  for (const [k, q] of Object.entries(s.quotes)) quotes[k] = { ...q, daily: packBars(q.daily), intraday: packBars(q.intraday) };
-  return JSON.stringify({ ...s, quotes });
-}
-export function deserialize(txt: string): GameState {
-  const raw = JSON.parse(txt) as GameState;
-  for (const q of Object.values(raw.quotes)) { q.daily = unpackBars(q.daily as unknown as number[]); q.intraday = unpackBars(q.intraday as unknown as number[]); }
-  return migrate(raw);
-}
+import { serialize, deserialize } from "@/engine/serialize";
+export { serialize, deserialize };
+
 function atomicWrite(file: string, content: string) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;

@@ -1,6 +1,7 @@
 import { withGame, json } from "@/server/http";
 import { advance } from "@/engine/engine";
 import { snapshot } from "@/server/views";
+import { aiAvailable } from "@/server/ai";
 import { STEP_MIN } from "@/engine/time";
 
 /** Horloge de simulation : le serveur mesure le temps réel écoulé (plafonné à 3 s) et avance le temps simulé en pas fixes. */
@@ -17,6 +18,6 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
       if (steps > 0) { advance(s, steps * STEP_MIN); rt.accMinutes -= steps * STEP_MIN; }
       if (s.paused) rt.accMinutes = 0;
     } else rt.accMinutes = 0;
-    return json(snapshot(s));
+    return json(snapshot(s, aiAvailable()));
   });
 }

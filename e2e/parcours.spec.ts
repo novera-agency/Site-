@@ -30,11 +30,13 @@ async function runUntil(page: Page, cond: () => Promise<boolean>, maxMs = 60000)
   }
   return false;
 }
+const BASE = process.env.E2E_BASE ?? "";
+const go = (page: Page, path: string) => page.goto(BASE + path);
 const clock = async (page: Page) => (await page.locator(".num.text-lg").first().textContent())?.trim() ?? "";
 
 test("parcours de validation end-to-end (20 étapes)", async ({ page, context }) => {
   // 1-4 : lancer, créer une carrière, choisir une banque, capital virtuel
-  await page.goto("/");
+  await go(page, "/");
   await page.getByTestId("new-career").click();
   await page.getByTestId("next").click();
   await page.getByTestId("first-name").fill("Camille");
@@ -46,7 +48,7 @@ test("parcours de validation end-to-end (20 étapes)", async ({ page, context })
   await page.getByTestId("next").click();
   await page.getByTestId("next").click();
   await page.getByTestId("create").click();
-  await page.waitForURL("**/play");
+  await page.waitForURL(/\/play\/?$/);
   await expect(page.getByText("Compte personnel").first()).toBeVisible();
   await expect(page.getByText("10 000,00 €").first()).toBeVisible();
   // 5-6 : marchés qui évoluent, accélération et pause
@@ -59,12 +61,12 @@ test("parcours de validation end-to-end (20 étapes)", async ({ page, context })
   await page.waitForTimeout(2500);
   expect(await clock(page)).toBe(paused);
   // 7-8 : acheter un instrument, solde qui diminue
-  await page.goto("/play/actif/XWLD");
+  await go(page, "/play/actif/?id=XWLD");
   await page.getByTestId("order-qty").fill("20");
   await page.getByTestId("submit-order").click();
   await expect(page.getByText(/Ordre exécuté|Marché fermé|enregistré/).first()).toBeVisible();
   // 9-10 : position et variation de valeur
-  await page.goto("/play/portefeuille");
+  await go(page, "/play/portefeuille");
   await expect(page.getByRole("link", { name: "XWLD" }).first()).toBeVisible({ timeout: 15000 });
   const v1 = await page.locator("text=Valeur totale").locator("..").locator(".num").first().textContent();
   expect(v1).not.toContain("10 000,00");
@@ -73,45 +75,45 @@ test("parcours de validation end-to-end (20 étapes)", async ({ page, context })
   await page.waitForTimeout(4000);
   await handleMeetings(page);
   // 11-12 : revendre, consulter le résultat
-  await page.goto("/play/actif/XWLD");
+  await go(page, "/play/actif/?id=XWLD");
   await page.getByTestId("side-sell").click();
   await page.getByTestId("order-qty").fill("20");
   await page.getByTestId("submit-order").click();
   await expect(page.getByText(/Ordre exécuté|enregistré|fermé/).first()).toBeVisible();
-  await page.goto("/play/transactions");
+  await go(page, "/play/transactions");
   await expect(page.getByText("Vente").first()).toBeVisible({ timeout: 15000 });
   await expect(page.getByText(/Balance de vérification équilibrée/)).toBeVisible();
   // 13-17 : réunions, mission, événement économique et conséquences, évaluation
-  await page.goto("/play");
+  await go(page, "/play");
   await runUntil(page, async () => (await clock(page)) >= "18:05" || (await clock(page)) < "07:00", 120000);
-  await page.goto("/play/reunions");
+  await go(page, "/play/reunions");
   await expect(page.getByText("Historique")).toBeVisible();
   await expect(page.locator("li b.text-sm").first()).toBeVisible();
-  await page.goto("/play/missions");
+  await go(page, "/play/missions");
   await page.getByRole("button", { name: "Terminées" }).click();
   await expect(page.getByText("Passer votre premier ordre")).toBeVisible();
-  await page.goto("/play/actualites");
+  await go(page, "/play/actualites");
   await expect(page.getByText(/indicateur avancé/).first()).toBeVisible();
-  await page.goto("/play/carriere");
+  await go(page, "/play/carriere");
   await expect(page.getByText(/Première journée|première journée/).first()).toBeVisible();
   // 18 : sauvegarder
-  await page.goto("/play/sauvegardes");
+  await go(page, "/play/sauvegardes");
   if ((await page.getByTestId("play-pause").textContent())?.includes("❚❚")) await page.getByTestId("play-pause").click();
   await page.waitForTimeout(1500);
   await page.getByRole("button", { name: "→ Empl. 1" }).first().click();
   await expect(page.getByText(/emplacement 1/)).toBeVisible();
   const savedClock = await clock(page);
   // 19-20 : fermer, reprendre
-  const state = await context.storageState();
+  const state = await context.storageState({ indexedDB: true });
   await page.close();
-  const ctx2 = await context.browser()!.newContext({ storageState: state, baseURL: "http://localhost:3100" });
+  const ctx2 = await context.browser()!.newContext({ storageState: state, baseURL: process.env.E2E_URL || "http://localhost:3100" });
   const p2 = await ctx2.newPage();
-  await p2.goto("/");
+  await go(p2, "/");
   await p2.getByTestId("continue-last").click();
-  await p2.waitForURL("**/play");
+  await p2.waitForURL(/\/play\/?$/);
   await expect(p2.getByText("Compte personnel").first()).toBeVisible();
   expect(await clock(p2)).toBe(savedClock);
-  await p2.goto("/play/transactions");
+  await go(p2, "/play/transactions");
   await expect(p2.getByText("Vente").first()).toBeVisible();
   await ctx2.close();
 });

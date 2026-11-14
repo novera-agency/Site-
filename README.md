@@ -21,6 +21,16 @@ Variables d'environnement facultatives (voir `.env.example`) :
 | `ANTHROPIC_API_KEY` | Active les dialogues IA des PNJ (côté serveur uniquement). Sans clé : dialogues scénarisés déterministes. |
 | `AI_MODEL` | Modèle utilisé pour les PNJ (défaut `claude-opus-5-5`). |
 
+## Version en ligne (GitHub Pages)
+
+**Adresse :** https://novera-agency.github.io/Site-/
+
+Le workflow `.github/workflows/pages.yml` vérifie le code (TypeScript, 37 tests), construit l'**édition navigateur** (`npm run build:static`) et la publie sur GitHub Pages à chaque push.
+
+- GitHub Pages n'héberge que des fichiers statiques. Dans cette édition, le **même moteur** tourne dans le navigateur ; les routes `/api/*` sont servies localement (`src/lib/local-backend.ts`) avec les mêmes validations Zod et les mêmes vues. Les parties sont sauvegardées dans le navigateur (IndexedDB) ; export et import JSON sont disponibles.
+- Différences avec la version serveur : pas de comptes, pas d'autorité serveur (l'état vit chez le joueur) et dialogues des PNJ uniquement scénarisés (aucune clé d'API dans un site statique).
+- Activation, une seule fois : **Settings → Pages → Build and deployment → Source : « GitHub Actions »**.
+
 ## Commandes
 
 | Commande | Effet |
@@ -30,6 +40,7 @@ Variables d'environnement facultatives (voir `.env.example`) :
 | `npm run lint` | Vérification TypeScript stricte |
 | `npm test` | Tests unitaires et de simulation (Vitest) |
 | `npm run e2e` | Parcours de validation end-to-end (Playwright, 20 étapes) |
+| `npm run build:static` | Édition navigateur statique dans `out/` (`BASE_PATH=/Site-` pour GitHub Pages) |
 
 ## Ce que contient le jeu
 

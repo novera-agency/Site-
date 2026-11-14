@@ -20,7 +20,6 @@ import { BANKS, BANK_BY_ID, TRACKS, BASE_SALARY } from "@/engine/data/banks";
 import { LESSONS } from "@/engine/data/learning";
 import { skillLevel, SKILL_LEVELS, SKILL_NAMES, REP_NAMES, avgRep, toEur, multiplier } from "@/engine/core";
 import { dayIndex, MIN_PER_DAY, fmtDate } from "@/engine/time";
-import { aiAvailable } from "./ai";
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
 const px = (x: number) => (Math.abs(x) >= 1000 ? Math.round(x * 100) / 100 : Number(x.toPrecision(6)));
@@ -31,7 +30,7 @@ function quoteLite(s: GameState, id: string) {
 }
 
 /** Instantané léger renvoyé à chaque tick */
-export function snapshot(s: GameState) {
+export function snapshot(s: GameState, aiAvailable = false) {
   const quotes: Record<string, [number, number]> = {};
   for (const [id, d] of Object.entries(s.instruments)) {
     if (d.option && !s.watchlist.includes(id) && !Object.values(s.accounts).some((a) => a.positions[id])) continue;
@@ -53,7 +52,7 @@ export function snapshot(s: GameState) {
     tutorial: s.mode === "carriere" && !s.tutorial.done ? tutorialChecklist(s) : null,
     player: { name: `${s.profile.firstName} ${s.profile.lastName}`, title: s.career.employed ? rankTitle(s) : s.company ? `Fondateur — ${s.company.name}` : s.mode === "carriere" ? "Sans emploi" : "Investisseur", bank: s.career.employed ? BANK_BY_ID[s.career.bankId]?.short : null, bankColor: BANK_BY_ID[s.career.bankId]?.accent, stress: Math.round(s.career.stress) },
     vix: vixLike(s), crisisActive: s.crises.some((c) => !c.resolved && c.phase > 0),
-    explanations: s.settings.explanations, aiAvailable: aiAvailable(),
+    explanations: s.settings.explanations, aiAvailable,
   };
 }
 export type Snapshot = ReturnType<typeof snapshot>;
