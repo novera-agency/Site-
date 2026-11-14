@@ -33,7 +33,7 @@ export function AssetPanel({ id, compact = false }: { id: string; compact?: bool
     <div className="grid gap-4 xl:grid-cols-[1fr_340px]">
       <Card pad={false} title={<span>Graphique</span>} right={<div className="flex flex-wrap items-center gap-1">{(["intraday", "daily"] as const).map((x) => <button key={x} onClick={() => setTf(x)} className={`rounded px-2 py-0.5 ${tf === x ? "bg-ink-600 text-white" : ""}`}>{x === "daily" ? "Journalier" : "15 min"}</button>)}<span className="mx-1 text-ink-600">|</span>{(["candles", "line"] as const).map((x) => <button key={x} onClick={() => setKind(x)} className={`rounded px-2 py-0.5 ${kind === x ? "bg-ink-600 text-white" : ""}`}>{x === "candles" ? "Chandeliers" : "Courbe"}</button>)}<span className="mx-1 text-ink-600">|</span>{INDS.map(([k, l]) => <button key={k} onClick={() => setInds(inds.includes(k) ? inds.filter((x) => x !== k) : [...inds, k])} className={`rounded px-1.5 py-0.5 ${inds.includes(k) ? "bg-accent text-white" : ""}`}>{l}</button>)}</div>}>
         <div className="p-2"><PriceChart bars={bars} kind={kind} indicators={inds} height={compact ? 300 : 380} /></div>
-        <div className="grid grid-cols-3 gap-3 border-t border-ink-700 p-3 md:grid-cols-6">
+        <div className="grid grid-cols-3 gap-3 border-t border-ink-700 p-3 2xl:grid-cols-6">
           <Stat label="Ouverture" value={fmtPx(q.dayOpen)} /><Stat label="Plus haut" value={fmtPx(q.dayHigh)} /><Stat label="Plus bas" value={fmtPx(q.dayLow)} />
           <Stat label={<Term id="volatilite">Vol. hist. 20 j</Term>} value={hv ? `${hv.toFixed(1)} %` : "—"} /><Stat label="ATR 14" value={at ? fmtPx(at) : "—"} /><Stat label="Volume du jour" value={fmtCompact(q.dayVolume)} />
         </div>

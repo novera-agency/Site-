@@ -90,10 +90,14 @@ export function dailyBonds(s: GameState, rng: Rng) {
     const stress = b.issuerStock ? s.quotes[b.issuerStock]?.stress ?? 0 : 0;
     const issuerDefaulted = b.issuerStock ? s.quotes[b.issuerStock]?.defaulted : false;
     if (issuerDefaulted || (!b.gov && stress > 0.5 && rng.chance(Math.pow(stress, 4) * 0.03))) { defaultBond(s, d); continue; }
-    const sched = couponSchedule(d, day - 1);
-    if (sched[0] === day) {
+    // Convention « jour ouvré suivant » : tout coupon échu depuis le dernier paiement est versé (y compris dates de week-end)
+    const lastKey = `cpn_${d.id}`;
+    const lastPaid = (s.flags[lastKey] as number | undefined) ?? day - 1;
+    const due = couponSchedule(d, lastPaid).filter((cd) => cd <= day);
+    for (const cd of due) {
+      s.flags[lastKey] = cd;
       const rate = b.floating ? s.macro.zones[d.zone].policyRate / 100 + b.couponRate : b.couponRate;
-      const isLast = day >= b.maturityDay;
+      const isLast = cd >= b.maturityDay;
       for (const acc of Object.values(s.accounts)) {
         const p = acc.positions[d.id];
         if (!p) continue;

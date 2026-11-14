@@ -75,8 +75,10 @@ export function simulateHistory(s: GameState, rng: Rng, startDay: number, nDays:
   for (const def of Object.values(s.instruments)) {
     if (def.cls === "obligation") {
       const p = bondPrice(s, def, startDay);
-      let y = 0;
-      s.quotes[def.id].daily = days.map((dd) => { y += rng.normal() * 0.0006; const c = p * (1 + y); return { t: dd * MIN_PER_DAY, o: c, h: c * 1.001, l: c * 0.999, c, v: 0 }; });
+      const walk: number[] = []; let y = 0;
+      for (let k = 0; k < days.length; k++) { y += rng.normal() * 0.0006; walk.push(y); }
+      const last = walk[walk.length - 1];
+      s.quotes[def.id].daily = days.map((dd, k) => { const c = p * (1 + walk[k] - last); return { t: dd * MIN_PER_DAY, o: c, h: c * 1.001, l: c * 0.999, c, v: 0 }; });
     }
   }
   for (const def of Object.values(s.instruments)) {
