@@ -21,7 +21,10 @@ export function useView<T = any>(name: string, params: Record<string, string | n
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId, name, key, enabled]);
   useEffect(() => { setData(null); load(); }, [load]);
-  useEffect(() => { if (Date.now() - last.current >= minMs) load(); }, [t, version, load, minMs]);
+  useEffect(() => { if (Date.now() - last.current >= minMs) load(); }, [t, load, minMs]);
+  // Après une action du joueur : rechargement immédiat (même en pause, même si la dernière lecture est récente)
+  const seenVersion = useRef(version);
+  useEffect(() => { if (version !== seenVersion.current) { seenVersion.current = version; load(); } }, [version, load]);
   return { data, reload: load };
 }
 

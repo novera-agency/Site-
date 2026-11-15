@@ -1,7 +1,8 @@
 /** Mutations validées (Zod) : toute modification de l'état passe par ici, côté serveur. */
 import { z } from "zod";
 import type { GameState } from "@/engine/types";
-import { SPEEDS, MIN_PER_DAY, tOfDay, dayIndex, nextBusinessDay, minuteOfDay, isWeekend, useEpoch } from "@/engine/time";
+import { doActivity, moveHousing, sellHousing, setTransport, setSub } from "@/engine/life";
+import { SPEEDS, MIN_PER_DAY, tOfDay, dayIndex, nextBusinessDay, minuteOfDay, isWeekend, useEpoch, fmtDate } from "@/engine/time";
 import { placeOrder, cancelOrder, convertCash } from "@/engine/orders";
 import { startMeeting, answerMeeting, explainTerm } from "@/engine/meetingEngine";
 import { answerMission, checkMissions } from "@/engine/missions";
@@ -41,6 +42,12 @@ export const ActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("company"), action: z.string().max(30), params: z.record(z.union([z.string().max(100), z.number()])).optional() }),
   z.object({ type: z.literal("vacation"), days: num.int().min(1).max(15) }),
   z.object({ type: z.literal("lifestyle"), level: num.int().min(0).max(4) }),
+  z.object({ type: z.literal("life_activity"), id: z.string().max(30) }),
+  z.object({ type: z.literal("life_move"), housing: z.string().max(30), buy: z.boolean() }),
+  z.object({ type: z.literal("life_sell") }),
+  z.object({ type: z.literal("life_transport"), mode: z.enum(["commun", "velo", "occasion", "neuve"]) }),
+  z.object({ type: z.literal("life_sub"), key: z.enum(["mutuelle", "assurance", "sport", "streaming"]), on: z.boolean() }),
+  z.object({ type: z.literal("ask_raise") }),
   z.object({ type: z.literal("settings"), minutesPerSecond: num.min(0.25).max(60).optional(), autoPauseImportant: z.boolean().optional(), livingExpenses: z.boolean().optional(), aiEnabled: z.boolean().optional(), explanations: z.boolean().optional(), allowShort: z.boolean().optional(), name: z.string().min(1).max(60).optional() }),
   z.object({ type: z.literal("tutorial_visit"), page: z.string().max(40) }),
   z.object({ type: z.literal("leave_meeting") }),
@@ -137,6 +144,19 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
     case "found_company": { const r = foundCompany(s, a.name, a.kind, a.capital, a.strategy); return r.ok ? { ok: true, message: "Société créée." } : { ok: false, error: r.error }; }
     case "company": { const r = companyAction(s, a.action, a.params ?? {}); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error }; }
     case "vacation": { const r = takeVacation(s, a.days); if (!r.ok) return { ok: false, error: r.error }; const n = advanceTo(s, r.until, 6000); return { ok: true, message: `Congés terminés (${Math.round(n * 5 / 1440)} jours simulés).` }; }
+    case "life_activity": { const r = doActivity(s, a.id); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error }; }
+    case "life_move": { const r = moveHousing(s, a.housing, a.buy); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error }; }
+    case "life_sell": { if (!s.life) return { ok: false, error: "Mode carrière uniquement." }; const r = sellHousing(s); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error }; }
+    case "life_transport": { const r = setTransport(s, a.mode); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error }; }
+    case "life_sub": { const r = setSub(s, a.key, a.on); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error }; }
+    case "ask_raise": {
+      if (s.mode !== "carriere" || !s.career.employed) return { ok: false, error: "Vous n'êtes pas en poste." };
+      if (s.activeMeetingId) return { ok: false, error: "Vous êtes déjà en réunion." };
+      const last = s.life?.lastRaiseAskT;
+      if (last !== undefined && s.t - last < 180 * MIN_PER_DAY) return { ok: false, error: `Vous avez déjà négocié il y a moins de six mois. Prochaine demande possible le ${fmtDate(last + 180 * MIN_PER_DAY, false)}.` };
+      const m = startMeeting(s, "negociation_salaire");
+      return m ? { ok: true, data: { meetingId: m.id } } : { ok: false, error: "Rendez-vous impossible." };
+    }
     case "lifestyle": s.flags["lifestyle"] = a.level; logDecision(s, "patrimoine", `Train de vie réglé au niveau ${a.level}`); return { ok: true, message: "Train de vie mis à jour." };
     case "settings": {
       if (a.minutesPerSecond !== undefined) s.settings.minutesPerSecond = a.minutesPerSecond;

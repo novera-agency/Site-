@@ -2,7 +2,7 @@
 import type { GameState } from "@/engine/types";
 import { REGIMES } from "@/engine/regimes";
 import { accountEquity, positionViews, exposures, valueAtRisk, performance, marginRequirement, cashEur, lockedMarginEur, structuredValueEur } from "@/engine/portfolio";
-import { cashBalances, accountEntries, trialBalance, isBalanced } from "@/engine/ledger";
+import { cashBalances, accountEntries, trialBalance, isBalanced, cashOf } from "@/engine/ledger";
 import { quoteBook, marketStatus, bondYield, optionIV, rateFor, dividendYield, baseVol, advNotionalEur, trackedSet } from "@/engine/market";
 import { bondPriceFromYield, blackScholes } from "@/engine/pricing";
 import { listExpiries, strikeGrid, optionId, optionable, buyingPower, canTradeOnDesk } from "@/engine/orders";
@@ -20,7 +20,8 @@ import { relationStatus } from "@/engine/relations";
 import { BANKS, BANK_BY_ID, TRACKS, BASE_SALARY } from "@/engine/data/banks";
 import { LESSONS } from "@/engine/data/learning";
 import { skillLevel, SKILL_LEVELS, SKILL_NAMES, REP_NAMES, avgRep, toEur, multiplier, fx } from "@/engine/core";
-import { dayIndex, MIN_PER_DAY, fmtDate, useEpoch } from "@/engine/time";
+import { dayIndex, MIN_PER_DAY, fmtDate, useEpoch, isWeekend } from "@/engine/time";
+import { payslip, monthlyBills, freeHours, priceLevel, HOUSING, HOUSING_BY_ID, rentOf, priceOf, housingEquity, mortgageRate, TRANSPORT, SUBS, ACTIVITIES } from "@/engine/life";
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
 const px = (x: number) => (Math.abs(x) >= 1000 ? Math.round(x * 100) / 100 : Number(x.toPrecision(6)));
@@ -71,6 +72,7 @@ export function snapshot(s: GameState, aiAvailable = false) {
   const pend = typeof s.flags["pendingMeeting"] === "string" ? JSON.parse(s.flags["pendingMeeting"] as string) as { template: string; title: string } : null;
   const nextAgenda = s.agenda.find((a) => a.status === "prevu" && a.t >= s.t);
   return {
+    life: s.life && s.mode === "carriere" ? { mental: Math.round(s.life.mental), physique: Math.round(s.life.physique), social: Math.round(s.life.social), fun: Math.round(s.life.fun) } : null,
     id: s.id, t: s.t, epochYear: s.epochYear ?? 2027, historical: !!s.historical, speed: s.speed, paused: s.paused, pauseReason: s.pauseReason, mode: s.mode, difficulty: s.difficulty, regime: s.macro.regime, regimeLabel: REGIMES[s.macro.regime].label,
     minutesPerSecond: s.settings.minutesPerSecond,
     quotes, sessions: marketStatus(s),
@@ -219,9 +221,29 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
       const company = s.company && !s.company.bankrupt ? Math.max(0, accountEquity(s, s.company.accountId)) * (1 - ((s.flags["dilution"] as number) ?? 0)) : 0;
       const entries = accountEntries(s, "perso", 400);
       const sum = (f: (m: string) => boolean, sign: 1 | -1) => entries.filter((e) => f(e.memo) && (sign === 1 ? e.debit === "perso:cash" : e.credit === "perso:cash")).reduce((a, e) => a + toEur(s, e.amount / 100, e.cur), 0);
-      return { perso: accountSummary(s, "perso"), persoEq, company, total: persoEq + company, lifestyle: (s.flags["lifestyle"] as number) ?? 1, livingExpenses: s.settings.livingExpenses, income: { salaires: sum((m) => m.startsWith("Salaire") || m.startsWith("Bonus"), 1), dividendes: sum((m) => m.startsWith("Dividende") || m.startsWith("Coupon") || m.startsWith("Intérêts"), 1), depenses: sum((m) => m.startsWith("Dépenses") || m.startsWith("Agios"), -1) }, history: s.accounts.perso.equityHistory, peak: s.stats.peakWealth, maxDrawdown: s.stats.maxDrawdown };
+      return { perso: accountSummary(s, "perso"), persoEq, company, total: persoEq + company, lifestyle: (s.flags["lifestyle"] as number) ?? 1, livingExpenses: s.settings.livingExpenses, lifeOn: !!s.life && s.mode === "carriere", housing: housingEquity(s), income: { salaires: sum((m) => m.startsWith("Salaire") || m.startsWith("Bonus"), 1), dividendes: sum((m) => m.startsWith("Dividende") || m.startsWith("Coupon") || m.startsWith("Intérêts"), 1), depenses: sum((m) => m.startsWith("Dépenses") || m.startsWith("Agios") || m.startsWith("Facture") || m.startsWith("Loisirs") || m.startsWith("Impôt") || m.startsWith("Déménagement") || m.startsWith("Achat —"), -1) }, history: s.accounts.perso.equityHistory, peak: s.stats.peakWealth, maxDrawdown: s.stats.maxDrawdown };
     }
-    case "compensation": return { salary: s.career.salaryAnnual / 100, bonusPool: s.career.ytdBonusPool / 100, reviews: s.career.reviews.slice(0, 20).map((r) => ({ ...r, bonus: r.bonus ? r.bonus / 100 : undefined })), payslips: accountEntries(s, "perso", 400).filter((e) => e.memo.startsWith("Salaire") || e.memo.startsWith("Bonus")).slice(0, 24), grid: BASE_SALARY.map((b, i) => ({ rank: i, title: TRACKS[s.career.track].ranks[i], salary: Math.round(b * (BANK_BY_ID[s.career.bankId]?.salaryMult ?? 1)) })), bank: BANK_BY_ID[s.career.bankId], rank: s.career.rank, employed: s.career.employed };
+    case "life": {
+      if (!s.life) return { enabled: false };
+      const l = s.life;
+      const pay = payslip(s);
+      const bills = monthlyBills(s);
+      const billsTotal = bills.reduce((a, [, x]) => a + x, 0);
+      const fh = freeHours(s);
+      const k = priceLevel(s);
+      return {
+        enabled: true, bars: { mental: Math.round(l.mental), physique: Math.round(l.physique), social: Math.round(l.social), fun: Math.round(l.fun) }, stress: Math.round(s.career.stress), energy: Math.round(s.career.energy),
+        pay, bills, billsTotal, left: pay.netAfterTax - billsTotal, cash: cashOf(s, "perso", "EUR"), unpaid: l.unpaid,
+        housing: { ...l.housing, def: HOUSING_BY_ID[l.housing.id], rent: rentOf(s, l.housing.id), value: (l.housing.value ?? 0) / 100, mortgage: l.housing.mortgage ? { ...l.housing.mortgage, principal: l.housing.mortgage.principal / 100, monthly: l.housing.mortgage.monthly / 100 } : null, equity: housingEquity(s) },
+        offers: HOUSING.map((h) => ({ ...h, rentNow: rentOf(s, h.id), priceNow: priceOf(s, h.id) })), mortgageRate: mortgageRate(s), city: BANK_BY_ID[s.career.bankId]?.city,
+        transport: l.transport, transports: Object.entries(TRANSPORT).map(([id, x]) => ({ id, ...x, cost: Math.round(x.cost * k) })),
+        subs: l.subs, subsList: Object.entries(SUBS).map(([id, x]) => ({ id, ...x, cost: Math.round(x.cost * k) })),
+        activities: ACTIVITIES.map((a) => ({ ...a, cost: a.id === "sport" && l.subs.sport ? 0 : Math.round(a.cost * k) })), free: fh, weekend: isWeekend(s.t),
+        perks: l.perks, log: l.log.slice(0, 25), budget: l.budget.slice(0, 12), salary: s.career.salaryAnnual / 100,
+        raiseAt: l.lastRaiseAskT !== undefined ? l.lastRaiseAskT + 180 * MIN_PER_DAY : null, employed: s.career.employed, vacationLeft: 25 + l.perks.extraLeave - ((s.flags["vacationDaysYear"] as number) ?? 0),
+      };
+    }
+    case "compensation": return { salary: s.career.salaryAnnual / 100, bonusPool: s.career.ytdBonusPool / 100, reviews: s.career.reviews.slice(0, 20).map((r) => ({ ...r, bonus: r.bonus ? r.bonus / 100 : undefined })), payslips: accountEntries(s, "perso", 400).filter((e) => e.memo.startsWith("Salaire") || e.memo.startsWith("Bonus")).slice(0, 24), grid: BASE_SALARY.map((b, i) => ({ rank: i, title: TRACKS[s.career.track].ranks[i], salary: Math.round(b * (BANK_BY_ID[s.career.bankId]?.salaryMult ?? 1) * priceLevel(s)) })), bank: BANK_BY_ID[s.career.bankId], rank: s.career.rank, employed: s.career.employed, lifeOn: !!s.life && s.mode === "carriere" };
     case "company": return { company: s.company ? { ...s.company, aum: s.company.aum / 100, debt: s.company.debt / 100, marketingBudget: s.company.marketingBudget / 100, equityRaised: s.company.equityRaised / 100, retainedEarnings: s.company.retainedEarnings / 100, employees: s.company.employees.map((e) => ({ ...e, salary: e.salary / 100 })) } : null, statements: companyStatements(s), types: COMPANY_TYPES, offices: OFFICES, tools: TOOLS, candidates: s.company ? hireCandidates(s) : [], persoCash: cashBalances(s, "perso").EUR ? (cashBalances(s, "perso").EUR as number) / 100 : 0, avgRep: avgRep(s), dilution: (s.flags["dilution"] as number) ?? 0 };
     case "structured": {
       const day = dayIndex(s.t);

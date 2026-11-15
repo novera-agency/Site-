@@ -9,6 +9,7 @@ import { REGIMES } from "./regimes";
 import { createMission } from "./missions";
 import { equityWeight, suitableEquityBand, loseClient, rebalanceClient } from "./clients";
 import { rankTitle, joinBank, salaryFor } from "./career";
+import { payslip, priceLevel } from "./life";
 import { BANK_BY_ID, TRACKS } from "./data/banks";
 import { toCents, fromCents } from "./money";
 import { dayIndex, fmtTime, MIN_PER_DAY } from "./time";
@@ -352,6 +353,69 @@ registerMeeting({
     end: { speaker: "boss", text: (c) => String(c.m.vars.res ?? ""), end: true },
   },
   conclude: (c) => `${c.m.vars.res} Nouveau salaire : ${eur(c.s.career.salaryAnnual / 100)}.`,
+});
+
+/* ═════════════════ Négociation salariale à l'initiative du joueur ═════════════════ */
+const lastScore = (c: MeetingCtx) => c.s.career.reviews[0]?.score ?? 50;
+const marketPay = (c: MeetingCtx) => Math.max(...Object.keys(BANK_BY_ID).map((b) => salaryFor(b, c.s.career.rank))) * priceLevel(c.s);
+/** Force du dossier : résultats, confiance du responsable, réputation, ancienneté dans le poste, argument choisi */
+function caseStrength(c: MeetingCtx) {
+  const s = c.s;
+  const tenureY = (s.t - ((s.flags["rankSinceT"] as number) ?? s.career.hiredT)) / (365 * MIN_PER_DAY);
+  return (lastScore(c) - 55) * 0.8 + (s.npcs.boss.trust - 50) * 0.5 + (avgRep(s) - 50) * 0.3 + Math.min(10, tenureY * 6) + v(c, "arg") - s.career.warnings * 6 - (s.life ? Math.max(0, 40 - s.life.mental) * 0.2 : 0);
+}
+/** Décision du responsable (appelée une seule fois, après l'argument) */
+function decideRaise(c: MeetingCtx) {
+  const st = caseStrength(c), ask = v(c, "ask");
+  const need = ask <= 5 ? 0 : ask <= 10 ? 8 : 14;
+  const weak = c.m.vars.weak ? "Le coût de la vie n'est pas un argument de performance. " : "";
+  if (st >= need) { grantRaise(c, ask); changeTrust(c.s, "boss", 2, "Négociation salariale réussie"); c.m.vars.res = `D'accord pour ${ask} %. Vous l'avez mérité.`; c.m.vars.done = 1; c.m.vars.say = c.m.vars.res; return; }
+  const counter = Math.max(0, Math.min(ask - 1, Math.round((st + 10) / 4)));
+  c.m.vars.counter = counter;
+  c.m.vars.say = counter >= 2 ? `${weak}${ask} %, ce n'est pas possible. Je peux aller jusqu'à ${counter} %.` : `${weak}Honnêtement, ce n'est pas le moment : vos résultats ne le justifient pas encore.`;
+}
+function grantRaise(c: MeetingCtx, pct: number) {
+  c.s.career.salaryAnnual = Math.round(c.s.career.salaryAnnual * (1 + pct / 100));
+  c.m.vars.granted = pct;
+  logDecision(c.s, "carriere", `Augmentation négociée : +${pct} % (nouveau salaire ${eur(c.s.career.salaryAnnual / 100)})`);
+}
+registerMeeting({
+  id: "negociation_salaire", type: "Entretien avec un supérieur", location: "Bureau de votre responsable", title: () => "Négociation de votre rémunération",
+  participants: () => ["boss"], agenda: ["Votre demande", "Vos arguments", "Décision"], objectives: ["Obtenir une augmentation ou des avantages", "Ne pas abîmer la relation"],
+  tension: "Une demande mal argumentée ou excessive peut vexer votre responsable.",
+  docs: (c) => {
+    const s = c.s; const pay = payslip(s); const mk = marketPay(c);
+    return [
+      { title: "Votre fiche de paie", rows: [["Salaire brut annuel", eur(s.career.salaryAnnual / 100)], ["Brut mensuel", eur(pay.gross)], ["Cotisations sociales", `−${eur(pay.social)}`], ["Net avant impôt", eur(pay.net)], ["Impôt prélevé à la source", `−${eur(pay.tax)}`], ["Net versé chaque mois", eur(pay.netAfterTax)]] },
+      { title: "Éléments de négociation", rows: [["Dernière évaluation", `${lastScore(c)}/100`], ["Confiance de votre responsable", `${Math.round(s.npcs.boss.trust)}/100`], ["Réputation moyenne", `${Math.round(avgRep(s))}/100`], ["Meilleur salaire du marché pour votre poste", eur(mk)], ["Offres concurrentes en cours", String(s.career.pendingOffers.length)], ["Avertissements au dossier", String(s.career.warnings)]] },
+    ];
+  },
+  init: (c) => { c.m.vars.arg = 0; },
+  start: "n0",
+  nodes: {
+    n0: { speaker: "boss", text: (c) => `Entrez, ${me(c)}. Vous avez demandé à me voir : qu'est-ce que je peux faire pour vous ?`, choices: [
+      { id: "p5", label: "J'aimerais parler de mon salaire : je pense mériter une augmentation de 5 %.", apply: (c) => { c.m.vars.ask = 5; }, next: "arg" },
+      { id: "p10", label: "Je demande 10 % : mon travail dépasse largement ce qu'on attend de mon poste.", apply: (c) => { c.m.vars.ask = 10; c.m.vars.arg = -6; }, next: "arg" },
+      { id: "mk", label: "Je voudrais être payé au niveau du marché pour mon poste.", apply: (c) => { const gap = Math.round((marketPay(c) / (c.s.career.salaryAnnual / 100) - 1) * 100); c.m.vars.ask = Math.max(3, Math.min(20, gap)); c.m.vars.arg = gap > 3 ? 4 : -4; }, next: "arg" },
+      { id: "tt", label: "Plutôt qu'une augmentation : deux jours de télétravail par semaine.", requires: (c) => !c.s.life?.perks.teletravail, apply: (c) => { const ok = c.s.npcs.boss.trust >= 48 && c.s.career.warnings < 2; if (ok && c.s.life) { c.s.life.perks.teletravail = true; c.m.vars.res = "Accordé : deux jours de télétravail par semaine. Moins de trajets, plus de temps pour vous."; } else c.m.vars.res = "Pas pour l'instant : je dois d'abord avoir pleinement confiance en votre autonomie."; }, next: "end" },
+      { id: "cp", label: "Cinq jours de congés supplémentaires par an.", requires: (c) => (c.s.life?.perks.extraLeave ?? 0) < 5, apply: (c) => { const ok = caseStrength(c) > 2; if (ok && c.s.life) { c.s.life.perks.extraLeave = 5; c.m.vars.res = "Accordé : 30 jours de congés par an."; } else { c.m.vars.res = "Refusé : la charge de travail ne le permet pas."; changeTrust(c.s, "boss", -1); } }, next: "end" },
+      { id: "of", label: "J'ai reçu une offre d'un concurrent. Je préfère rester, si vous vous alignez.", requires: (c) => c.s.career.pendingOffers.length > 0, apply: (c) => { const o = c.s.career.pendingOffers[0]; c.m.vars.ask = Math.max(3, Math.round((o.salary / c.s.career.salaryAnnual - 1) * 100)); c.m.vars.arg = 12;  decideRaise(c); }, next: "dec" },
+    ] },
+    arg: { speaker: "boss", text: (c) => `${v(c, "ask")} %… Sur quoi vous appuyez-vous ?`, choices: [
+      { id: "res", label: "Sur mes résultats : mes évaluations, mon P&L et le respect de mes limites.", apply: (c) => { c.m.vars.arg = v(c, "arg") + (lastScore(c) >= 65 ? 8 : lastScore(c) >= 50 ? 2 : -6); sc(c, "communication", 2);  decideRaise(c); }, next: "dec" },
+      { id: "resp", label: "Sur les responsabilités que j'ai prises : clients, missions, gestion de crise.", apply: (c) => { c.m.vars.arg = v(c, "arg") + Math.min(8, c.s.career.missionsDone * 0.8 + c.s.clients.filter((x) => !x.lost).length); sc(c, "communication", 1);  decideRaise(c); }, next: "dec" },
+      { id: "vie", label: "Mon loyer et le coût de la vie ont augmenté.", apply: (c) => { c.m.vars.arg = v(c, "arg") - 5; c.m.vars.weak = 1;  decideRaise(c); }, next: "dec" },
+      { id: "anc", label: "Cela fait un moment que je suis dans l'équipe sans évolution.", apply: (c) => { const y = (c.s.t - ((c.s.flags["rankSinceT"] as number) ?? c.s.career.hiredT)) / (365 * MIN_PER_DAY); c.m.vars.arg = v(c, "arg") + (y >= 1 ? 5 : -4);  decideRaise(c); }, next: "dec" },
+    ] },
+    dec: { speaker: "boss", text: (c) => String(c.m.vars.say ?? ""), choices: [
+      { id: "acc", label: "J'accepte votre proposition.", requires: (c) => !c.m.vars.done && v(c, "counter") >= 2, apply: (c) => { grantRaise(c, v(c, "counter")); c.m.vars.res = `Augmentation de ${v(c, "counter")} % accordée.`; }, next: "end" },
+      { id: "ins", label: "J'insiste : c'est mon chiffre, sinon je regarderai ailleurs.", requires: (c) => !c.m.vars.done, apply: (c) => { const ok = caseStrength(c) + 6 >= (v(c, "ask") <= 10 ? 8 : 14) && c.s.career.pendingOffers.length > 0; if (ok) { grantRaise(c, v(c, "ask")); c.m.vars.res = `Bon… ${v(c, "ask")} %. Mais j'attends beaucoup de vous.`; } else { changeTrust(c.s, "boss", -6, "Ultimatum salarial"); c.s.career.stress = clamp(c.s.career.stress + 6, 0, 100); c.m.vars.res = "Je n'apprécie pas les ultimatums. La réponse est non."; } }, next: "end" },
+      { id: "ren", label: "Je comprends. Revoyons-en dans six mois, avec des objectifs précis.", requires: (c) => !c.m.vars.done, apply: (c) => { changeTrust(c.s, "boss", 3, "Négociation constructive"); c.m.vars.res = "Entendu : objectifs fixés, on en reparle dans six mois."; }, next: "end" },
+      { id: "ok", label: "Merci, je ne vous décevrai pas.", requires: (c) => !!c.m.vars.done, next: "end" },
+    ] },
+    end: { speaker: "boss", text: (c) => String(c.m.vars.res ?? "Bien. Au travail."), end: true },
+  },
+  conclude: (c) => { if (c.s.life) c.s.life.lastRaiseAskT = c.s.t; return `${c.m.vars.res ?? ""} Salaire brut annuel : ${eur(c.s.career.salaryAnnual / 100)} (net mensuel après impôt : ${eur(payslip(c.s).netAfterTax)}).`; },
 });
 
 /* ═════════════════ Entretien d'embauche ═════════════════ */

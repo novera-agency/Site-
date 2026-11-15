@@ -1,4 +1,5 @@
 /** EventEngine (narratif) + NPCDecisionEngine (banques concurrentes, agents). */
+import { lifeChoice } from "./life";
 import type { GameState } from "./types";
 import { Rng } from "./rng";
 import { applyShock } from "./market";
@@ -98,6 +99,7 @@ export function handleMessageAction(s: GameState, messageId: string, action: str
     case "network_skip": result = "Vous restez travailler."; break;
     case "partner_sign": if (s.company) { s.company.reputation = clamp(s.company.reputation + 8, 0, 100); s.company.clientsCount += 15; s.company.aum += toCents(8e6); result = "Partenariat signé : +15 clients, +8 M€ d'encours."; changeTrust(s, "founder", 8); } break;
     case "partner_decline": result = "Partenariat décliné."; break;
+    case "life_choice": result = lifeChoice(s, payload.ev, payload.choice); break;
     case "partner_contact": result = "Vous gardez le contact."; changeTrust(s, "founder", 4); break;
     case "mutation": result = "Vous êtes muté sur le desk de taux : nouvelles responsabilités."; changeRep(s, "interne", 3); gainXp(s, "macro", 30, "Mutation desk de taux"); careerLog(s, "Mutation sur le desk de taux"); break;
     case "interview": { const o = s.career.pendingOffers.find((x) => x.id === payload.offer); if (!o) return { ok: false as const, error: "Offre expirée." }; s.flags["pendingMeeting"] = JSON.stringify({ template: "entretien_embauche", params: { offer: o.id }, title: "Entretien de recrutement" }); result = "Entretien programmé : rendez-vous dans la salle de réunion."; break; }

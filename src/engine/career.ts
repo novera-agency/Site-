@@ -6,6 +6,7 @@ import { toCents, fromCents } from "./money";
 import { accountEquity, valueAtRisk, performance } from "./portfolio";
 import { avgRep, careerLog, changeRep, changeTrust, clamp, gainXp, logDecision, nextId, notify, skillLevel, pause } from "./core";
 import { BANK_BY_ID, BANKS, BASE_SALARY, TRACKS } from "./data/banks";
+import { lifeOn, payslip, monthlyLife, lifePerformanceAdj, priceLevel } from "./life";
 import { addAgendaItem } from "./agenda";
 import { newAccount, totalAum } from "./clients";
 import { dayIndex, MIN_PER_DAY, tOfDay, nextBusinessDay, fmtDate } from "./time";
@@ -60,9 +61,14 @@ export function monthlyPayroll(s: GameState) {
     const gross = c.salaryAnnual / 12;
     const net = Math.round(gross * 0.77);
     post(s, cashAcc("perso"), EXT_EMPLOYER, net, "EUR", `Salaire net — ${BANK_BY_ID[c.bankId].short} (brut ${fromCents(Math.round(gross)).toLocaleString("fr-FR")} €)`);
-    notify(s, "succes", "Salaire versé", `${fromCents(net).toLocaleString("fr-FR")} € nets crédités sur votre compte.`, "/play/remuneration");
+    if (lifeOn(s)) {
+      const tax = toCents(payslip(s).tax);
+      if (tax > 0) post(s, EXT_TAX, cashAcc("perso"), tax, "EUR", "Impôt sur le revenu (prélèvement à la source)");
+      notify(s, "succes", "Salaire versé", `${fromCents(net - tax).toLocaleString("fr-FR")} € nets après impôt. Les factures du mois vont être prélevées.`, "/play/vie");
+    } else notify(s, "succes", "Salaire versé", `${fromCents(net).toLocaleString("fr-FR")} € nets crédités sur votre compte.`, "/play/remuneration");
   }
-  if (s.settings.livingExpenses) {
+  if (lifeOn(s)) monthlyLife(s);
+  else if (s.settings.livingExpenses) {
     const lifestyle = (s.flags["lifestyle"] as number) ?? 1;
     const base = 1800 + lifestyle * 900 + (c.employed ? c.salaryAnnual / 100 / 12 * 0.15 : 0);
     post(s, EXT_LIVING, cashAcc("perso"), toCents(base), "EUR", `Dépenses de vie mensuelles (logement, transport, alimentation) — train de vie ${lifestyle}`);
@@ -97,7 +103,7 @@ export function performanceScore(s: GameState, since: "week" | "quarter" | "year
     : c.track === "analyste" || c.track === "ib" ? { pnl: 0.1, risk: 0.1, client: 0.1, mission: 0.4, rep: 0.2, comp: 0.1 }
     : { pnl: 0.35, risk: 0.25, client: 0.05, mission: 0.15, rep: 0.1, comp: 0.1 };
   const bossAdj = isAlly(s, "boss") ? 5 : isHostile(s, "boss") ? -5 : 0; // le jugement du manager pèse dans toute évaluation
-  const total = clamp(pnlScore * w.pnl + riskScore * w.risk + clientScore * w.client + missionScore * w.mission + repScore * w.rep + compliance * w.comp + bossAdj, 0, 100);
+  const total = clamp(pnlScore * w.pnl + riskScore * w.risk + clientScore * w.client + missionScore * w.mission + repScore * w.rep + compliance * w.comp + bossAdj + lifePerformanceAdj(s), 0, 100);
   return { total: Math.round(total), bossAdj, details: { pnl: Math.round(pnlScore), risque: Math.round(riskScore), clients: Math.round(clientScore), missions: Math.round(missionScore), reputation: Math.round(repScore), conformite: Math.round(compliance) }, pnl, varv, limit };
 }
 
@@ -154,7 +160,7 @@ export function quarterlyReview(s: GameState) {
 export function promote(s: GameState) {
   const c = s.career;
   c.rank = Math.min(8, c.rank + 1);
-  c.salaryAnnual = toCents(salaryFor(c.bankId, c.rank));
+  c.salaryAnnual = toCents(salaryFor(c.bankId, c.rank) * priceLevel(s));
   s.flags["rankSinceT"] = s.t;
   careerLog(s, `Promotion au poste de ${rankTitle(s)} — salaire ${fromCents(c.salaryAnnual).toLocaleString("fr-FR")} €`);
   changeRep(s, "interne", 5); changeRep(s, "professionnelle", 4);
@@ -212,7 +218,7 @@ export function generateOffer(s: GameState, rng: Rng, afterFiring = false) {
   const b = rng.pick(candidates);
   const track = b.tracks.includes(s.career.track) ? s.career.track : b.tracks[0];
   const rank = Math.max(1, afterFiring ? s.career.rank - 1 : s.career.rank + (rng.chance(0.4) ? 1 : 0));
-  const salary = toCents(salaryFor(b.id, rank) * rng.range(0.98, 1.12));
+  const salary = toCents(salaryFor(b.id, rank) * priceLevel(s) * rng.range(0.98, 1.12));
   s.career.pendingOffers.push({ id: nextId(s, "off"), bankId: b.id, rank, salary, expiresT: s.t + 10 * MIN_PER_DAY, track });
   s.messages.unshift({ id: nextId(s, "msg"), t: s.t, from: s.npcs.recruiter.name + " (chasseur de têtes)", subject: `Opportunité chez ${b.name}`, body: `Bonjour,\n\n${b.name} (${b.city}) recherche un profil comme le vôtre pour un poste de ${TRACKS[track].ranks[rank]} (${TRACKS[track].name}). Rémunération fixe proposée : ${fromCents(salary).toLocaleString("fr-FR")} € par an, bonus selon la politique maison (multiplicateur ${b.bonusMult}).\n\nCulture : ${b.culture}\n\nL'offre est valable 10 jours. Un entretien sera nécessaire.\n\nBien à vous.`, read: false, actions: [{ label: "Passer l'entretien", action: "interview", payload: { offer: s.career.pendingOffers[s.career.pendingOffers.length - 1].id } }, { label: "Décliner", action: "decline_offer", payload: { offer: s.career.pendingOffers[s.career.pendingOffers.length - 1].id } }] });
   notify(s, "info", `Offre de recrutement : ${b.name}`, `${TRACKS[track].ranks[rank]} — ${fromCents(salary).toLocaleString("fr-FR")} €`, "/play/messagerie");
@@ -257,7 +263,8 @@ export function takeVacation(s: GameState, days: number) {
   if (!s.career.employed) return { ok: false as const, error: "Vous n'êtes pas en poste." };
   if (s.activeMeetingId) return { ok: false as const, error: "Terminez d'abord votre réunion." };
   const used = (s.flags["vacationDaysYear"] as number) ?? 0;
-  if (used + days > 25) return { ok: false as const, error: `Il vous reste ${25 - used} jours de congés cette année.` };
+  const quota = 25 + (s.life?.perks.extraLeave ?? 0);
+  if (used + days > quota) return { ok: false as const, error: `Il vous reste ${quota - used} jours de congés cette année.` };
   s.flags["vacationDaysYear"] = used + days;
   const until = tOfDay(nextBusinessDay(dayIndex(s.t) + days), 7, 0);
   for (const a of s.agenda) if (a.status === "prevu" && a.t < until) a.status = "annule";

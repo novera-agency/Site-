@@ -249,8 +249,23 @@ export interface GameSettings {
   explanations: boolean;
 }
 
+export interface LifeState {
+  /** Jauges 0-100 */
+  mental: number; physique: number; social: number; fun: number;
+  housing: { id: string; owned: boolean; since: number; value?: number; mortgage?: { principal: number; rate: number; monthly: number; monthsLeft: number } };
+  transport: "commun" | "velo" | "occasion" | "neuve";
+  subs: { mutuelle: boolean; assurance: boolean; sport: boolean; streaming: boolean };
+  free: { day: number; used: number };
+  unpaid: number;
+  perks: { teletravail: boolean; extraLeave: number };
+  lastRaiseAskT?: number;
+  log: { t: number; text: string }[];
+  budget: { month: number; bills: number; net: number }[];
+}
 export interface GameState {
   version: number;
+  /** Vie privée (mode carrière) */
+  life?: LifeState;
   /** Année de départ du calendrier (2027 : monde fictif ; 2000 : mode historique) */
   epochYear?: number;
   /** Mode historique 2000 → 2025 : événements réels datés et trajectoires de marché approchées */

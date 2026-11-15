@@ -41,6 +41,7 @@ src/engine/        Moteur pur, déterministe, sans dépendance au navigateur ni 
   events.ts        EventEngine narratif + NPCDecisionEngine (banques concurrentes)
   company.ts       Entreprise du joueur, états financiers
   agenda.ts        Cycle quotidien (agenda, rendez-vous)
+  life.ts          Vie privée : paie et impôt, logement et crédit, factures, loisirs, jauges, événements, niveau des prix
   history.ts       Pré-historique de marché (≈ 1 an) au même modèle
   historical.ts    Mode historique 2000 → 2025 : guidage des cours vers des trajectoires approchées
                    (avance de la cible + rappel, correction collective par zone pour que l'indice suive),

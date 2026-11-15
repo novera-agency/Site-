@@ -13,7 +13,7 @@ import { Badge, Disclaimer } from "./ui";
 import type { Snapshot } from "@/server/views";
 
 const NAV: { group: string; items: [string, string, string][] }[] = [
-  { group: "Bureau", items: [["/play", "Bureau personnel", "🏢"], ["/play/agenda", "Agenda", "🗓️"], ["/play/messagerie", "Messagerie", "✉️"], ["/play/reunions", "Réunions", "🤝"]] },
+  { group: "Bureau", items: [["/play", "Bureau personnel", "🏢"], ["/play/agenda", "Agenda", "🗓️"], ["/play/messagerie", "Messagerie", "✉️"], ["/play/reunions", "Réunions", "🤝"], ["/play/vie", "Vie privée", "🏠"]] },
   { group: "Marchés", items: [["/play/terminal", "Salle des marchés", "📈"], ["/play/recherche", "Recherche d'instruments", "🔎"], ["/play/ordres", "Passage d'ordres", "🧾"], ["/play/options", "Options", "🎛️"], ["/play/structures", "Produits structurés", "🧩"]] },
   { group: "Portefeuille", items: [["/play/portefeuille", "Portefeuille", "💼"], ["/play/transactions", "Transactions & grand livre", "📒"], ["/play/risques", "Gestion des risques", "🛡️"], ["/play/patrimoine", "Patrimoine personnel", "🏦"]] },
   { group: "Informations", items: [["/play/actualites", "Actualités", "📰"], ["/play/calendrier", "Calendrier économique", "📅"], ["/play/macro", "Macroéconomie", "🌍"]] },
@@ -48,6 +48,7 @@ function TopBar({ snap, onMenu }: { snap: Snapshot; onMenu: () => void }) {
         <Badge tone={snap.crisisActive ? "loss" : "info"}>{snap.regimeLabel}</Badge>
         <span className="hidden text-[11px] text-ink-300 md:inline">Volatilité <span className="num text-ink-100">{snap.vix}</span></span>
         <div className="ml-auto flex items-center gap-4">
+          {snap.life && <Link href="/play/vie" data-testid="life-chip" title={`Santé mentale ${snap.life.mental} · Forme ${snap.life.physique} · Vie sociale ${snap.life.social} · Épanouissement ${snap.life.fun}`} className="flex items-center gap-1.5 rounded-md bg-ink-800 px-2 py-1 text-[11px] hover:bg-ink-700">{([["🧠", snap.life.mental], ["💪", snap.life.physique], ["🫂", snap.life.social], ["🎉", snap.life.fun]] as [string, number][]).map(([e, v]) => <span key={e} className={`num ${v >= 60 ? "text-gain" : v >= 35 ? "text-amber-300" : "text-loss"}`}>{e}{v}</span>)}</Link>}
           <div className="text-right"><div className="text-[10px] uppercase tracking-wider text-ink-400">Patrimoine</div><div className="num text-sm font-semibold">{fmtEur(snap.wealth)}</div></div>
           {snap.desk !== null && <div className="hidden text-right sm:block"><div className="text-[10px] uppercase tracking-wider text-ink-400">P&L desk semaine</div><div className={`num text-sm font-semibold ${clsChange(snap.deskPnlWeek ?? 0)}`}>{fmtEur(snap.deskPnlWeek)}</div></div>}
           <Link href="/play/messagerie" className="relative text-lg" title="Messagerie">✉️{snap.unreadMsgs > 0 && <span className="absolute -right-2 -top-1 rounded-full bg-accent px-1 text-[10px] text-white">{snap.unreadMsgs}</span>}</Link>

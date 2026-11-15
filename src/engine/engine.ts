@@ -29,6 +29,7 @@ import { bondStats } from "./analytics";
 import { cashAcc, post } from "./ledger";
 import { toCents } from "./money";
 import { changeRep, gainXp, notify, pushNews, nextId, fx, logDecision } from "./core";
+import { initLife, dailyLife, housingEquity, priceLevel } from "./life";
 import { histInitialPrices, initHistorical, histAdjust, histAfterHistory, histDaily, histActive, histScriptedCrisis, HIST_EPOCH } from "./historical";
 import { dayIndex, minuteOfDay, MIN_PER_DAY, START_T, STEP_MIN, tOfDay, weekday, isWeekend, firstBusinessDayOfMonth, dateOf, nextBusinessDay, EPOCH_UTC, setEpochYear, startTForEpoch, useEpoch } from "./time";
 import "./meetings";
@@ -116,7 +117,9 @@ export function createGame(o: NewGameOptions): GameState {
   if (o.mode === "carriere") {
     s.flags["rankSinceT"] = s.t;
     s.career.rank = o.profile.knowledge === "expert" ? 2 : 1;
-    s.career.salaryAnnual = toCents(salaryFor(bank.id, s.career.rank));
+    s.career.salaryAnnual = toCents(salaryFor(bank.id, s.career.rank) * priceLevel(s));
+    s.life = initLife(s);
+    s.messages.unshift({ id: nextId(s, "msg"), t: s.t, from: "Vie privée", subject: "Votre nouvelle vie commence", body: "Vous emménagez dans un studio en centre-ville. Chaque mois, votre salaire est versé puis l'impôt, le loyer et les factures sont prélevés : gardez un œil sur le reste à vivre.\n\nEn dehors du bureau, entretenez votre santé mentale, votre forme, votre vie sociale et votre épanouissement (onglet Vie privée) : si vous les négligez, le stress monte et vos performances baissent. Et si vous estimez mériter mieux, demandez un rendez-vous à votre responsable pour négocier.", read: false });
     setupDesk(s);
     // Portefeuille obligataire professionnel supervisé
     const cap = (s.accounts.desk.capitalAllocated ?? 0) / 100;
@@ -264,6 +267,7 @@ function newDay(s: GameState, rng: Rng) {
   updateConsensus(s);
   dailyStructured(s);
   dailyWellbeing(s, weekend);
+  dailyLife(s, rng);
   sweepNegativeCash(s);
   // Mensuel
   if (!weekend && day === firstBusinessDayOfMonth(s.t)) {
@@ -307,7 +311,7 @@ function endOfDay(s: GameState) {
 }
 
 export function wealth(s: GameState) {
-  let w = accountEquity(s, "perso");
+  let w = accountEquity(s, "perso") + housingEquity(s);
   if (s.company && !s.company.bankrupt) w += Math.max(0, accountEquity(s, s.company.accountId)) * (1 - ((s.flags["dilution"] as number) ?? 0));
   return w;
 }
@@ -402,6 +406,7 @@ export function migrate(raw: GameState): GameState {
     s.alerts ??= []; s.impulses ??= []; s.ledgerArchive ??= { count: 0, checksum: {} };
     s.version = 2;
   }
+  if (s.mode === "carriere" && !s.life) s.life = initLife(s);
   if (s.version > SAVE_VERSION) throw new Error("Sauvegarde issue d'une version plus récente du jeu.");
   return s;
 }

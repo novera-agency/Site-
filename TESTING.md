@@ -32,3 +32,5 @@ Pour tester l'édition navigateur : `BASE_PATH=/Site- npm run build:static`, ser
 | `tests/univers.test.ts` | Plus de 1 000 actions, tickers uniques, 13 pays, 12 secteurs, prix valides ; indices nationaux (500/40/40/100/100 valeurs) ; achat d'une petite valeur, sauvegarde < 5 Mo, définitions et clôtures restaurées au chargement. |
 | `e2e/univers.spec.ts` | Recherche : plus de 1 000 résultats, filtres pays + secteur, ouverture de la fiche d'une valeur. |
 | `e2e/historique.spec.ts` | Choix de l'époque, départ le 3 janvier 2000 ou le 4 janvier 2027, actualités et banques centrales réelles, date affichée dans le menu. |
+| `tests/vie.test.ts` | Fiche de paie (cotisations, impôt progressif), factures prélevées ; loisirs (coût, temps libre limité, week-end) ; achat immobilier refusé sans apport puis accepté, mensualité ; impayés → expulsion ; négociation salariale réussie et délai de six mois ; prix et salaires plus bas en 2000. |
+| `e2e/vie.spec.ts` | Page Vie privée : jauges, fiche de paie, factures, une activité consomme le temps libre, demande de rendez-vous de négociation. |
