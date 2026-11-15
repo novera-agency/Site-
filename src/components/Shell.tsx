@@ -11,7 +11,7 @@ import { MeetingLauncher } from "./MeetingRoom";
 import { MissionHelpPanel } from "./MissionHelp";
 import { Badge, Disclaimer } from "./ui";
 import type { Snapshot } from "@/server/views";
-import { CATEGORIES, categoryOf, type NavCategory } from "./nav";
+import { CATEGORIES, categoryOf, itemOf, type NavCategory } from "./nav";
 
 
 const SPEEDS = [1, 2, 5, 10, 25, 50, 100];
@@ -91,6 +91,21 @@ function Tutorial({ snap }: { snap: Snapshot }) {
 function useBadge(snap: Snapshot) {
   return (k?: string) => k === "msgs" ? snap.unreadMsgs : k === "missions" ? snap.missionsActive : k === "meeting" ? (snap.pendingMeeting || snap.activeMeetingId ? "!" : 0) : 0;
 }
+/** Fil d'Ariane et croix de fermeture : ramène à la page de la catégorie (ou au bureau depuis une catégorie) */
+function BackBar({ path }: { path: string }) {
+  const p = path.length > 1 ? path.replace(/\/$/, "") : path;
+  if (p === "/play") return null;
+  const cat = CATEGORIES.find((c) => c.id === categoryOf(p))!;
+  const isHub = CATEGORIES.some((c) => c.hub === p);
+  const item = itemOf(p);
+  const target = isHub ? "/play" : cat.hub;
+  const here = isHub ? null : item?.label ?? (p.startsWith("/play/actif") ? "Fiche de l'instrument" : null);
+  return <div className="mb-3 flex items-center justify-between gap-3" data-testid="back-bar">
+    <nav className="min-w-0 truncate text-xs text-ink-400"><Link href="/play" className="hover:text-white">🏢 Bureau</Link>{cat.id !== "bureau" ? <> › <Link href={cat.hub} className="hover:text-white">{cat.icon} {cat.label}</Link></> : null}{here && <> › <span className="text-ink-200">{here}</span></>}</nav>
+    <Link href={target} data-testid="back-x" aria-label={`Fermer et revenir à ${isHub ? "Bureau" : cat.label}`} title={`Revenir à ${isHub ? "Bureau" : cat.label}`} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-ink-600 bg-ink-850 text-lg text-ink-200 hover:border-gold hover:text-white">✕</Link>
+  </div>;
+}
+
 /** Barre du bas : chaque catégorie ouvre sa propre page */
 function BottomNav({ snap, path }: { snap: Snapshot; path: string }) {
   const badge = useBadge(snap);
@@ -162,6 +177,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </nav>
         {menu && <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setMenu(false)} />}
         <main className="min-w-0 flex-1 p-3 pb-28 md:p-5 md:pb-28">
+          <BackBar path={path} />
           <Tutorial snap={snap} />
           {children}
           <div className="mt-8 border-t border-ink-800 pt-3"><Disclaimer /></div>

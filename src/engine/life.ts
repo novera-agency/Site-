@@ -11,6 +11,7 @@ const EXT_LIVING = "ext:depenses_vie";
 import { toCents, fromCents } from "./money";
 import { dayIndex, isWeekend, MIN_PER_DAY, EPOCH_YEAR, dateOf } from "./time";
 import { BANK_BY_ID } from "./data/banks";
+import { dailyRealEstate, monthlyRealEstate, propertiesEquity } from "./realestate";
 
 // ───────────── Niveau des prix (mode historique : la vie coûtait moins cher en 2000) ─────────────
 const PRICE_PTS: [number, number][] = [[2000, 0.68], [2005, 0.75], [2010, 0.82], [2015, 0.86], [2020, 0.89], [2022, 0.95], [2024, 1.0], [2027, 1.04]];
@@ -184,6 +185,7 @@ export function monthlyLife(s: GameState) {
     lg(s, `⚠️ Factures impayées (${l.unpaid} mois)`);
     if (l.unpaid >= 3) evict(s);
   } else if (l.unpaid > 0) { l.unpaid = 0; lg(s, "✅ Situation bancaire régularisée."); }
+  monthlyRealEstate(s, new Rng(s.rng));
   l.budget.unshift({ month: dateOf(s.t).getUTCMonth() + 12 * (dateOf(s.t).getUTCFullYear() - EPOCH_YEAR), bills: total, net: payslip(s).netAfterTax });
   if (l.budget.length > 24) l.budget.length = 24;
 }
@@ -255,7 +257,7 @@ export function sellHousing(s: GameState, forced = false) {
 export function setTransport(s: GameState, mode: LifeState["transport"]) { if (!lifeOn(s)) return { ok: false as const, error: "Mode carrière uniquement." }; s.life!.transport = mode; lg(s, `🚗 Transport : ${TRANSPORT[mode].name}`); return { ok: true as const, message: `${TRANSPORT[mode].name} : ${Math.round(TRANSPORT[mode].cost * priceLevel(s))} € par mois.` }; }
 export function setSub(s: GameState, key: keyof LifeState["subs"], on: boolean) { if (!lifeOn(s)) return { ok: false as const, error: "Mode carrière uniquement." }; s.life!.subs[key] = on; return { ok: true as const, message: `${SUBS[key].name} : ${on ? "souscrit" : "résilié"}.` }; }
 /** Valeur nette du logement (bien − crédit restant), comptée dans le patrimoine */
-export function housingEquity(s: GameState) { const l = s.life; if (!l?.housing.owned) return 0; return ((l.housing.value ?? 0) - (l.housing.mortgage?.principal ?? 0)) / 100; }
+export function housingEquity(s: GameState) { const l = s.life; if (!l) return 0; return (l.housing.owned ? ((l.housing.value ?? 0) - (l.housing.mortgage?.principal ?? 0)) / 100 : 0) + propertiesEquity(s); }
 
 // ───────────── Chaque jour ─────────────
 const LIFE_EVENTS: { id: string; w: (s: GameState) => number; fire: (s: GameState, rng: Rng) => void }[] = [
@@ -319,6 +321,7 @@ export function dailyLife(s: GameState, rng: Rng) {
     if (v >= 35) delete s.flags[flag];
   }
   if (l.mental <= 8 && !s.flags["burnoutUntil"]) c.stress = Math.max(c.stress, 93); // déclenche l'arrêt pour épuisement
+  dailyRealEstate(s, rng);
   // Événements de la vie (environ un par semaine)
   if (rng.chance(0.14)) {
     const pool = LIFE_EVENTS.filter((e) => e.w(s) > 0 && s.t - ((s.eventCooldowns[`life_${e.id}`] as number) ?? -1e9) > 45 * MIN_PER_DAY);

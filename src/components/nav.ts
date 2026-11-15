@@ -48,6 +48,7 @@ export const CATEGORIES: NavCategory[] = [
     sections: [{ items: [
       { href: "/play/vie", label: "Vie privée", icon: "🏠", desc: "Santé mentale, loisirs, logement, factures" },
       { href: "/play/remuneration", label: "Salaire", icon: "💶", desc: "Fiche de paie, bonus, grille salariale" },
+      { href: "/play/immobilier", label: "Investissement immobilier", icon: "🏘️", desc: "Acheter, louer, revendre dans 13 villes" },
       { href: "/play/patrimoine", label: "Patrimoine", icon: "🏦", desc: "Épargne, placements, immobilier" },
     ] }],
   },

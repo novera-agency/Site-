@@ -251,6 +251,15 @@ export interface GameSettings {
   explanations: boolean;
 }
 
+export interface Property {
+  id: string; city: string; type: "studio" | "t2" | "t3" | "maison"; surface: number;
+  condition: "neuf" | "bon" | "renover"; dpe: "A" | "B" | "C" | "D" | "E" | "F" | "G";
+  buyPrice: number; buyT: number;
+  status: "vacant" | "en_location" | "loue" | "en_vente" | "travaux";
+  askRent?: number; rent?: number; tenantSince?: number; askPrice?: number; worksUntil?: number; unpaid?: number;
+  loan?: { principal: number; rate: number; monthly: number; monthsLeft: number };
+  log?: { t: number; text: string }[];
+}
 export interface LifeState {
   /** Jauges 0-100 */
   mental: number; physique: number; social: number; fun: number;
@@ -263,6 +272,9 @@ export interface LifeState {
   lastRaiseAskT?: number;
   log: { t: number; text: string }[];
   budget: { month: number; bills: number; net: number }[];
+  /** Investissements locatifs */
+  properties?: Property[];
+  reBought?: string[];
 }
 export interface GameState {
   version: number;

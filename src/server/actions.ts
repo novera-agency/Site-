@@ -1,6 +1,7 @@
 /** Mutations validées (Zod) : toute modification de l'état passe par ici, côté serveur. */
 import { z } from "zod";
 import type { GameState } from "@/engine/types";
+import { buyProperty, setRent, setSale, withdraw, renovate } from "@/engine/realestate";
 import { doActivity, moveHousing, sellHousing, setTransport, setSub } from "@/engine/life";
 import { SPEEDS, MIN_PER_DAY, tOfDay, dayIndex, nextBusinessDay, minuteOfDay, isWeekend, useEpoch, fmtDate } from "@/engine/time";
 import { placeOrder, cancelOrder, convertCash } from "@/engine/orders";
@@ -48,6 +49,11 @@ export const ActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("life_transport"), mode: z.enum(["commun", "velo", "occasion", "neuve"]) }),
   z.object({ type: z.literal("life_sub"), key: z.enum(["mutuelle", "assurance", "sport", "streaming"]), on: z.boolean() }),
   z.object({ type: z.literal("ask_raise") }),
+  z.object({ type: z.literal("re_buy"), listing: z.string().max(60), credit: z.boolean() }),
+  z.object({ type: z.literal("re_rent"), id: z.string().max(40), rent: num.positive().max(100000) }),
+  z.object({ type: z.literal("re_sell"), id: z.string().max(40), price: num.positive().max(1e8) }),
+  z.object({ type: z.literal("re_withdraw"), id: z.string().max(40) }),
+  z.object({ type: z.literal("re_renovate"), id: z.string().max(40) }),
   z.object({ type: z.literal("settings"), minutesPerSecond: num.min(0.25).max(60).optional(), autoPauseImportant: z.boolean().optional(), livingExpenses: z.boolean().optional(), aiEnabled: z.boolean().optional(), explanations: z.boolean().optional(), allowShort: z.boolean().optional(), name: z.string().min(1).max(60).optional() }),
   z.object({ type: z.literal("tutorial_visit"), page: z.string().max(40) }),
   z.object({ type: z.literal("leave_meeting") }),
@@ -149,6 +155,11 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
     case "life_sell": { if (!s.life) return { ok: false, error: "Mode carrière uniquement." }; const r = sellHousing(s); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error }; }
     case "life_transport": { const r = setTransport(s, a.mode); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error }; }
     case "life_sub": { const r = setSub(s, a.key, a.on); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error }; }
+    case "re_buy": case "re_rent": case "re_sell": case "re_withdraw": case "re_renovate": {
+      if (!s.life) return { ok: false, error: "L'investissement immobilier est disponible en mode carrière." };
+      const r = a.type === "re_buy" ? buyProperty(s, a.listing, a.credit) : a.type === "re_rent" ? setRent(s, a.id, a.rent) : a.type === "re_sell" ? setSale(s, a.id, a.price) : a.type === "re_withdraw" ? withdraw(s, a.id) : renovate(s, a.id);
+      return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error };
+    }
     case "ask_raise": {
       if (s.mode !== "carriere" || !s.career.employed) return { ok: false, error: "Vous n'êtes pas en poste." };
       if (s.activeMeetingId) return { ok: false, error: "Vous êtes déjà en réunion." };

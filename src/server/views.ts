@@ -22,6 +22,7 @@ import { LESSONS } from "@/engine/data/learning";
 import { skillLevel, SKILL_LEVELS, SKILL_NAMES, REP_NAMES, avgRep, toEur, multiplier, fx } from "@/engine/core";
 import { dayIndex, MIN_PER_DAY, fmtDate, useEpoch, isWeekend } from "@/engine/time";
 import { appreciation } from "@/engine/missions";
+import { CITIES, CITY_BY_ID, TYPE_NAME, COND_NAME, marketValue, marketRent, rentCap, rentProbability, saleProbability, cityPrice, cityRent, listings, propertiesEquity, loanBurden } from "@/engine/realestate";
 import { payslip, monthlyBills, freeHours, priceLevel, HOUSING, HOUSING_BY_ID, rentOf, priceOf, housingEquity, mortgageRate, TRANSPORT, SUBS, ACTIVITIES } from "@/engine/life";
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
@@ -223,6 +224,17 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
       const entries = accountEntries(s, "perso", 400);
       const sum = (f: (m: string) => boolean, sign: 1 | -1) => entries.filter((e) => f(e.memo) && (sign === 1 ? e.debit === "perso:cash" : e.credit === "perso:cash")).reduce((a, e) => a + toEur(s, e.amount / 100, e.cur), 0);
       return { perso: accountSummary(s, "perso"), persoEq, company, total: persoEq + company, lifestyle: (s.flags["lifestyle"] as number) ?? 1, livingExpenses: s.settings.livingExpenses, lifeOn: !!s.life && s.mode === "carriere", housing: housingEquity(s), income: { salaires: sum((m) => m.startsWith("Salaire") || m.startsWith("Bonus"), 1), dividendes: sum((m) => m.startsWith("Dividende") || m.startsWith("Coupon") || m.startsWith("Intérêts"), 1), depenses: sum((m) => m.startsWith("Dépenses") || m.startsWith("Agios") || m.startsWith("Facture") || m.startsWith("Loisirs") || m.startsWith("Impôt") || m.startsWith("Déménagement") || m.startsWith("Achat —"), -1) }, history: s.accounts.perso.equityHistory, peak: s.stats.peakWealth, maxDrawdown: s.stats.maxDrawdown };
+    }
+    case "realestate": {
+      if (!s.life) return { enabled: false };
+      const city = p.city && CITY_BY_ID[p.city] ? p.city : "lyon";
+      const props = (s.life.properties ?? []).map((x) => ({ ...x, cityName: CITY_BY_ID[x.city].name, typeName: TYPE_NAME[x.type], condName: COND_NAME[x.condition], value: marketValue(s, x), marketRent: marketRent(s, x), cap: rentCap(s, x), loan: x.loan ? { ...x.loan, principal: x.loan.principal / 100, monthly: x.loan.monthly / 100 } : null, pRent: x.askRent ? rentProbability(s, x, x.askRent) : null, pSale: x.askPrice ? saleProbability(s, x, x.askPrice) : null }));
+      return {
+        enabled: true, city, cash: cashOf(s, "perso", "EUR"), rate: mortgageRate(s) + 0.002, burden: loanBurden(s), income: payslip(s).net,
+        cities: CITIES.map((c) => ({ ...c, priceNow: Math.round(cityPrice(s, c)), rentNow: Math.round(cityRent(s, c) * 10) / 10, yieldGross: (cityRent(s, c) * 12) / cityPrice(s, c) })),
+        listings: listings(s, city).map((li) => { const fake = { ...li, buyPrice: 0, buyT: 0, status: "vacant" as const, id: "" }; return { ...li, typeName: TYPE_NAME[li.type], marketRent: marketRent(s, fake), value: marketValue(s, fake) }; }),
+        properties: props, equity: propertiesEquity(s),
+      };
     }
     case "life": {
       if (!s.life) return { enabled: false };

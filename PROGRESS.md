@@ -57,6 +57,8 @@ Légende : ✅ fonctionnel et relié au moteur · 🟡 partiel · ❌ non réali
 | Vie privée : fiche de paie et impôt, logement (location/achat à crédit), factures, transport, abonnements, loisirs à temps limité, 4 jauges, événements de la vie, impayés et expulsion, négociation salariale à la demande | ✅ | Impôt : barème progressif simplifié (une part) |
 | Missions du jour (≥ 2 par jour ouvré, 11 modèles, enjeu selon appréciation et grade) | ✅ | |
 | Navigation en 5 catégories (Bureau, Vie professionnelle, Vie personnelle, Relations, Options) | ✅ | Barre du bas + menu latéral repliable |
+| Investissement immobilier locatif (13 villes, annonces, marché de la location et de la vente, encadrement, DPE, fiscalité) | ✅ | Fiscalité simplifiée |
+| Croix de retour et fil d'Ariane sur chaque page | ✅ | |
 | Cours réels exacts (flux de données) | ❌ | Aucune source de données accessible ni licence de diffusion |
 | PostgreSQL / Prisma | ❌ | Remplacé par des fichiers JSON (voir ARCHITECTURE) |
 | Responsive (ordinateur, tablette, mobile) | ✅ | Menu latéral repliable |
@@ -70,7 +72,7 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 
 ## Vérifications (dernière exécution)
 - `npm run lint` : OK
-- `npm test` : 68/68
+- `npm test` : 73/73
 - `npm run e2e` : 9/9 (dont parcours 20 étapes et appel client)
 - `npm run build` : OK
 
