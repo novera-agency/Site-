@@ -1,6 +1,7 @@
 /** Mutations validées (Zod) : toute modification de l'état passe par ici, côté serveur. */
 import { z } from "zod";
 import type { GameState } from "@/engine/types";
+import { canCall, RECALL_DAYS } from "@/engine/prospects";
 import { buyProperty, setRent, setSale, withdraw, renovate } from "@/engine/realestate";
 import { doActivity, moveHousing, sellHousing, setTransport, setSub } from "@/engine/life";
 import { SPEEDS, MIN_PER_DAY, tOfDay, dayIndex, nextBusinessDay, minuteOfDay, isWeekend, useEpoch, fmtDate } from "@/engine/time";
@@ -49,6 +50,7 @@ export const ActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("life_transport"), mode: z.enum(["commun", "velo", "occasion", "neuve"]) }),
   z.object({ type: z.literal("life_sub"), key: z.enum(["mutuelle", "assurance", "sport", "streaming"]), on: z.boolean() }),
   z.object({ type: z.literal("ask_raise") }),
+  z.object({ type: z.literal("call_prospect"), id: z.string().max(40) }),
   z.object({ type: z.literal("re_buy"), listing: z.string().max(60), credit: z.boolean() }),
   z.object({ type: z.literal("re_rent"), id: z.string().max(40), rent: num.positive().max(100000) }),
   z.object({ type: z.literal("re_sell"), id: z.string().max(40), price: num.positive().max(1e8) }),
@@ -159,6 +161,14 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
       if (!s.life) return { ok: false, error: "L'investissement immobilier est disponible en mode carrière." };
       const r = a.type === "re_buy" ? buyProperty(s, a.listing, a.credit) : a.type === "re_rent" ? setRent(s, a.id, a.rent) : a.type === "re_sell" ? setSale(s, a.id, a.price) : a.type === "re_withdraw" ? withdraw(s, a.id) : renovate(s, a.id);
       return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error };
+    }
+    case "call_prospect": {
+      const p = s.prospects?.find((x) => x.id === a.id);
+      if (!p || p.status === "refus" || p.status === "converti") return { ok: false, error: "Ce prospect n'est plus à démarcher." };
+      if (s.activeMeetingId) return { ok: false, error: "Vous êtes déjà en réunion." };
+      if (!canCall(s, p)) return { ok: false, error: p.status === "rappel" ? `Laissez-lui un peu de temps : rappelez au moins ${RECALL_DAYS} jours après le dernier appel.` : "Vous l'avez déjà appelé aujourd'hui." };
+      const m = startMeeting(s, "prospection", { pros: p.id });
+      return m ? { ok: true, data: { meetingId: m.id } } : { ok: false, error: "Appel impossible." };
     }
     case "ask_raise": {
       if (s.mode !== "carriere" || !s.career.employed) return { ok: false, error: "Vous n'êtes pas en poste." };

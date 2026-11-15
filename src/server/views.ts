@@ -22,6 +22,7 @@ import { LESSONS } from "@/engine/data/learning";
 import { skillLevel, SKILL_LEVELS, SKILL_NAMES, REP_NAMES, avgRep, toEur, multiplier, fx } from "@/engine/core";
 import { dayIndex, MIN_PER_DAY, fmtDate, useEpoch, isWeekend } from "@/engine/time";
 import { appreciation } from "@/engine/missions";
+import { canCall } from "@/engine/prospects";
 import { CITIES, CITY_BY_ID, TYPE_NAME, COND_NAME, marketValue, marketRent, rentCap, rentProbability, saleProbability, cityPrice, cityRent, listings, propertiesEquity, loanBurden } from "@/engine/realestate";
 import { payslip, monthlyBills, freeHours, priceLevel, HOUSING, HOUSING_BY_ID, rentOf, priceOf, housingEquity, mortgageRate, TRANSPORT, SUBS, ACTIVITIES } from "@/engine/life";
 
@@ -207,6 +208,7 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
     case "messages": return { messages: s.messages.slice(0, 100) };
     case "notifications": return { notifications: s.notifications };
     case "clients": return {
+      prospects: (s.prospects ?? []).filter((p) => p.status !== "converti" || s.t - p.givenT < 30 * MIN_PER_DAY).slice(0, 12).map((p) => ({ ...p, canCall: canCall(s, p), givenByName: p.givenBy ? s.npcs[p.givenBy]?.name : undefined })), prospectsWon: Number(s.flags["prospectsWon"] ?? 0),
       clients: s.clients.map((c) => ({ ...c, wealth: c.wealth / 100, aum: accountEquity(s, c.accountId), perf: performance(s.accounts[c.accountId]), equityWeight: equityWeight(s, c.accountId), band: suitableEquityBand(c.riskTolerance), allocation: currentAllocation(s, c), npc: s.npcs[c.npcId], history: c.history.slice(0, 15), equityHistory: s.accounts[c.accountId].equityHistory.slice(-120) })),
       buckets: ALLOC_BUCKETS.map((b) => ({ ...b, price: b.id === "CASH" ? 1 : s.quotes[b.id]?.price })), totalAum: totalAum(s), feesYtd: ((s.flags["feesYtd"] as number) ?? 0) / 100, salesYtd: (s.flags["salesYtd"] as number) ?? 0,
     };

@@ -37,3 +37,5 @@ Pour tester l'édition navigateur : `BASE_PATH=/Site- npm run build:static`, ser
 | `tests/missions-jour.test.ts` | Au moins deux missions par jour ouvré, différentes de la veille, à rendre le jour même ; enjeu élevé si apprécié, faible si mal vu ; fort enjeu réussi → bonus, raté → réputation et confiance en baisse ; quiz du jour notés. |
 | `tests/immobilier.test.ts` | 13 villes, annonces mensuelles, rendements contrastés ; loyer trop cher jamais signé, loyer de marché signé, loyer bradé non garanti ; flux mensuels équilibrés ; encadrement et DPE G ; vente trop chère impossible, au prix du marché vendue ; crédit refusé au-delà de 35 % d'endettement. |
 | `e2e/immobilier.spec.ts` | Croix de retour (sous-page → catégorie → bureau) ; achat à crédit à Saint-Étienne, mise en location, chances affichées. |
+| `tests/appel.test.ts` (complété) | Demandes variées d'un appel à l'autre ; demande de service sans objectif de vente (satisfaction, frais) ; une recommandation crée un prospect. |
+| `tests/prospection.test.ts` | Prospects confiés par le N+1 le lundi avec un message ; bon démarchage → nouveau client et versement ; démarchage agressif → refus. |

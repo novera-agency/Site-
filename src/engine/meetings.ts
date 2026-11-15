@@ -10,6 +10,8 @@ import { createMission } from "./missions";
 import { equityWeight, suitableEquityBand, loseClient, rebalanceClient } from "./clients";
 import { rankTitle, joinBank, salaryFor } from "./career";
 import { payslip, priceLevel } from "./life";
+import { REQUESTS, OBJECTIONS, REACTIONS, requestsFor, type ReqChoice } from "./clientRequests";
+import { addProspect, convertProspect, RECALL_DAYS } from "./prospects";
 import { BANK_BY_ID, TRACKS } from "./data/banks";
 import { toCents, fromCents } from "./money";
 import { dayIndex, fmtTime, MIN_PER_DAY } from "./time";
@@ -355,6 +357,79 @@ registerMeeting({
   conclude: (c) => `${c.m.vars.res} Nouveau salaire : ${eur(c.s.career.salaryAnnual / 100)}.`,
 });
 
+/* ═════════════════ Prospection téléphonique ═════════════════ */
+const pr = (c: MeetingCtx) => c.s.prospects?.find((x) => x.id === c.m.vars.pros);
+const prNpc = (c: MeetingCtx) => `npc_${String(c.m.vars.pros)}`;
+const pts = (c: MeetingCtx, d: number) => { c.m.vars.pts = v(c, "pts") + d; if (d > 0) sc(c, "communication", d); };
+const PROSPECT_OBJ: { text: string; choices: { label: string; d: number; recall?: boolean; ethics?: boolean }[] }[] = [
+  { text: "Écoutez, je n'ai vraiment pas le temps, là.", choices: [{ label: "Je comprends. Quand puis-je vous rappeler ? Deux minutes suffiront.", d: 2, recall: true }, { label: "Ça ne prendra que vingt minutes, promis !", d: -2 }] },
+  { text: "J'ai déjà un banquier, merci.", choices: [{ label: "Très bien. Beaucoup de mes clients en avaient un aussi : je vous propose simplement un second avis, gratuit, sur votre situation.", d: 2 }, { label: "Votre banquier ne vous fait sûrement pas gagner grand-chose.", d: -3 }] },
+  { text: "Je n'aime pas beaucoup le démarchage téléphonique…", choices: [{ label: "Je le comprends. Je ne vous vendrai rien au téléphone : seulement, si vous le souhaitez, un rendez-vous pour faire le point.", d: 2 }, { label: "C'est mon travail, il faut bien que j'appelle des gens.", d: -2 }] },
+  { text: "Envoyez-moi plutôt un mail, je regarderai.", choices: [{ label: "Avec plaisir. Pour qu'il vous soit utile : quel est votre principal projet en ce moment ?", d: 2 }, { label: "Entendu, je vous envoie notre plaquette.", d: 0, recall: true }] },
+  { text: "Et vous prenez combien, en frais ?", choices: [{ label: "Je vous donne la fourchette exacte, et tout sera écrit noir sur blanc avant toute décision.", d: 2 }, { label: "Ne vous inquiétez pas pour les frais, c'est le rendement qui compte.", d: -2 }] },
+];
+registerMeeting({
+  id: "prospection", type: "Appel téléphonique", location: "Au téléphone", title: (c) => `Prospection : ${pr(c)?.name ?? "un prospect"}`,
+  participants: (c) => [prNpc(c)],
+  agenda: ["Accroche", "Objection", "Découverte", "Proposition de rendez-vous"], objectives: ["Se présenter clairement", "Lever l'objection sans insister", "Comprendre le besoin", "Obtenir un rendez-vous"],
+  tension: "Un prospect ne vous doit rien : soyez clair, honnête et bref. Trop insistant, il raccroche.",
+  init: (c) => {
+    const p = pr(c); if (!p) return;
+    const rng = new Rng(c.s.rng);
+    if (!c.s.npcs[prNpc(c)]) c.s.npcs[prNpc(c)] = { id: prNpc(c), name: p.name, role: `Prospect — ${p.desc}`, personality: p.desc, avatar: p.avatar, trust: p.warm ? 55 : 40, riskTolerance: p.risk / 7, mood: 0.5, goals: [p.objective], opinion: "Ne vous connaît pas encore", memory: [], relation: "client" } as never;
+    const m = minuteOfDay(c.s.t);
+    const open = !isWeekend(c.s.t) && m >= 8 * 60 + 30 && m < 19 * 60 + 30;
+    const pickup = open && rng.chance(p.warm ? 0.8 : p.status === "rappel" ? 0.65 : 0.45) ? 1 : 0;
+    p.attempts++; p.lastCallT = c.s.t;
+    c.m.vars.pickup = pickup; c.m.vars.pts = 0; c.m.vars.o = rng.int(0, PROSPECT_OBJ.length - 1); c.m.vars.g = rng.int(0, 2);
+    if (!pickup) c.m.nodeId = "repondeur";
+  },
+  docs: (c) => { const p = pr(c); return p ? [{ title: `Fiche prospect — ${p.name}`, rows: [["Profil", p.desc], ["Source", p.source], ["Patrimoine estimé", eur(p.wealth)], ["Potentiel à confier", eur(p.potential)], ["Objectif probable", p.objective], ["Tentatives d'appel", String(p.attempts)], ["Statut", p.status === "rappel" ? "À rappeler (déjà intéressé)" : "Premier contact"]] }] : []; },
+  start: "accroche",
+  nodes: {
+    accroche: { speaker: (c) => prNpc(c), text: (c) => [`Allô ? Oui… c'est à quel sujet ?`, `${pr(c)?.name}, j'écoute. Vous êtes qui ?`, "Oui ? Faites vite, je suis entre deux rendez-vous."][v(c, "g")], choices: [
+      { id: "a", label: "Bonjour, je me présente, et je vous explique en une phrase pourquoi je vous appelle.", apply: (c) => pts(c, 2), reply: (c) => { const p = pr(c)!; const b = BANK_BY_ID[c.s.career.bankId]; return p.warm ? `(Vous : « ${me(c)}, de ${b?.name}. ${p.source.replace("Recommandé par", "")} m'a parlé de vous et m'a dit que vous cherchiez un conseiller. »)` : `(Vous : « ${me(c)}, conseiller chez ${b?.name}. J'accompagne des personnes dans votre situation pour organiser leur patrimoine. Avez-vous deux minutes ? »)`; }, next: (c) => `pobj_${v(c, "o")}` },
+      { id: "b", label: "J'ai un placement exceptionnel à 10 % par an sans aucun risque, ça vous intéresse ?", apply: (c) => { pts(c, -4); sc(c, "ethique", -3); changeRep(c.s, "conformite", -2, "Démarchage avec une promesse trompeuse"); }, next: (c) => `pobj_${v(c, "o")}` },
+      { id: "c", label: "Bonjour, je suis de la banque. Vous avez deux minutes ?", apply: (c) => pts(c, 0), next: (c) => `pobj_${v(c, "o")}` },
+    ] },
+    ...Object.fromEntries(PROSPECT_OBJ.map((o, k) => [`pobj_${k}`, { speaker: (c: MeetingCtx) => prNpc(c), text: () => o.text, choices: o.choices.map((ch, i) => ({ id: `o${i}`, label: ch.label, apply: (c: MeetingCtx) => { pts(c, ch.d); if (ch.recall) c.m.vars.recall = 1; }, next: "decouverte" })) } as MeetingNode])),
+    decouverte: { speaker: (c) => prNpc(c), text: (c) => { const p = pr(c)!; return v(c, "pts") < 0 ? "Bon… Vous voulez savoir quoi, au juste ?" : `D'accord. En deux mots : ${p.objective.toLowerCase()}. Mon patrimoine, c'est de l'ordre de ${eur(roundNice(p.wealth))}.`; }, choices: [
+      { id: "a", label: "Qu'est-ce qui compte le plus pour vous : la sécurité, le rendement ou la disponibilité de l'argent ?", apply: (c) => { pts(c, 2); gainXp(c.s, "client", 8, "Découverte d'un prospect"); }, next: "close" },
+      { id: "b", label: "Notre fonds phare est parfait pour vous, je vous l'envoie ?", apply: (c) => pts(c, -2), next: "close" },
+      { id: "c", label: "Je vois, c'est très classique.", apply: (c) => pts(c, 0), next: "close" },
+    ] },
+    close: { speaker: (c) => prNpc(c), text: (c) => (v(c, "pts") >= 4 ? "C'est intéressant. Concrètement, vous me proposez quoi ?" : "Hmm. Et donc, vous me proposez quoi ?"), choices: [
+      { id: "a", label: "Un rendez-vous de trente minutes, sans engagement, pour étudier votre situation : mardi ou jeudi ?", apply: (c) => { pts(c, 2); c.m.vars.rdv = 1; }, next: "fin" },
+      { id: "b", label: "Je vous envoie une documentation et je vous rappelle dans quelques jours.", apply: (c) => { pts(c, 0); c.m.vars.recall = 1; }, next: "fin" },
+      { id: "c", label: "Signez aujourd'hui, je vous envoie le contrat par mail.", apply: (c) => pts(c, -3), next: "fin" },
+    ] },
+    fin: { speaker: "narrateur", text: () => "L'appel se termine.", end: true },
+    repondeur: { speaker: "narrateur", text: (c) => `Pas de réponse : messagerie de ${pr(c)?.name}.`, choices: [
+      { id: "a", label: "Laisser un message court : qui vous êtes, pourquoi vous appelez, comment vous joindre.", apply: (c) => { c.m.vars.message = 1; }, next: "fin" },
+      { id: "b", label: "Raccrocher sans laisser de message.", next: "fin" },
+    ] },
+  },
+  conclude: (c) => {
+    const p = pr(c); if (!p) return "Appel terminé.";
+    if (!v(c, "pickup")) {
+      if (p.attempts >= 4) { p.status = "refus"; p.note = "Injoignable"; return `${p.name} reste injoignable après ${p.attempts} tentatives : contact abandonné.`; }
+      p.note = v(c, "message") ? "Message laissé" : "Pas de réponse";
+      return `${p.name} n'a pas décroché.${v(c, "message") ? " Votre message est enregistré ; rappelez dans quelques jours." : ""}`;
+    }
+    const score = v(c, "pts") + (p.status === "rappel" ? 2 : 0) + (p.warm ? 1 : 0);
+    if (v(c, "rdv") && score >= 6) {
+      const r = convertProspect(c.s, p, 0.55 + (score - 6) * 0.08);
+      changeRep(c.s, "commerciale", 3, "Nouveau client gagné par prospection"); changeTrust(c.s, "boss", 3, "Prospection réussie");
+      gainXp(c.s, "client", 40, "Prospection réussie");
+      notify(c.s, "succes", `Nouveau client : ${p.name}`, `Rendez-vous concluant : ${eur(r.aum)} confiés.`, "/play/clients");
+      return `Rendez-vous obtenu et concluant : ${p.name} devient client et vous confie ${eur(r.aum)}.`;
+    }
+    if (score >= 2 || v(c, "recall")) { p.status = "rappel"; p.note = "Intéressé, à rappeler"; gainXp(c.s, "client", 10, "Prospection"); return `${p.name} est intéressé mais pas encore décidé : rappelez dans ${RECALL_DAYS} jours.`; }
+    p.status = "refus"; p.note = "Pas intéressé"; changeRep(c.s, "commerciale", -1);
+    return `${p.name} n'est pas intéressé${score <= -3 ? " et a mal pris votre approche" : ""}.`;
+  },
+});
+
 /* ═════════════════ Négociation salariale à l'initiative du joueur ═════════════════ */
 const lastScore = (c: MeetingCtx) => c.s.career.reviews[0]?.score ?? 50;
 const marketPay = (c: MeetingCtx) => Math.max(...Object.keys(BANK_BY_ID).map((b) => salaryFor(b, c.s.career.rank))) * priceLevel(c.s);
@@ -489,6 +564,26 @@ const EVENT: Record<string, string[]> = {
   institutionnel: ["les cotisations encaissées ce trimestre", "le remboursement d'une obligation arrivée à échéance"],
   entreprise: ["une trésorerie excédentaire ce trimestre", "la cession d'une filiale"],
 };
+/** Réponse à une demande spéciale ou à une objection : effets selon la qualité, réaction variée du client */
+function answerRequest(c: MeetingCtx, ch: ReqChoice, objection = false) {
+  const x = cl(c); if (!x) return;
+  const rng = new Rng(c.s.rng);
+  const collect = !!v(c, "collect");
+  if (ch.q === "bon") { sc(c, "communication", 2); sc(c, "finance", 1); gainXp(c.s, "client", 6, "Bonne réponse à un client"); }
+  if (ch.q === "faute" || ch.ethics) { sc(c, "ethique", -3); changeRep(c.s, "conformite", -3, `Au téléphone : ${ch.why}`); }
+  if (collect) {
+    if (ch.q === "moyen") salesFault(c, 0.05, ch.why);
+    if (ch.q === "mauvais") salesFault(c, objection ? 0.15 : 0.2, ch.why);
+    if (ch.q === "faute") salesFault(c, 0.3, ch.why);
+  } else {
+    c.m.vars.sat = v(c, "sat") + (ch.sat ?? (ch.q === "bon" ? 5 : ch.q === "moyen" ? 0 : -6));
+    if (ch.fees) x.feeBps = Math.round(x.feeBps * ch.fees);
+    if (ch.prospect) c.m.vars.newProspect = addProspect(c.s, rng, { source: `Recommandé par ${x.name}`, warm: true, kind: x.kind === "institutionnel" ? "entreprise" : x.kind })?.name ?? "";
+    const rq = REQUESTS.find((r) => r.id === c.m.vars.rq); c.m.vars.rqLabel = rq ? { retrait: "demande de retrait", frais: "négociation des frais", panique: "client inquiet", fiscalite: "question fiscale", recommandation: "recommandation d'un proche" }[rq.id] ?? rq.id : "";
+  }
+  if (!objection) c.m.vars.react = rng.pick(REACTIONS[ch.q]);
+  if (ch.q !== "bon") c.m.vars.lastWhy = ch.why;
+}
 registerMeeting({
   id: "appel_client", type: "Appel téléphonique", location: "Au téléphone", title: (c) => `Appel à ${cl(c)?.name ?? "un client"}`,
   participants: (c) => [cl(c)?.npcId ?? ""].filter(Boolean),
@@ -502,35 +597,50 @@ registerMeeting({
     const free = Math.max(0, x.wealth / 100 - aum);
     const obj = roundNice(Math.max(10000, Math.min(aum * 0.18, free * 0.4 || aum * 0.18)));
     c.m.vars.event = rng.pick(EVENT[x.kind] ?? EVENT.particulier);
+    // Demande spéciale du jour (imposable pour les tests via params.rq)
+    const pool = requestsFor(x.kind);
+    const rq = REQUESTS.find((r) => r.id === c.m.vars.rq) ?? rng.pick(pool);
+    c.m.vars.rq = rq.id; c.m.vars.rqv = rng.int(0, rq.intro.length - 1); c.m.vars.collect = rq.collect ? 1 : 0;
+    c.m.vars.obj = c.m.vars.obj !== undefined ? Number(c.m.vars.obj) : rng.int(0, OBJECTIONS.length); c.m.vars.objv = rng.int(0, 1);
+    c.m.vars.greet = rng.int(0, 3);
     const m = minuteOfDay(c.s.t);
     const open = !isWeekend(c.s.t) && m >= 8 * 60 && m < 20 * 60;
     const p = 0.45 + x.satisfaction / 200 + (c.s.npcs[x.npcId]?.trust ?? 50) / 400;
     const pickup = c.m.vars.callback ? 1 : open && rng.chance(Math.min(0.95, p)) ? 1 : 0;
     c.m.vars.pickup = pickup;
-    if (pickup) { c.m.vars.objInit = obj; c.m.vars.objective = obj; c.m.vars.faults = 0; } // pas d'objectif de vente sur une messagerie
-    else c.m.nodeId = "repondeur";
+    if (!pickup) c.m.nodeId = "repondeur";
+    else if (rq.collect) { c.m.vars.objInit = obj; c.m.vars.objective = obj; c.m.vars.faults = 0; } // pas d'objectif de vente sur une messagerie ni pour une demande de service
     x.lastContactT = c.s.t;
   },
   docs: (c) => { const x = cl(c); if (!x) return []; return [...clientDocs(c), ...(v(c, "pickup") ? [{ title: "Objectif de l'appel", rows: [["Montant visé", eur(v(c, "objInit"))], ["Origine probable des fonds", String(c.m.vars.event)], ["Règle", "Chaque faute réduit l'objectif ; sous 30 %, le client raccroche."]] as [string, string][] }] : [])]; },
   start: "decroche",
   nodes: {
-    decroche: { speaker: (c) => cl(c)?.npcId ?? "narrateur", text: (c) => c.m.vars.callback ? `Allô, ${me(c)} ? Vous m'aviez laissé un message, je vous rappelle. Je vous écoute.` : `Allô ? ${cl(c)?.name}, j'écoute.`, choices: [
-      { id: "a", label: "Bonjour, je vous appelle pour faire le point sur votre portefeuille et vos projets.", apply: (c) => { sc(c, "communication", 2); }, next: "besoins" },
-      { id: "b", label: "J'ai un produit exceptionnel qui rapporte énormément, vous allez adorer !", apply: (c) => { sc(c, "communication", -2); salesFault(c, 0.15, "démarchage trop agressif"); }, next: "besoins" },
-      { id: "c", label: "Euh… je voulais juste prendre des nouvelles.", apply: (c) => { salesFault(c, 0.05, "appel sans objet clair"); }, next: "besoins" },
+    decroche: { speaker: (c) => cl(c)?.npcId ?? "narrateur", text: (c) => c.m.vars.callback ? `Allô, ${me(c)} ? Vous m'aviez laissé un message, je vous rappelle. Je vous écoute.` : [`Allô ? ${cl(c)?.name}, j'écoute.`, "Oui, allô ? Ah, c'est vous ! Justement, je voulais vous parler.", "Allô… Oui, j'ai deux minutes, je vous écoute.", "Bonjour ! Ça tombe bien que vous appeliez."][v(c, "greet")], choices: [
+      { id: "a", label: "Bonjour, je vous appelle pour faire le point sur votre situation et vos projets.", apply: (c) => { sc(c, "communication", 2); }, next: (c) => `rq_${c.m.vars.rq}` },
+      { id: "b", label: "J'ai un produit exceptionnel qui rapporte énormément, vous allez adorer !", apply: (c) => { sc(c, "communication", -2); if (v(c, "collect")) salesFault(c, 0.15, "démarchage trop agressif"); else c.m.vars.sat = v(c, "sat") - 4; }, next: (c) => `rq_${c.m.vars.rq}` },
+      { id: "c", label: "Euh… je voulais juste prendre des nouvelles.", apply: (c) => { if (v(c, "collect")) salesFault(c, 0.05, "appel sans objet clair"); }, next: (c) => `rq_${c.m.vars.rq}` },
     ] },
-    besoins: { speaker: (c) => cl(c)?.npcId ?? "narrateur", text: (c) => `Ça tombe bien. Suite à ${c.m.vars.event}, j'ai environ ${eur(v(c, "objInit"))} disponibles. Je me demandais quoi en faire.`, choices: [
-      { id: "a", label: "Avant de vous proposer quoi que ce soit : votre objectif et votre horizon ont-ils changé ?", apply: (c) => { sc(c, "communication", 3); gainXp(c.s, "client", 10, "Découverte des besoins client"); }, next: "besoins2" },
-      { id: "b", label: "Parlons directement de ce que je peux vous vendre.", apply: (c) => { sc(c, "communication", -2); salesFault(c, 0.15, "pas d'écoute des besoins"); }, next: "proposition" },
+    ...Object.fromEntries(REQUESTS.map((rq) => [`rq_${rq.id}`, {
+      speaker: (c: MeetingCtx) => cl(c)?.npcId ?? "narrateur",
+      text: (c: MeetingCtx) => rq.intro[v(c, "rqv") % rq.intro.length].replace("{amount}", eur(v(c, "objInit") || roundNice((cl(c)?.wealth ?? 0) / 100 * 0.03))),
+      choices: rq.choices.map((ch, i) => ({ id: `r${i}`, label: ch.label, apply: (c: MeetingCtx) => answerRequest(c, ch), next: () => (rq.collect ? "react_c" : "react_s") })),
+    } as MeetingNode])),
+    react_c: { speaker: (c) => cl(c)?.npcId ?? "narrateur", text: (c) => String(c.m.vars.react ?? ""), choices: [
+      { id: "a", label: "Concrètement, voici comment je vous propose d'investir cette somme.", next: "proposition" },
     ] },
-    besoins2: { speaker: (c) => cl(c)?.npcId ?? "narrateur", text: (c) => { const x = cl(c)!; return `Mon objectif reste le même : ${x.objective.toLowerCase()}. Mon horizon, c'est environ ${x.horizonYears} ans. Et je tiens à ceci : ${x.constraints[0]?.toLowerCase() ?? "pas de mauvaise surprise"}.`; }, choices: [
-      { id: "a", label: "C'est noté, je vous fais une proposition qui respecte ces contraintes.", apply: (c) => sc(c, "communication", 1), next: "proposition" },
+    react_s: { speaker: (c) => cl(c)?.npcId ?? "narrateur", text: (c) => String(c.m.vars.react ?? ""), choices: [
+      { id: "a", label: "Y a-t-il autre chose que je puisse faire pour vous ?", apply: (c) => { sc(c, "communication", 1); }, next: "fin" },
     ] },
+    ...Object.fromEntries(OBJECTIONS.map((ob, k) => [`obj_${k}`, {
+      speaker: (c: MeetingCtx) => cl(c)?.npcId ?? "narrateur",
+      text: (c: MeetingCtx) => ob.text[v(c, "objv") % ob.text.length],
+      choices: ob.choices.map((ch, i) => ({ id: `o${i}`, label: ch.label, apply: (c: MeetingCtx) => answerRequest(c, ch, true), next: "closing" })),
+    } as MeetingNode])),
     proposition: { speaker: (c) => cl(c)?.npcId ?? "narrateur", text: (c) => `Concrètement, que feriez-vous de ces ${eur(v(c, "objective"))} ?`, choices: [
-      { id: "a", label: "Les investir progressivement selon votre allocation actuelle, qui est adaptée à votre profil.", apply: (c) => { sc(c, "finance", 2); sc(c, "ethique", 1); }, next: "objection" },
-      { id: "b", label: "Tout placer sur les valeurs technologiques : c'est là que se fait la performance.", apply: (c) => { const r = cl(c)!.riskTolerance; if (r >= 6) sc(c, "finance", 1); else { sc(c, "ethique", -2); salesFault(c, r <= 3 ? 0.3 : 0.2, "proposition inadaptée au profil de risque"); } }, next: "objection" },
-      { id: "c", label: "Souscrire un produit structuré à capital protégé à 95 % à l'échéance.", apply: (c) => { const r = cl(c)!.riskTolerance; if (r >= 2 && r <= 4) sc(c, "finance", 2); else salesFault(c, 0.1, "produit peu adapté"); }, next: "objection" },
-      { id: "d", label: "Les laisser sur un compte rémunéré en attendant d'y voir plus clair.", apply: (c) => { const x = cl(c)!; if (x.riskTolerance <= 2 || x.liquidityNeed >= 0.3) sc(c, "finance", 1); else salesFault(c, 0.1, "proposition sans valeur ajoutée"); }, next: "objection" },
+      { id: "a", label: "Les investir progressivement selon votre allocation actuelle, qui est adaptée à votre profil.", apply: (c) => { sc(c, "finance", 2); sc(c, "ethique", 1); }, next: (c) => (v(c, "obj") >= OBJECTIONS.length ? "objection" : `obj_${v(c, "obj")}`) },
+      { id: "b", label: "Tout placer sur les valeurs technologiques : c'est là que se fait la performance.", apply: (c) => { const r = cl(c)!.riskTolerance; if (r >= 6) sc(c, "finance", 1); else { sc(c, "ethique", -2); salesFault(c, r <= 3 ? 0.3 : 0.2, "proposition inadaptée au profil de risque"); } }, next: (c) => (v(c, "obj") >= OBJECTIONS.length ? "objection" : `obj_${v(c, "obj")}`) },
+      { id: "c", label: "Souscrire un produit structuré à capital protégé à 95 % à l'échéance.", apply: (c) => { const r = cl(c)!.riskTolerance; if (r >= 2 && r <= 4) sc(c, "finance", 2); else salesFault(c, 0.1, "produit peu adapté"); }, next: (c) => (v(c, "obj") >= OBJECTIONS.length ? "objection" : `obj_${v(c, "obj")}`) },
+      { id: "d", label: "Les laisser sur un compte rémunéré en attendant d'y voir plus clair.", apply: (c) => { const x = cl(c)!; if (x.riskTolerance <= 2 || x.liquidityNeed >= 0.3) sc(c, "finance", 1); else salesFault(c, 0.1, "proposition sans valeur ajoutée"); }, next: (c) => (v(c, "obj") >= OBJECTIONS.length ? "objection" : `obj_${v(c, "obj")}`) },
     ] },
     objection: { speaker: (c) => cl(c)?.npcId ?? "narrateur", text: (c) => { const x = cl(c)!; const p = performance(c.s.accounts[x.accountId]); return p.totalReturn < -0.03 ? `Hum. Mon portefeuille a perdu ${pct(Math.abs(p.totalReturn * 100))} depuis l'ouverture. Pourquoi vous confierais-je davantage ?` : x.feeBps >= 80 ? `Vos frais de ${x.feeBps} points de base par an me paraissent élevés. Pourquoi payer ça ?` : "Et si les marchés baissent juste après ? J'ai peur de mal tomber."; }, choices: [
       { id: "a", label: "Je comprends. Voici les chiffres honnêtes : les risques, ce que vous pouvez perdre, et pourquoi c'est cohérent avec votre horizon.", apply: (c) => { sc(c, "communication", 2); sc(c, "ethique", 2); }, next: "closing" },
@@ -558,6 +668,13 @@ registerMeeting({
         return `Message laissé. ${x.name} vous rappellera demain matin.`;
       }
       return `${x.name} n'a pas décroché. Vous pourrez rappeler un autre jour.`;
+    }
+    if (!v(c, "collect")) {
+      const sat = v(c, "sat");
+      clientEffect(c, sat, Math.round(sat / 2), `Appel : ${String(c.m.vars.rqLabel ?? "demande du client")} (${sat >= 4 ? "bien géré" : sat >= 0 ? "géré" : "mal géré"})`);
+      gainXp(c.s, "client", sat >= 4 ? 20 : 8, "Service client au téléphone");
+      if (c.m.score.ethique < 0) changeRep(c.s, "conformite", -4, "Propos inappropriés au téléphone");
+      return `${x.name} : ${sat >= 4 ? "demande traitée avec professionnalisme, client satisfait" : sat >= 0 ? "demande traitée, sans plus" : "le client raccroche mécontent"}.${c.m.vars.newProspect ? ` Nouveau prospect recommandé : ${c.m.vars.newProspect}.` : ""}`;
     }
     const ini = v(c, "objInit"), cur = v(c, "objective");
     const amount = roundNice(cur * (Number(c.m.vars.closeMult ?? 1))) * (cur > 0 ? 1 : 0);

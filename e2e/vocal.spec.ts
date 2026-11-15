@@ -162,6 +162,14 @@ test("appel client : sonnerie, objectif de vente qui baisse à chaque faute, ver
   await room.getByTestId("mode-ecrit").click();
   if (!picked) { await expect(room.getByText(/messagerie/i).first()).toBeVisible(); return; } // le client peut ne pas répondre
   const gauge = room.getByTestId("sales-objective");
+  const collect = await gauge.isVisible().catch(() => false);
+  console.log("DEMANDE_PLACEMENT=" + collect);
+  const answerFirst = async () => { for (let i = 0; i < 10 && !(await room.getByRole("button", { name: "Quitter la salle" }).isVisible().catch(() => false)); i++) { await room.locator(".grid.gap-2 > button").first().click(); await page.waitForTimeout(250); } };
+  if (!collect) { // demande de service : pas d'objectif de vente, on répond au mieux
+    await answerFirst();
+    await expect(room.getByText(/demande traitée/).first()).toBeVisible();
+    return;
+  }
   await expect(gauge).toContainText("0 faute");
   const full = (await gauge.textContent()) ?? "";
   // Faute : démarchage agressif
@@ -169,8 +177,8 @@ test("appel client : sonnerie, objectif de vente qui baisse à chaque faute, ver
   await expect(gauge).toContainText("1 faute");
   expect((await gauge.textContent()) ?? "").not.toBe(full);
   await expect(room.getByTestId("meeting-log").getByText(/objectif de vente −15 %/)).toBeVisible();
-  // Puis un appel bien mené
-  for (const label of [/votre objectif et votre horizon/, /C'est noté/, /allocation actuelle/, /chiffres honnêtes/, /bulletin de versement/]) await room.getByRole("button", { name: label }).click();
+  // Puis la demande spéciale bien traitée (la première réponse proposée est toujours la bonne)
+  await answerFirst();
   await expect(gauge).toContainText("Obtenu");
   await expect(room.getByText(/vous confie/).first()).toBeVisible();
 });

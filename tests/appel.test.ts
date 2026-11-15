@@ -12,10 +12,10 @@ describe("Appel commercial", () => {
     const s = atEuOpen(game("carriere", "call-ok"));
     const c = s.clients[0];
     const aum0 = accountEquity(s, c.accountId);
-    const m = startMeeting(s, "appel_client", { client: c.id, callback: "1" })!;
+    const m = startMeeting(s, "appel_client", { client: c.id, callback: "1", rq: "heritage", obj: "0" })!;
     const obj = Number(m.vars.objInit);
     expect(obj).toBeGreaterThan(0);
-    for (const id of ["a", "a", "a", "a", "a", "a"]) pick(s, m, id);
+    for (const id of ["a", "r0", "a", "a", "o0", "a"]) pick(s, m, id);
     expect(m.done).toBe(true);
     expect(Number(m.vars.obtained)).toBe(obj);
     expect(accountEquity(s, c.accountId)).toBeGreaterThan(aum0 + obj * 0.95);
@@ -25,16 +25,17 @@ describe("Appel commercial", () => {
   it("chaque faute fait baisser l'objectif ; sous 30 %, le client raccroche", () => {
     const s = atEuOpen(game("carriere", "call-ko"));
     const c = s.clients[0]; // profil prudent
-    const m = startMeeting(s, "appel_client", { client: c.id, callback: "1" })!;
+    const m = startMeeting(s, "appel_client", { client: c.id, callback: "1", rq: "heritage", obj: "0" })!;
     const obj = Number(m.vars.objInit);
     pick(s, m, "b"); // démarchage agressif : −15 %
     expect(Number(m.vars.objective)).toBe(Math.round(obj * 0.85));
-    pick(s, m, "b"); // pas d'écoute : −15 %
-    expect(Number(m.vars.objective)).toBe(Math.round(obj * 0.7));
+    pick(s, m, "r2"); // précipitation : −20 %
+    expect(Number(m.vars.objective)).toBe(Math.round(obj * 0.65));
+    pick(s, m, "a");
     expect(m.done).toBe(false);
     pick(s, m, "b"); // tout en technologie pour un client prudent : −30 %
-    expect(Number(m.vars.objective)).toBe(Math.round(obj * 0.4));
-    pick(s, m, "b"); // « je vous garantis » : −25 % → sous le seuil
+    expect(Number(m.vars.objective)).toBe(Math.round(obj * 0.35));
+    pick(s, m, "o1"); // « je vous garantis » : −30 % → sous le seuil
     expect(m.done).toBe(true);
     expect(m.vars.failed).toBe(1);
     expect(m.vars.obtained).toBeUndefined();
@@ -51,5 +52,27 @@ describe("Appel commercial", () => {
     expect(m.vars.penalites).toBeUndefined();
     expect(m.done).toBe(true);
     expect(s.agenda.some((a) => a.meetingTemplate === "appel_client" && a.params?.callback === "1" && a.params?.client === c.id)).toBe(true);
+  });
+
+  it("les demandes changent d'un appel à l'autre, avec des formulations variées", () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 12; i++) { const s = atEuOpen(game("carriere", `call-var-${i}`)); const m = startMeeting(s, "appel_client", { client: s.clients[0].id, callback: "1" })!; seen.add(`${m.vars.rq}:${m.vars.rqv}`); }
+    expect(seen.size).toBeGreaterThanOrEqual(5);
+  });
+  it("demande de service (frais) : pas d'objectif de vente, satisfaction selon la réponse", () => {
+    const s = atEuOpen(game("carriere", "call-fees"));
+    const c = s.clients[0]; const sat0 = c.satisfaction; const fee0 = c.feeBps;
+    const m = startMeeting(s, "appel_client", { client: c.id, callback: "1", rq: "frais" })!;
+    expect(m.vars.objInit).toBeUndefined();
+    for (const id of ["a", "r0", "a"]) pick(s, m, id);
+    expect(m.done).toBe(true);
+    expect(c.satisfaction).toBeGreaterThan(sat0);
+    expect(c.feeBps).toBeLessThan(fee0);
+  });
+  it("une recommandation d'un client satisfait crée un prospect", () => {
+    const s = atEuOpen(game("carriere", "call-reco"));
+    const m = startMeeting(s, "appel_client", { client: s.clients[0].id, callback: "1", rq: "recommandation" })!;
+    for (const id of ["a", "r0", "a"]) pick(s, m, id);
+    expect(s.prospects?.some((p) => p.warm && p.source.startsWith("Recommandé"))).toBe(true);
   });
 });

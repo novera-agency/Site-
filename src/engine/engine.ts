@@ -29,6 +29,7 @@ import { bondStats } from "./analytics";
 import { cashAcc, post } from "./ledger";
 import { toCents } from "./money";
 import { changeRep, gainXp, notify, pushNews, nextId, fx, logDecision } from "./core";
+import { assignProspects } from "./prospects";
 import { initLife, dailyLife, housingEquity, priceLevel } from "./life";
 import { histInitialPrices, initHistorical, histAdjust, histAfterHistory, histDaily, histActive, histScriptedCrisis, HIST_EPOCH } from "./historical";
 import { dayIndex, minuteOfDay, MIN_PER_DAY, START_T, STEP_MIN, tOfDay, weekday, isWeekend, firstBusinessDayOfMonth, dateOf, nextBusinessDay, EPOCH_UTC, setEpochYear, startTForEpoch, useEpoch } from "./time";
@@ -119,6 +120,7 @@ export function createGame(o: NewGameOptions): GameState {
     s.career.rank = o.profile.knowledge === "expert" ? 2 : 1;
     s.career.salaryAnnual = toCents(salaryFor(bank.id, s.career.rank) * priceLevel(s));
     s.life = initLife(s);
+    assignProspects(s, rng, true); // premiers contacts confiés par le N+1
     s.messages.unshift({ id: nextId(s, "msg"), t: s.t, from: "Vie privée", subject: "Votre nouvelle vie commence", body: "Vous emménagez dans un studio en centre-ville. Chaque mois, votre salaire est versé puis l'impôt, le loyer et les factures sont prélevés : gardez un œil sur le reste à vivre.\n\nEn dehors du bureau, entretenez votre santé mentale, votre forme, votre vie sociale et votre épanouissement (onglet Vie privée) : si vous les négligez, le stress monte et vos performances baissent. Et si vous estimez mériter mieux, demandez un rendez-vous à votre responsable pour négocier.", read: false });
     setupDesk(s);
     // Portefeuille obligataire professionnel supervisé
@@ -262,6 +264,7 @@ function newDay(s: GameState, rng: Rng) {
     if (!s.flags["vacationUntil"] || s.t >= (s.flags["vacationUntil"] as number)) { delete s.flags["vacationUntil"]; maybeCareerEvent(s, rng); planDay(s, rng); }
     if (weekday(s.t) === 1) { assignWeeklyMissions(s, rng); mondayRelations(s); }
     assignDailyMissions(s, rng);
+    assignProspects(s, rng);
     checkRelationChanges(s);
   }
   scheduleCalendar(s, day + 30);

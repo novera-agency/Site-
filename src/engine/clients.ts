@@ -28,8 +28,9 @@ export function seedPosition(s: GameState, accId: string, id: string, valueEur: 
   executeFill(s, o, qty, px);
 }
 
-export function onboardClient(s: GameState, seedIndex: number) {
-  const seed = CLIENT_SEEDS[seedIndex];
+export function onboardClient(s: GameState, seedIndex: number) { return onboardSeed(s, CLIENT_SEEDS[seedIndex]); }
+/** Ouverture d'un mandat à partir d'un profil (client historique ou prospect converti) */
+export function onboardSeed(s: GameState, seed: (typeof CLIENT_SEEDS)[number]) {
   const c = makeClient(s, seed);
   s.clients.push(c);
   const acc = newAccount(c.accountId, "client", `Mandat ${c.name}`, false, seed.aum);

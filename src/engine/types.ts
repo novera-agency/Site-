@@ -206,6 +206,11 @@ export interface Client {
   accountId: string; targetAllocation: Record<string, number>; expectedReturn: number; feeBps: number;
   constraints: string[]; history: { t: number; text: string }[]; lastContactT: number; lost?: boolean; joinedT: number;
 }
+export interface Prospect {
+  id: string; name: string; kind: Client["kind"]; desc: string; source: string; warm: boolean;
+  wealth: number; potential: number; risk: number; horizon: number; objective: string; knowledge: number; avatar: string;
+  status: "a_appeler" | "rappel" | "refus" | "converti"; attempts: number; lastCallT?: number; givenT: number; givenBy?: string; note?: string;
+}
 export interface MeetingInstance {
   id: string; templateId: string; nodeId: string; startedT: number; vars: Record<string, number | string>;
   score: { finance: number; risque: number; communication: number; ethique: number }; log: { who: string; text: string }[];
@@ -278,6 +283,8 @@ export interface LifeState {
 }
 export interface GameState {
   version: number;
+  /** Prospects à démarcher (donnés par le N+1 ou recommandés) */
+  prospects?: Prospect[];
   /** Vie privée (mode carrière) */
   life?: LifeState;
   /** Année de départ du calendrier (2027 : monde fictif ; 2000 : mode historique) */
