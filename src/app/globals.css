@@ -61,3 +61,10 @@ html.a11y-still *, html.a11y-still *::before, html.a11y-still *::after { animati
 /* Boutons bleus : texte blanc lisible (contraste ≥ 4,5:1) */
 .bg-accent { background-color: #1d4ed8; }
 .bg-green-600 { background-color: #15803d; }
+
+/* Mobiles : les champs de saisie et menus déroulants à 16 px minimum évitent le zoom automatique de iOS/Android */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea { font-size: 16px !important; }
+}
+/* Pas de zoom involontaire au double toucher sur les éléments interactifs */
+a, button, [role="button"], input, select, textarea, label, summary { touch-action: manipulation; }

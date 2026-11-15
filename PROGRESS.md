@@ -117,3 +117,4 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 - ✅ 28 questions d'assurance et 34 d'immobilier (France) ; 2 nouvelles catégories du quiz (compétence « risque » pour l'assurance).
 - ✅ Révision espacée : une question réussie ne revient jamais avant 30 jours de jeu ; réussie à la révision, elle rapporte moins d'expérience ; ratée, elle repasse en « à retravailler ». Les nouvelles questions passent toujours avant les révisions.
 - ✅ Son de fond (pluie, vent) retiré à la demande de l'utilisateur : il ne reste que de très courts bruits lors des notifications, désactivables dans Paramètres.
+- ✅ Zoom automatique sur mobile : champs et menus déroulants à 16 px minimum (pas de zoom au toucher), échelle verrouillée pendant la saisie puis rendue au pincement ; double-toucher sans zoom. Vérifié en émulation (écran iPhone sous Chromium), pas sur un vrai iPhone.
