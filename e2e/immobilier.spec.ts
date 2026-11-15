@@ -9,7 +9,9 @@ test("croix de retour et investissement immobilier : achat à crédit à Saint-�
   await page.getByTestId("next").click();
   await page.getByTestId("first-name").fill("Ines");
   await page.getByTestId("last-name").fill("Pierre");
-  for (let i = 0; i < 4; i++) await page.getByTestId("next").click();
+  for (let i = 0; i < 3; i++) await page.getByTestId("next").click();
+  await page.getByText("Confortable").click(); // 100 000 € : de quoi financer l'apport de n'importe quelle annonce de Saint-Étienne
+  await page.getByTestId("next").click();
   await page.getByTestId("create").click();
   await page.waitForURL(/\/play\/?$/);
   await expect(page.getByTestId("bottom-nav")).toBeVisible({ timeout: 20000 });

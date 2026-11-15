@@ -6,6 +6,7 @@ import { api, STATIC } from "@/lib/api";
 import { BANK_BY_ID, TRACKS } from "@/engine/data/banks";
 import { fmtDateFor } from "@/engine/time";
 import { Button, inputCls } from "@/components/ui";
+import { Intro } from "@/components/Intro";
 
 interface Meta { gameId: string; name: string; mode: string; bank: string; t: number; updatedAt: string; rank?: string; difficulty: string; epochYear?: number; }
 type Item = "continuer" | "nouvelle" | "charger" | "libre" | "defis" | "options";
@@ -170,6 +171,7 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#070a12]">
+      <Intro />
       <Skyline />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[32vh] bg-gradient-to-b from-[#070a12] via-transparent to-transparent" />
       <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col px-5 pb-16 pt-8 md:px-8">
