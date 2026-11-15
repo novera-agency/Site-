@@ -8,10 +8,10 @@
 import type { GameState, Property } from "./types";
 import { Rng, seedRng } from "./rng";
 import { notify, nextId, logDecision } from "./core";
-import { cashAcc, post, cashOf } from "./ledger";
+import { cashAcc, post } from "./ledger";
 import { toCents } from "./money";
 import { dateOf, MIN_PER_DAY, EPOCH_YEAR, isWeekend } from "./time";
-import { priceLevel, payslip, mortgageRate } from "./life";
+import { priceLevel, payslip, mortgageRate, eurCash } from "./life";
 
 const EXT_RE = "ext:immobilier";
 
@@ -117,7 +117,7 @@ export function buyProperty(s: GameState, listingId: string, credit: boolean) {
   const li = listings(s, cityId).find((x) => x.id === listingId);
   if (!li) return err("Cette annonce n'est plus disponible.");
   const fees = Math.round(li.price * 0.075);
-  const cash = cashOf(s, "perso", "EUR");
+  const cash = eurCash(s);
   const p: Property = { id: nextId(s, "bien"), city: li.city, type: li.type, surface: li.surface, condition: li.condition, dpe: li.dpe, buyPrice: li.price, buyT: s.t, status: "vacant" };
   if (credit) {
     if (!s.career.employed) return err("Sans emploi, aucune banque ne financera l'investissement.");
@@ -172,7 +172,7 @@ export function renovate(s: GameState, id: string) {
   if (p.status === "loue") return err("Impossible pendant la location.");
   if (p.condition === "neuf") return err("Le bien est déjà refait à neuf.");
   const cost = Math.round(p.surface * (p.condition === "renover" ? 1100 : 600) * priceLevel(s) / 100) * 100;
-  if (cashOf(s, "perso", "EUR") < cost) return err(`Les travaux coûtent ${fmt(cost)}.`);
+  if (eurCash(s) < cost) return err(`Les travaux coûtent ${fmt(cost)}.`);
   post(s, EXT_RE, cashAcc("perso"), toCents(cost), "EUR", `Travaux de rénovation — ${TYPE_NAME[p.type]} à ${CITY_BY_ID[p.city].name}`);
   p.status = "travaux"; p.worksUntil = s.t + (p.condition === "renover" ? 75 : 40) * MIN_PER_DAY; p.askRent = undefined; p.askPrice = undefined;
   return ok(`Travaux lancés (${fmt(cost)}). Fin prévue dans ${p.condition === "renover" ? "deux mois et demi" : "six semaines"} : état « neuf », meilleur DPE, loyer et valeur en hausse.`);
@@ -249,3 +249,22 @@ export function monthlyRealEstate(s: GameState, rng: Rng) {
 }
 /** Valeur nette du parc locatif (valeur de marché − crédits restants) */
 export function propertiesEquity(s: GameState) { return (s.life?.properties ?? []).reduce((a, p) => a + marketValue(s, p) - (p.loan?.principal ?? 0) / 100, 0); }
+
+/**
+ * Réparation des parties touchées par l'ancien bug (solde lu en centimes) : les achats immobiliers qui ont mis le compte
+ * dans le rouge sont annulés et remboursés, du plus récent au plus ancien, tant que le compte reste négatif.
+ */
+export function repairUnaffordablePurchases(s: GameState) {
+  const l = s.life;
+  if (!l?.properties?.length || s.flags["reCashFix"]) return;
+  s.flags["reCashFix"] = true;
+  const undone: string[] = [];
+  for (const p of [...l.properties].sort((a, b) => b.buyT - a.buyT)) {
+    if (eurCash(s) >= 0) break;
+    const paid = Math.round(p.loan ? p.buyPrice * 0.175 : p.buyPrice * 1.075);
+    post(s, cashAcc("perso"), EXT_RE, toCents(paid), "EUR", `Annulation d'un achat non finançable (correction) — ${TYPE_NAME[p.type]} à ${CITY_BY_ID[p.city].name}`);
+    l.properties = l.properties.filter((x) => x.id !== p.id);
+    undone.push(`${TYPE_NAME[p.type]} à ${CITY_BY_ID[p.city].name}`);
+  }
+  if (undone.length) notify(s, "info", "Correction : achat immobilier annulé", `Un défaut du jeu vous avait laissé acheter sans les fonds nécessaires. Achat annulé et remboursé : ${undone.join(", ")}.`, "/play/immobilier");
+}

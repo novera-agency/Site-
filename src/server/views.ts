@@ -232,7 +232,7 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
       const city = p.city && CITY_BY_ID[p.city] ? p.city : "lyon";
       const props = (s.life.properties ?? []).map((x) => ({ ...x, cityName: CITY_BY_ID[x.city].name, typeName: TYPE_NAME[x.type], condName: COND_NAME[x.condition], value: marketValue(s, x), marketRent: marketRent(s, x), cap: rentCap(s, x), loan: x.loan ? { ...x.loan, principal: x.loan.principal / 100, monthly: x.loan.monthly / 100 } : null, pRent: x.askRent ? rentProbability(s, x, x.askRent) : null, pSale: x.askPrice ? saleProbability(s, x, x.askPrice) : null }));
       return {
-        enabled: true, city, cash: cashOf(s, "perso", "EUR"), rate: mortgageRate(s) + 0.002, burden: loanBurden(s), income: payslip(s).net,
+        enabled: true, city, cash: cashOf(s, "perso", "EUR") / 100, rate: mortgageRate(s) + 0.002, burden: loanBurden(s), income: payslip(s).net,
         cities: CITIES.map((c) => ({ ...c, priceNow: Math.round(cityPrice(s, c)), rentNow: Math.round(cityRent(s, c) * 10) / 10, yieldGross: (cityRent(s, c) * 12) / cityPrice(s, c) })),
         listings: listings(s, city).map((li) => { const fake = { ...li, buyPrice: 0, buyT: 0, status: "vacant" as const, id: "" }; return { ...li, typeName: TYPE_NAME[li.type], marketRent: marketRent(s, fake), value: marketValue(s, fake) }; }),
         properties: props, equity: propertiesEquity(s),
@@ -248,7 +248,7 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
       const k = priceLevel(s);
       return {
         enabled: true, bars: { mental: Math.round(l.mental), physique: Math.round(l.physique), social: Math.round(l.social), fun: Math.round(l.fun) }, stress: Math.round(s.career.stress), energy: Math.round(s.career.energy),
-        pay, bills, billsTotal, left: pay.netAfterTax - billsTotal, cash: cashOf(s, "perso", "EUR"), unpaid: l.unpaid,
+        pay, bills, billsTotal, left: pay.netAfterTax - billsTotal, cash: cashOf(s, "perso", "EUR") / 100, unpaid: l.unpaid,
         housing: { ...l.housing, def: HOUSING_BY_ID[l.housing.id], rent: rentOf(s, l.housing.id), value: (l.housing.value ?? 0) / 100, mortgage: l.housing.mortgage ? { ...l.housing.mortgage, principal: l.housing.mortgage.principal / 100, monthly: l.housing.mortgage.monthly / 100 } : null, equity: housingEquity(s) },
         offers: HOUSING.map((h) => ({ ...h, rentNow: rentOf(s, h.id), priceNow: priceOf(s, h.id) })), mortgageRate: mortgageRate(s), city: BANK_BY_ID[s.career.bankId]?.city,
         transport: l.transport, transports: Object.entries(TRANSPORT).map(([id, x]) => ({ id, ...x, cost: Math.round(x.cost * k) })),

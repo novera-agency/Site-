@@ -30,6 +30,7 @@ import { cashAcc, post } from "./ledger";
 import { toCents } from "./money";
 import { changeRep, gainXp, notify, pushNews, nextId, fx, logDecision } from "./core";
 import { assignProspects } from "./prospects";
+import { repairUnaffordablePurchases } from "./realestate";
 import { initLife, dailyLife, housingEquity, priceLevel } from "./life";
 import { histInitialPrices, initHistorical, histAdjust, histAfterHistory, histDaily, histActive, histScriptedCrisis, HIST_EPOCH } from "./historical";
 import { dayIndex, minuteOfDay, MIN_PER_DAY, START_T, STEP_MIN, tOfDay, weekday, isWeekend, firstBusinessDayOfMonth, dateOf, nextBusinessDay, EPOCH_UTC, setEpochYear, startTForEpoch, useEpoch } from "./time";
@@ -411,6 +412,7 @@ export function migrate(raw: GameState): GameState {
     s.version = 2;
   }
   if (s.mode === "carriere" && !s.life) s.life = initLife(s);
+  repairUnaffordablePurchases(s);
   if (s.version > SAVE_VERSION) throw new Error("Sauvegarde issue d'une version plus récente du jeu.");
   return s;
 }

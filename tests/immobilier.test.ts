@@ -4,6 +4,8 @@ import { applyAction } from "@/server/actions";
 import { listings, rentProbability, saleProbability, marketRent, marketValue, dailyRealEstate, monthlyRealEstate, CITIES } from "@/engine/realestate";
 import { Rng } from "@/engine/rng";
 import { isBalanced } from "@/engine/ledger";
+import { buildView } from "@/server/views";
+import { serialize, deserialize } from "@/engine/serialize";
 import { MIN_PER_DAY, dayIndex, nextBusinessDay } from "@/engine/time";
 
 const act = (s: ReturnType<typeof game>, a: object) => applyAction(s, a as never);
@@ -70,5 +72,28 @@ describe("Investissement immobilier", () => {
     const li = listings(s, "paris")[0];
     const r = act(s, { type: "re_buy", listing: li.id, credit: true }) as { ok: boolean; error?: string };
     expect(r.ok).toBe(false); expect(r.error).toMatch(/35 %/);
+  });
+
+  it("régression : avec 1 300 € sur le compte, impossible d'acheter un bien de 70 000 € (les soldes sont bien en euros)", () => {
+    const s = game("carriere", "re-6", 1300);
+    const li = CITIES.flatMap((c) => listings(s, c.id)).find((x) => x.price > 50000)!;
+    const r = act(s, { type: "re_buy", listing: li.id, credit: false }) as { ok: boolean; error?: string };
+    expect(r.ok).toBe(false);
+    expect(cash(s)).toBe(1300);
+    const v = buildView(s, "realestate", {}) as { cash: number };
+    expect(v.cash).toBe(1300);
+  });
+  it("réparation au chargement : un achat qui a mis le compte dans le rouge est annulé et remboursé", () => {
+    const s = game("carriere", "re-7", 1300);
+    const li = CITIES.flatMap((c) => listings(s, c.id)).find((x) => x.price > 50000)!;
+    // reproduit l'ancien bug : achat comptant forcé sans les fonds
+    s.life!.properties = [{ id: "bien1", city: li.city, type: li.type, surface: li.surface, condition: li.condition, dpe: li.dpe, buyPrice: li.price, buyT: s.t, status: "vacant" }];
+    s.balances["perso:cash|EUR"] -= Math.round(li.price * 1.075) * 100;
+    s.balances["ext:immobilier|EUR"] = (s.balances["ext:immobilier|EUR"] ?? 0) + Math.round(li.price * 1.075) * 100;
+    expect(cash(s)).toBeLessThan(0);
+    const back = deserialize(serialize(s));
+    expect(back.life!.properties!.length).toBe(0);
+    expect(cash(back)).toBeCloseTo(1300, 0);
+    expect(isBalanced(back)).toBe(true);
   });
 });

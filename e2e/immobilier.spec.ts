@@ -25,9 +25,12 @@ test("croix de retour et investissement immobilier : achat à crédit à Saint-�
   await page.getByTestId("hub").getByText("Investissement immobilier").click();
   await expect(page).toHaveURL(/immobilier/);
   await page.getByTestId("cities").getByText("Saint-Étienne").click();
-  const first = page.getByTestId("listings").locator(":scope > div").filter({ hasNotText: "DPE G" }).first().locator("[data-testid^=buy-credit-]");
-  await expect(first).toBeVisible({ timeout: 15000 });
-  await first.click();
+  // Le bien le moins cher (hors passoire thermique), finançable avec 10 000 € d'apport
+  const cards = page.getByTestId("listings").locator(":scope > div").filter({ hasNotText: "DPE G" });
+  await expect(cards.first()).toBeVisible({ timeout: 15000 });
+  const prices = await cards.evaluateAll((els) => els.map((e) => Number((e.querySelector(".num")?.textContent ?? "").replace(/\D/g, ""))));
+  const cheapest = prices.indexOf(Math.min(...prices));
+  await cards.nth(cheapest).locator("[data-testid^=buy-credit-]").click();
   const mine = page.getByTestId("my-properties");
   await expect(mine).toContainText("Saint-Étienne", { timeout: 15000 });
   await mine.locator("[data-testid^=do-rent-]").first().click();

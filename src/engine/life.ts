@@ -8,6 +8,8 @@ import { Rng } from "./rng";
 import { clamp, notify, nextId, logDecision } from "./core";
 import { cashAcc, post, cashOf } from "./ledger";
 const EXT_LIVING = "ext:depenses_vie";
+/** Solde du compte courant personnel, en euros (le grand livre compte en centimes) */
+export function eurCash(s: GameState) { return cashOf(s, "perso", "EUR") / 100; }
 import { toCents, fromCents } from "./money";
 import { dayIndex, isWeekend, MIN_PER_DAY, EPOCH_YEAR, dateOf } from "./time";
 import { BANK_BY_ID } from "./data/banks";
@@ -105,7 +107,7 @@ export function doActivity(s: GameState, id: string) {
   const fh = freeHours(s);
   if (fh.left < a.hours) return { ok: false as const, error: `Il ne vous reste que ${fh.left} h de temps libre aujourd'hui (il en faut ${a.hours}).` };
   const cost = a.id === "sport" && l.subs.sport ? 0 : Math.round(a.cost * priceLevel(s));
-  if (cost > 0 && cashOf(s, "perso", "EUR") < cost) return { ok: false as const, error: "Solde insuffisant sur votre compte personnel." };
+  if (cost > 0 && eurCash(s) < cost) return { ok: false as const, error: "Solde insuffisant sur votre compte personnel." };
   if (l.free.day !== dayIndex(s.t)) l.free = { day: dayIndex(s.t), used: 0 };
   l.free.used += a.hours;
   // Les plaisirs répétés lassent : rendement décroissant si la même activité est refaite dans la semaine
@@ -176,7 +178,7 @@ export function monthlyLife(s: GameState) {
     l.housing.value = Math.round(l.housing.value * (1 + yearly / 12));
   }
   // Impayés
-  const cash = cashOf(s, "perso", "EUR");
+  const cash = eurCash(s);
   const limit = -Math.max(1500, payslip(s).netAfterTax);
   if (cash < limit) {
     l.unpaid++;
@@ -210,7 +212,7 @@ export function moveHousing(s: GameState, id: string, buy: boolean) {
   if (!h) return { ok: false as const, error: "Logement inconnu." };
   if (l.housing.id === id && l.housing.owned === buy) return { ok: false as const, error: "Vous y habitez déjà." };
   if (s.t - l.housing.since < 30 * MIN_PER_DAY) return { ok: false as const, error: "Vous avez déménagé il y a moins d'un mois." };
-  const cash = cashOf(s, "perso", "EUR");
+  const cash = eurCash(s);
   if (buy) {
     const price = priceOf(s, id);
     if (price === null) return { ok: false as const, error: "Ce logement ne s'achète pas." };
@@ -235,7 +237,7 @@ export function moveHousing(s: GameState, id: string, buy: boolean) {
   const rent = rentOf(s, id);
   const deposit = rent + Math.round(600 * priceLevel(s));
   if (l.housing.owned) sellHousing(s);
-  if (cashOf(s, "perso", "EUR") < deposit) return { ok: false as const, error: `Il faut ${deposit.toLocaleString("fr-FR")} € (dépôt de garantie et déménagement).` };
+  if (eurCash(s) < deposit) return { ok: false as const, error: `Il faut ${deposit.toLocaleString("fr-FR")} € (dépôt de garantie et déménagement).` };
   post(s, EXT_LIVING, cashAcc("perso"), toCents(deposit), "EUR", `Déménagement — ${h.name} : dépôt de garantie et déménageurs`);
   const before = HOUSING_BY_ID[l.housing.id].comfort;
   l.housing = { id, owned: false, since: s.t };
@@ -307,7 +309,7 @@ export function dailyLife(s: GameState, rng: Rng) {
   if (l.fun < 25) dm -= 0.8;
   if (l.physique < 25) dm -= 0.5;
   if (l.unpaid > 0) dm -= 1.5;
-  if (cashOf(s, "perso", "EUR") < 0) dm -= 0.6;
+  if (eurCash(s) < 0) dm -= 0.6;
   l.mental = bar(l.mental + dm);
   // Retour sur le travail : moral et forme pèsent sur le stress et l'énergie
   if (c.employed) {
