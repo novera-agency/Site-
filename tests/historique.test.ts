@@ -25,11 +25,11 @@ describe("Mode historique 2000", () => {
     expect(s.quotes["IDX-US"].daily.length).toBeGreaterThan(200); // historique 1999 reconstitué
   });
 
-  it("suit la chronologie : krach Internet, décisions réelles de la Fed, indices proches de leurs trajectoires", () => {
+  it("suit la chronologie : krach Internet, décisions réelles de la Fed, indices proches de leurs trajectoires", async () => {
     const s = hist("hist-run");
     s.settings.autoPauseImportant = false;
     let guard = 0;
-    while (s.t < 140 * MIN_PER_DAY && guard++ < 1000) { s.paused = false; if (s.activeMeetingId) { for (const m of s.meetings) m.done = true; s.activeMeetingId = undefined; } advance(s, 1440); }
+    while (s.t < 140 * MIN_PER_DAY && guard++ < 1000) { s.paused = false; if (s.activeMeetingId) { for (const m of s.meetings) m.done = true; s.activeMeetingId = undefined; } advance(s, 1440); if (guard % 5 === 0) await new Promise((r) => setImmediate(r)); }
     expect(fmtDate(s.t, false)).toMatch(/mai 2000/);
     expect(s.macro.zones.US.policyRate).toBe(6.5); // hausse du 16 mai 2000
     expect(s.news.some((n) => n.title.includes("Nasdaq"))).toBe(true);
