@@ -7,6 +7,7 @@ import { bondYield } from "./market";
 import { changeRep, changeTrust, gainXp, nextId, notify, careerLog } from "./core";
 import { equityWeight, suitableEquityBand } from "./clients";
 import { dayIndex, MIN_PER_DAY, fmtShortDate } from "./time";
+import { quizState, quizById, QUIZ_BANK } from "./quiz";
 
 interface Tpl {
   id: string; category: Mission["category"]; xp: number; rep: Partial<Record<RepKey, number>>; days: number;
@@ -138,6 +139,9 @@ const DAILY: Tpl[] = [
   { id: "d_varchiffre", category: "risque", xp: 40, rep: { risque: 2, professionnelle: 1 }, days: 1,
     make: (s) => { if (!s.accounts.desk) return null; return { title: "Chiffre demandé par le comité : la VaR du book", description: "Le directeur présente le risque du desk au comité exécutif. Il vous demande la VaR 99 % à 1 jour du book (page Risques).", criteria: ["Réponse à 10 % près"], params: {} }; },
     check: () => 0, quiz: (s) => { const v = valueAtRisk(s, "desk").var; return { answer: Math.round(v), tolerance: Math.max(500, v * 0.1), unit: "€", question: "VaR 99 % à 1 jour du book du desk ?", explain: `VaR actuelle : ${Math.round(v).toLocaleString("fr-FR")} €.` }; } },
+  { id: "d_culture", category: "analyse", xp: 25, rep: { professionnelle: 1 }, days: 1,
+    make: (s, _p, rng) => { const st = quizState(s); const pool = QUIZ_BANK.filter((q) => st.done[q.id] !== 1); const q = rng.pick(pool.length ? pool : QUIZ_BANK); return { title: q.cat === "macro" ? "Culture macro du jour" : "Culture micro du jour", description: "Le directeur aime que ses équipes maîtrisent les bases de l'économie. Une question pour la machine à café.", criteria: ["Bonne réponse avant ce soir"], params: { q: q.id } }; },
+    check: () => 0, choiceQuiz: (_s, m) => { const q = quizById(String(m.params.q)); return { question: q.q, options: q.options, correct: q.correct, explain: q.explain }; } },
   { id: "d_or_eur", category: "macro", xp: 20, rep: { professionnelle: 1 }, days: 1,
     make: (s) => { if (!s.quotes["GOLD"] || !s.quotes["EURUSD"]) return null; const g = s.quotes["GOLD"].price, r = s.quotes["EURUSD"].price; return { title: "Le prix de l'or en euros", description: `Une cliente veut connaître le prix d'une once d'or en euros. L'or cote ${g.toFixed(2)} $ et l'EURUSD ${r.toFixed(4)}.`, criteria: ["Réponse à 1 % près"], params: { g: Math.round(g * 100) / 100, r: Math.round(r * 10000) / 10000 } }; },
     check: () => 0, quiz: (_s, m) => { const a = Number(m.params.g) / Number(m.params.r); return { answer: Math.round(a * 100) / 100, tolerance: a * 0.01, unit: "€", question: `Une once d'or à ${m.params.g} $, EURUSD à ${m.params.r} : combien en euros ?`, explain: `${m.params.g} ÷ ${m.params.r} = ${a.toFixed(2)} € (on divise par l'EURUSD pour passer des dollars aux euros).` }; } },

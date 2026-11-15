@@ -11,6 +11,7 @@ import { MeetingLauncher } from "./MeetingRoom";
 import { MissionHelpPanel } from "./MissionHelp";
 import { Tour } from "./Tour";
 import { tr } from "@/lib/i18n";
+import { HIST_END_LABEL } from "@/engine/data/history2000";
 import { Badge, Disclaimer } from "./ui";
 import type { Snapshot } from "@/server/views";
 import { sfx, startMusic, stopMusic, setSoundEnabled } from "@/lib/sound";
@@ -41,7 +42,7 @@ function TopBar({ snap, onMenu }: { snap: Snapshot; onMenu: () => void }) {
         </div>
         <div className="hidden items-center gap-1.5 md:flex">{snap.sessions.filter((x) => ["EU", "US", "ASIA", "CRYPTO"].includes(x.id)).map((x) => <span key={x.id} title={x.label} className="flex items-center gap-1 text-[11px] text-ink-300"><span className={`h-1.5 w-1.5 rounded-full ${x.open ? "bg-gain" : "bg-ink-500"}`} />{x.id}</span>)}</div>
         <span className="hidden sm:inline"><Badge tone={snap.crisisActive ? "loss" : "info"}>{snap.regimeLabel}</Badge></span>
-        {snap.historical && <span data-testid="hist-badge" title={snap.histLive ? "Les marchés suivent les grandes tendances réelles et les événements historiques jusqu'au 31 décembre 2025." : "Après 2025, il n'y a plus de données réelles : les marchés évoluent selon le modèle et des événements mondiaux simulés peuvent survenir."} className={`hidden rounded px-1.5 py-0.5 text-[10px] sm:inline ${snap.histLive ? "bg-blue-500/15 text-blue-200" : "bg-purple-500/15 text-purple-200"}`}>{tr(snap.histLive ? "📜 Histoire réelle" : "🎲 Simulation libre")}</span>}
+        {snap.historical && <span data-testid="hist-badge" title={snap.histLive ? `Les marchés suivent les grandes tendances réelles et les événements historiques jusqu'au ${HIST_END_LABEL}.` : `Après le ${HIST_END_LABEL}, il n'y a plus de données réelles : les marchés évoluent selon le modèle et des événements mondiaux simulés peuvent survenir.`} className={`hidden rounded px-1.5 py-0.5 text-[10px] sm:inline ${snap.histLive ? "bg-blue-500/15 text-blue-200" : "bg-purple-500/15 text-purple-200"}`}>{tr(snap.histLive ? "📜 Histoire réelle" : "🎲 Simulation libre")}</span>}
         {snap.lag && <span data-testid="lag-badge" title="Votre appareil ne peut pas calculer aussi vite : le temps avance moins vite que la vitesse choisie, sans rien perdre." className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-200">{tr("🐢 Appareil limité")}</span>}
         <span className="hidden text-[11px] text-ink-300 md:inline">Volatilité <span className="num text-ink-100">{snap.vix}</span></span>
         <div className="ml-auto flex items-center gap-4">

@@ -84,6 +84,8 @@ Le workflow `.github/workflows/pages.yml` vérifie le code (TypeScript, 37 tests
 - Visite guidée de l'interface au premier lancement (relançable dans Options → Paramètres).
 - Accessibilité : texte agrandi, contraste renforcé, animations réduites, navigation au clavier ; audit automatique WCAG A/AA sans erreur.
 - Interface en anglais (menus, navigation, visite guidée, accueil) ; les dialogues et missions restent en français.
+- **Histoire réelle de 2000 au 13 novembre 2026** (guerre contre l'Iran, choc pétrolier, remontée des taux, krach de l'IA…), puis simulation libre. Les parties créées avec une ancienne version sont recommencées une fois au 3 janvier 2000.
+- **Quiz d'économie** : 50 questions de micro et macroéconomie avec explications, séries de 5, progression, succès et expérience en compétences ; une question de culture générale fait aussi partie des missions du jour.
 - Contenu enrichi : 25 demandes clients, 26 événements mondiaux simulés, 20 événements de vie, 15 types de missions du jour.
 - Sur les appareils lents, le calcul est limité à chaque seconde : le temps ralentit au lieu de figer l'écran.
 

@@ -6,6 +6,7 @@ import type { GameState } from "./types";
 import { notify, gainXp, avgRep, careerLog } from "./core";
 import { wealthOf } from "./wealth";
 import { MIN_PER_DAY } from "./time";
+import { quizCorrectCount } from "./quiz";
 
 export interface Objective { id: string; label: string; hint: string; link: string; check: (s: GameState) => boolean; }
 export interface Chapter { id: string; title: string; intro: string; objectives: Objective[]; reward: { xp: number; text: string }; }
@@ -70,6 +71,9 @@ export const CHAPTERS: Chapter[] = [
 // ───────────── Succès ─────────────
 export interface Achievement { id: string; title: string; desc: string; icon: string; secret?: boolean; check: (s: GameState) => boolean; }
 export const ACHIEVEMENTS: Achievement[] = [
+  { id: "eco10", title: "Curieux", desc: "Réussir 10 questions du quiz d'économie.", icon: "💡", check: (s) => quizCorrectCount(s) >= 10 },
+  { id: "eco30", title: "Esprit éclairé", desc: "Réussir 30 questions du quiz d'économie.", icon: "🎓", check: (s) => quizCorrectCount(s) >= 30 },
+  { id: "eco_serie", title: "Sans faute", desc: "Enchaîner 8 bonnes réponses d'affilée au quiz d'économie.", icon: "🔥", check: (s) => (s.quiz?.best ?? 0) >= 8 },
   { id: "first_trade", title: "Baptême du feu", desc: "Passer son premier ordre.", icon: "🎯", check: (s) => fills(s) > 0 },
   { id: "missions10", title: "Fiable", desc: "Réussir 10 missions.", icon: "✅", check: (s) => s.career.missionsDone >= 10 },
   { id: "missions50", title: "Machine de guerre", desc: "Réussir 50 missions.", icon: "🏅", check: (s) => s.career.missionsDone >= 50 },

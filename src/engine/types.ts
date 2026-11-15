@@ -293,6 +293,8 @@ export interface GameState {
   version: number;
   /** Parcours, succès et fin de partie */
   progress?: { chapters: string[]; objectives: string[]; achievements: string[] };
+  /** Quiz de culture économique */
+  quiz?: { done: Record<string, 0 | 1>; streak: number; best: number; answered: number; correct: number };
   ended?: { id: "retraite" | "faillite" | "fortune"; t: number; score: number };
   /** Prospects à démarcher (donnés par le N+1 ou recommandés) */
   prospects?: Prospect[];
@@ -300,7 +302,7 @@ export interface GameState {
   life?: LifeState;
   /** Année de départ du calendrier (2027 : monde fictif ; 2000 : mode historique) */
   epochYear?: number;
-  /** Mode historique 2000 → 2025 : événements réels datés et trajectoires de marché approchées */
+  /** Mode historique 2000 → novembre 2026 : événements réels datés et trajectoires de marché approchées */
   historical?: boolean;
   id: string;
   ownerId: string;

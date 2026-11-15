@@ -39,6 +39,7 @@ export const CATEGORIES: NavCategory[] = [
         { href: "/play/carriere", label: "Ma carrière", icon: "🏆", desc: "Évaluations, promotion, objectifs" },
         { href: "/play/competences", label: "Compétences", icon: "🧠", desc: "Vos points forts à développer" },
         { href: "/play/formation", label: "Formation", icon: "🎓", desc: "Modules pour apprendre la finance" },
+        { href: "/play/culture", label: "Quiz d'économie", icon: "💡", desc: "Micro et macroéconomie : testez votre culture" },
         { href: "/play/dictionnaire", label: "Dictionnaire", icon: "📖", desc: "Définitions des termes financiers" },
         { href: "/play/entreprise", label: "Créer sa société", icon: "🚀", desc: "Entrepreneuriat" },
       ] },

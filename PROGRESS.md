@@ -73,8 +73,8 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 
 ## Vérifications (dernière exécution)
 - `npm run lint` : OK
-- `npm test` : 93/93
-- `npm run e2e` : 19/19 (dont parcours 20 étapes, appel client, immobilier, vie privée, voix)
+- `npm test` : 100/100
+- `npm run e2e` : 20/20 (dont parcours 20 étapes, appel client, immobilier, vie privée, voix)
 - Affichage émulé iPhone 13, Pixel 7 et iPad : aucune page ne déborde horizontalement (38 écrans)
 - `npm run build` : OK
 
@@ -100,3 +100,9 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 - ✅ Performances : calcul plafonné par seconde (150 ms dans le navigateur), badge « Appareil limité ».
 - ✅ Contenu : +12 demandes clients, +12 événements mondiaux, +8 événements de vie (animal de compagnie), +4 missions du jour.
 - ❌ Sauvegarde dans le cloud, classement mondial, voix humaines de synthèse : nécessitent un service externe (compte, clé, serveur).
+
+## Histoire jusqu'en 2026, quiz d'économie
+- ✅ Repères réels étendus jusqu'au 13 novembre 2026 (indices, or, pétrole, devises, taux, cryptoactifs, taux directeurs Fed/BCE/BoE, 21 événements datés) ; sources : presse financière consultée le 15 novembre 2026. Les séries peu couvertes (émergents, banques, cuivre, blé, devises secondaires) sont des estimations prudentes ; la macro 2026 (PIB, inflation, chômage) est estimée.
+- ✅ Parties créées avant cette version : recommencées une fois au 3 janvier 2000 (même personnage, banque, nom, capital).
+- ✅ Quiz d'économie : 50 questions (25 micro, 25 macro), explications, séries, 3 succès, mission du jour « culture ».
+- ⚠️ Les valeurs 2026 viennent de recherches web aux chiffres parfois divergents : approximations, pas des cours officiels.

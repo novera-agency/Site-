@@ -17,6 +17,7 @@ import { takeVacation } from "@/engine/career";
 import { completeLesson, advanceTo } from "@/engine/engine";
 import { nextId, logDecision } from "@/engine/core";
 import { toCents } from "@/engine/money";
+import { answerQuiz } from "@/engine/quiz";
 
 const num = z.coerce.number().finite();
 export const ActionSchema = z.discriminatedUnion("type", [
@@ -60,6 +61,7 @@ export const ActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("re_renovate"), id: z.string().max(40) }),
   z.object({ type: z.literal("settings"), notifLevel: z.enum(["toutes", "importantes", "critiques"]).optional(), sound: z.boolean().optional(), minutesPerSecond: num.min(0.25).max(60).optional(), autoPauseImportant: z.boolean().optional(), livingExpenses: z.boolean().optional(), aiEnabled: z.boolean().optional(), explanations: z.boolean().optional(), allowShort: z.boolean().optional(), name: z.string().min(1).max(60).optional() }),
   z.object({ type: z.literal("tutorial_visit"), page: z.string().max(40) }),
+  z.object({ type: z.literal("quiz_answer"), id: z.string().max(40), choice: z.number().int().min(0).max(5) }),
   z.object({ type: z.literal("leave_meeting") }),
 ]);
 export type Action = z.infer<typeof ActionSchema>;
@@ -197,6 +199,7 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
       if (a.name) s.name = a.name;
       return { ok: true, message: "Paramètres enregistrés." };
     }
+    case "quiz_answer": { const r = answerQuiz(s, a.id, a.choice); return r.ok ? { ok: true, data: r.data } : { ok: false, error: r.error }; }
     case "tutorial_visit": if (a.page === "terminal") s.flags["visitedTerminal"] = true; return { ok: true };
   }
 }

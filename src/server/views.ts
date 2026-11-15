@@ -26,6 +26,7 @@ import { appreciation } from "@/engine/missions";
 import { canCall } from "@/engine/prospects";
 import { CHAPTERS, ACHIEVEMENTS, currentChapter, careerScore, endingAvailable, ENDINGS } from "@/engine/progression";
 import { wealthOf } from "@/engine/wealth";
+import { quizState, quizBatch, QUIZ_BANK } from "@/engine/quiz";
 import { CITIES, CITY_BY_ID, TYPE_NAME, COND_NAME, marketValue, marketRent, rentCap, rentProbability, saleProbability, cityPrice, cityRent, listings, propertiesEquity, loanBurden } from "@/engine/realestate";
 import { payslip, monthlyBills, freeHours, priceLevel, HOUSING, HOUSING_BY_ID, rentOf, priceOf, housingEquity, mortgageRate, TRANSPORT, SUBS, ACTIVITIES } from "@/engine/life";
 
@@ -243,6 +244,12 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
         score: careerScore(s), endings: endingAvailable(s).map((id) => ({ id, ...ENDINGS[id] })), ended: s.ended ? { ...s.ended, ...ENDINGS[s.ended.id] } : null,
         age: Math.floor(s.profile.age + s.stats.daysPlayed / 365), wealth: wealthOf(s),
       };
+    }
+    case "culture": {
+      const st = quizState(s);
+      const cat = p.cat === "micro" || p.cat === "macro" ? p.cat : "mix";
+      const by = (c: "micro" | "macro") => { const all = QUIZ_BANK.filter((q) => q.cat === c); return { total: all.length, done: all.filter((q) => st.done[q.id] === 1).length }; };
+      return { mode: s.mode, cat, stats: { micro: by("micro"), macro: by("macro"), streak: st.streak, best: st.best, answered: st.answered, right: st.correct }, batch: quizBatch(s, cat, 5).map((q) => ({ id: q.id, cat: q.cat, level: q.level, q: q.q, options: q.options })) };
     }
     case "realestate": {
       if (!s.life) return { enabled: false };

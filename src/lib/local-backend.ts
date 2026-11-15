@@ -4,7 +4,7 @@
  * les mêmes validations (Zod) et les mêmes vues. Persistance dans IndexedDB.
  * Limite assumée : sans serveur, l'état réside dans le navigateur du joueur (pas d'autorité serveur).
  */
-import { createGame, advanceBudget } from "@/engine/engine";
+import { createGame, advanceBudget, restartLegacyGame } from "@/engine/engine";
 import { serialize, deserialize } from "@/engine/serialize";
 import { STEP_MIN } from "@/engine/time";
 import { BANK_BY_ID } from "@/engine/data/banks";
@@ -37,9 +37,13 @@ async function runtime(id: string): Promise<Runtime | null> {
   if (!rt) {
     const txt = await get<string>(`game:${id}`);
     if (!txt) return null;
-    const s = deserialize(txt); s.paused = true; s.pauseReason = "Partie reprise";
-    rt = { state: s, lastTickReal: Date.now(), accMinutes: 0, dirty: false, lastSaved: Date.now() };
+    let s = deserialize(txt); s.paused = true; s.pauseReason = "Partie reprise";
+    // Partie créée avec une ancienne version : recommencée une fois au 3 janvier 2000 (mode historique)
+    const fresh = restartLegacyGame(s);
+    if (fresh) { s = fresh; s.paused = true; s.pauseReason = "Partie recommencée en 2000"; }
+    rt = { state: s, lastTickReal: Date.now(), accMinutes: 0, dirty: !!fresh, lastSaved: Date.now() };
     games.set(id, rt);
+    if (fresh) await save(rt);
   }
   return rt;
 }

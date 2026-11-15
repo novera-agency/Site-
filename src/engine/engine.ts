@@ -52,6 +52,17 @@ export const CHALLENGES = [
   { id: "choc_petrolier", name: "Choc pétrolier", description: "75 000 € : une crise énergétique va éclater. Réalisez +5 % en 40 jours.", capital: 75000, days: 40, target: 0.05, crisis: "crise_energie" as const },
 ];
 
+/** Génération des parties : les parties créées avant la version « histoire réelle jusqu'en 2026 » sont recommencées une fois */
+export const SAVE_GEN = 2;
+/** Recommence à zéro (3 janvier 2000, mode historique) une partie créée avec une ancienne version ; renvoie null si rien à faire */
+export function restartLegacyGame(old: GameState): GameState | null {
+  if (Number(old.flags["gen"] ?? 0) >= SAVE_GEN || old.mode === "defi") return null;
+  const capital = Math.max(1000, Math.round((old.accounts.perso?.capitalAllocated ?? 1_000_000) / 100));
+  const n = createGame({ ownerId: old.ownerId, mode: old.mode, difficulty: old.difficulty, profile: old.profile, bankId: old.career.bankId, track: old.career.track, startingCapital: capital, settings: { ...old.settings }, historical: true });
+  n.id = old.id; n.name = old.name;
+  n.messages.unshift({ id: nextId(n, "msg"), t: n.t, from: "Financial Empire", subject: "🔄 Votre partie recommence en 2000", body: `Votre partie a été recommencée depuis le début, avec le même personnage, le même métier et la même banque.\n\nVous démarrez le lundi 3 janvier 2000, en pleine bulle Internet, avec ${capital.toLocaleString("fr-FR")} € d'économies. Vous allez traverser les vrais événements jusqu'au 13 novembre 2026 : 11 septembre, crise de 2008, crise de l'euro, Covid, guerre en Ukraine, guerre contre l'Iran et choc pétrolier de 2026…\n\nBonne chance !`, read: false });
+  return n;
+}
 export function createGame(o: NewGameOptions): GameState {
   const seed = o.seed || `${Date.now()}-${o.ownerId}`.slice(0, 40);
   const rngState = seedRng(seed);
@@ -116,6 +127,7 @@ export function createGame(o: NewGameOptions): GameState {
   const capital = o.mode === "defi" ? CHALLENGES.find((c) => c.id === o.challengeId)?.capital ?? o.startingCapital : o.startingCapital;
   post(s, cashAcc("perso"), "ext:apport_initial", toCents(capital), "EUR", "Capital personnel initial (monnaie virtuelle)");
   s.accounts.perso.capitalAllocated = toCents(capital);
+  s.flags["gen"] = SAVE_GEN;
   s.accounts.perso.equityHistory.push({ t: s.t, v: capital });
   createNpcs(s, rng);
   if (o.mode === "carriere") {
@@ -148,7 +160,7 @@ export function createGame(o: NewGameOptions): GameState {
     s.settings.livingExpenses = false; s.settings.allowShort = true; s.accounts.perso.allowShort = true;
   }
   if (o.mode !== "carriere") { s.paused = false; s.pauseReason = undefined; }
-  if (hist) pushNews(s, { category: "marches", title: "3 janvier 2000 : les marchés ouvrent le nouveau millénaire au sommet", body: "Mode historique : vous vivez les marchés de 2000 à 2025 avec les événements réels (bulle Internet, 11 septembre, crise de 2008, crise de l'euro, Brexit, Covid, inflation 2022…). Les grandes trajectoires de marché sont reconstituées de façon approchée ; les sociétés cotées et les banques du jeu restent fictives. Monnaie virtuelle.", impact: "moyen", tickers: [], zones: ["US", "EZ"], sentiment: 0.3 });
+  if (hist) pushNews(s, { category: "marches", title: "3 janvier 2000 : les marchés ouvrent le nouveau millénaire au sommet", body: "Mode historique : vous vivez les marchés de 2000 à novembre 2026 avec les événements réels (bulle Internet, 11 septembre, crise de 2008, crise de l'euro, Brexit, Covid, inflation 2022, guerre contre l'Iran en 2026…). Les grandes trajectoires de marché sont reconstituées de façon approchée ; les sociétés cotées et les banques du jeu restent fictives. Monnaie virtuelle.", impact: "moyen", tickers: [], zones: ["US", "EZ"], sentiment: 0.3 });
   else pushNews(s, { category: "marches", title: "Ouverture d'une nouvelle année boursière", body: `Les stratégistes anticipent une année de ${s.macro.regime === "expansion" ? "croissance modérée" : "transition"}. Inflation américaine à ${s.macro.zones.US.inflation.toFixed(1)} %, taux directeur à ${s.macro.zones.US.policyRate.toFixed(2)} %. Simulation — données fictives.`, impact: "faible", tickers: [], zones: ["US", "EZ"], sentiment: 0.1 });
   return s;
 }

@@ -72,10 +72,10 @@ describe("Contenu supplémentaire", () => {
     const s = createGame({ ownerId: "u", mode: "carriere", difficulty: "normal", seed: "contenu-5", profile, bankId: "lutece", track: "trader", startingCapital: 10000, historical: true });
     useEpoch(s);
     const at = (iso: string) => (Date.parse(iso + "T08:00:00Z") - EPOCH_UTC) / 60000;
-    s.t = at("2025-12-05");
+    s.t = at("2026-10-20");
     histDaily(s, () => undefined);
     expect(s.notifications.some((n) => n.title.includes("Dans un mois"))).toBe(true);
-    s.t = at("2026-01-02");
+    s.t = at("2026-11-16");
     histDaily(s, () => undefined);
     expect(s.messages.some((m) => m.subject.includes("futur"))).toBe(true);
   });
