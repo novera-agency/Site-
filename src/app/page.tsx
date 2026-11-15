@@ -4,10 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useRouter } from "next/navigation";
 import { api, STATIC } from "@/lib/api";
 import { BANK_BY_ID, TRACKS } from "@/engine/data/banks";
-import { fmtDate } from "@/engine/time";
+import { fmtDateFor } from "@/engine/time";
 import { Button, inputCls } from "@/components/ui";
 
-interface Meta { gameId: string; name: string; mode: string; bank: string; t: number; updatedAt: string; rank?: string; difficulty: string; }
+interface Meta { gameId: string; name: string; mode: string; bank: string; t: number; updatedAt: string; rank?: string; difficulty: string; epochYear?: number; }
 type Item = "continuer" | "nouvelle" | "charger" | "libre" | "defis" | "options";
 
 const CHALLENGES = [
@@ -117,7 +117,7 @@ export default function Home() {
       <h2 className="text-2xl font-semibold text-white">{last.name}</h2>
       <p className="mt-1 text-ink-300">{careerLine(last)}</p>
       <dl className="mt-5 grid grid-cols-2 gap-4 text-sm">
-        <div><dt className="text-ink-500">Date dans le jeu</dt><dd className="mt-0.5 capitalize text-ink-100">{fmtDate(last.t)}</dd></div>
+        <div><dt className="text-ink-500">Date dans le jeu</dt><dd className="mt-0.5 capitalize text-ink-100">{fmtDateFor(last.t, last.epochYear)}</dd></div>
         <div><dt className="text-ink-500">Dernière session</dt><dd className="mt-0.5 text-ink-100">{new Date(last.updatedAt).toLocaleDateString("fr-FR", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}</dd></div>
       </dl>
       <Button className="mt-6" onClick={() => open(last.gameId)} data-testid="continue-last">Reprendre la partie</Button>
@@ -137,7 +137,7 @@ export default function Home() {
       {!saves?.length ? <p className="mt-2 text-ink-400">Vous n'avez pas encore de partie. Lancez une nouvelle carrière : elle sera sauvegardée automatiquement.</p> : (
         <ul className="mt-4 space-y-2">{saves.slice(0, 6).map((g) => (
           <li key={g.gameId}><button onClick={() => open(g.gameId)} className="flex w-full items-center justify-between gap-3 rounded-lg border border-ink-700 bg-ink-900/80 px-4 py-3 text-left hover:border-gold/60">
-            <span className="min-w-0"><b className="block truncate text-white">{g.name}</b><span className="block truncate text-xs text-ink-400">{careerLine(g)} · {fmtDate(g.t, false)}</span></span><span className="shrink-0 text-sm text-gold">Jouer</span>
+            <span className="min-w-0"><b className="block truncate text-white">{g.name}</b><span className="block truncate text-xs text-ink-400">{careerLine(g)} · {fmtDateFor(g.t, g.epochYear, false)}</span></span><span className="shrink-0 text-sm text-gold">Jouer</span>
           </button></li>))}
         </ul>)}
       <Link href="/sauvegardes" className="mt-4 inline-block text-sm text-ink-300 underline-offset-4 hover:underline">Gérer les sauvegardes (emplacements, export, import)</Link>

@@ -6,7 +6,9 @@ import { MIN_PER_DAY, isWeekend } from "./time";
 import { multiplier, fx } from "./core";
 import { bondPrice, realizedVol } from "./market";
 
-export function simulateHistory(s: GameState, rng: Rng, startDay: number, nDays: number) {
+/** Ajustement facultatif (mode historique) : rapport multiplicatif par instrument primaire, décalage logarithmique par devise */
+export interface HistoryAdjust { prim(id: string, day: number): number; fx(cur: Currency, day: number): number; }
+export function simulateHistory(s: GameState, rng: Rng, startDay: number, nDays: number, adj?: HistoryAdjust) {
   const reg = REGIMES[s.macro.regime];
   const ids = Object.keys(s.instruments);
   const dt = 1 / 252, sq = Math.sqrt(dt);
@@ -51,9 +53,11 @@ export function simulateHistory(s: GameState, rng: Rng, startDay: number, nDays:
     const isPrimary = def.cls === "action" || def.cls === "matiere" || def.cls === "crypto";
     if (!isPrimary) continue;
     const last = paths[id][paths[id].length - 1];
-    let prev = q.price * Math.exp(paths[id][0] - last - 0.005);
+    const endDay = days[days.length - 1];
+    let prev = q.price * Math.exp(paths[id][0] - last - 0.005) * (adj ? adj.prim(id, days[0]) / adj.prim(id, endDay) : 1);
     for (let k = 0; k < days.length; k++) {
-      const c = q.price * Math.exp(paths[id][k] - last);
+      const ra = adj ? adj.prim(id, days[k]) / adj.prim(id, endDay) : 1;
+      const c = q.price * Math.exp(paths[id][k] - last) * ra;
       const dv = def.vol * Math.sqrt(dt);
       const o = prev * Math.exp(rng.normal() * dv * 0.3);
       const h = Math.max(o, c) * (1 + Math.abs(rng.normal()) * dv * 0.5);
@@ -65,7 +69,7 @@ export function simulateHistory(s: GameState, rng: Rng, startDay: number, nDays:
   }
   // Devises
   const fxNow = { ...s.macro.fxLog };
-  const fxAt = (k: number): Record<Currency, number> => { const o = {} as Record<Currency, number>; for (const c of Object.keys(fxNow) as Currency[]) o[c] = fxNow[c] + fxPaths[c][k] - fxPaths[c][days.length - 1]; return o; };
+  const fxAt = (k: number): Record<Currency, number> => { const o = {} as Record<Currency, number>; for (const c of Object.keys(fxNow) as Currency[]) o[c] = fxNow[c] + fxPaths[c][k] - fxPaths[c][days.length - 1] + (adj ? adj.fx(c, days[k]) - adj.fx(c, days[days.length - 1]) : 0); return o; };
   for (const def of Object.values(s.instruments)) {
     if (def.cls !== "devise") continue;
     const b = def.id.slice(0, 3) as Currency, qt = def.id.slice(3) as Currency;

@@ -56,8 +56,8 @@ export function autosave(gameId: string, force = false) {
 }
 export function markDirty(gameId: string) { const rt = games.get(gameId); if (rt) rt.dirty = true; }
 
-export interface SaveMeta { gameId: string; name: string; mode: string; bank: string; t: number; updatedAt: string; slot?: number; difficulty: string; wealth?: number; rank?: string; }
-function metaOf(s: GameState, slot?: number): SaveMeta { return { gameId: s.id, name: s.name, mode: s.mode, bank: s.career.bankId, t: s.t, updatedAt: s.updatedAt, slot, difficulty: s.difficulty, rank: s.career.employed ? `${s.career.track} · rang ${s.career.rank}` : s.company ? s.company.name : "—" }; }
+export interface SaveMeta { gameId: string; name: string; mode: string; bank: string; t: number; updatedAt: string; slot?: number; difficulty: string; epochYear?: number; wealth?: number; rank?: string; }
+function metaOf(s: GameState, slot?: number): SaveMeta { return { gameId: s.id, name: s.name, mode: s.mode, bank: s.career.bankId, t: s.t, epochYear: s.epochYear, updatedAt: s.updatedAt, slot, difficulty: s.difficulty, rank: s.career.employed ? `${s.career.track} · rang ${s.career.rank}` : s.company ? s.company.name : "—" }; }
 export function listSaves(uid: string) {
   const dir = savesDir(uid);
   if (!fs.existsSync(dir)) return { games: [] as SaveMeta[], slots: [] as SaveMeta[] };

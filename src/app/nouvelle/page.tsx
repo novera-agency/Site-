@@ -41,6 +41,7 @@ function Wizard() {
   const [capitalMode, setCapitalMode] = useState<"standard" | "1000" | "10000" | "100000" | "libre">("standard");
   const [free, setFree] = useState(25000);
   const [seed, setSeed] = useState("");
+  const [historical, setHistorical] = useState(sp.get("epoque") !== "fictif");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const maxDiff = KNOW.find((k) => k.id === p.knowledge)!.max + (p.education.toLowerCase().includes("master") || p.education.toLowerCase().includes("grande école") ? 1 : 0);
@@ -57,7 +58,7 @@ function Wizard() {
     setBusy(true); setErr("");
     await api("/api/auth", { action: "guest" });
     let mps = 1; try { mps = Number(localStorage.getItem("fe_mps") || 1); } catch { /* */ }
-    const r = await api<{ ok: boolean; gameId?: string; error?: string }>("/api/game/new", { mode, difficulty, bankId: mode === "carriere" ? bankId : "lutece", track: mode === "carriere" ? track : "trader", startingCapital: mode === "defi" ? 10000 : capital, profile: p, seed: seed || undefined, challengeId: mode === "defi" ? challenge : undefined, minutesPerSecond: mps });
+    const r = await api<{ ok: boolean; gameId?: string; error?: string }>("/api/game/new", { mode, difficulty, bankId: mode === "carriere" ? bankId : "lutece", track: mode === "carriere" ? track : "trader", startingCapital: mode === "defi" ? 10000 : capital, profile: p, seed: seed || undefined, challengeId: mode === "defi" ? challenge : undefined, minutesPerSecond: mps, historical: mode !== "defi" && historical });
     if (!r.ok || !r.gameId) { setErr(r.error ?? "Création impossible"); setBusy(false); return; }
     try { localStorage.setItem("fe_game", r.gameId); } catch { /* */ }
     router.push("/play");
@@ -69,6 +70,13 @@ function Wizard() {
         <ol className="mb-6 flex flex-wrap gap-2">{steps.map((s, i) => <li key={s} className={`rounded-full px-3 py-1 text-xs ${i === step ? "bg-accent text-white" : i < step ? "bg-green-600/25 text-green-300" : "bg-ink-800 text-ink-400"}`}>{i + 1}. {s}</li>)}</ol>
         <div className="panel p-5 fade-in" key={cur}>
           {(cur === "Difficulté" || cur === "Défi") && <div className="space-y-5">
+            {mode !== "defi" && <div>
+              <h2 className="text-xl font-semibold">Quelle époque ?</h2>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <button data-testid="epoch-hist" onClick={() => setHistorical(true)} className={`rounded-lg border p-4 text-left ${historical ? "border-gold bg-yellow-500/10" : "border-ink-700 bg-ink-850 hover:border-ink-500"}`}><div className="font-semibold">🕰️ De 2000 à aujourd'hui — l'histoire réelle</div><div className="mt-1 text-xs text-ink-300">Départ le 3 janvier 2000, en pleine bulle Internet. Vous traversez les vrais événements : 11 septembre, faillite de Lehman, crise de l'euro, Brexit, élections, Covid, guerre en Ukraine, inflation… Les marchés suivent leurs trajectoires réelles (reconstituées de façon approchée) ; les entreprises et banques du jeu restent fictives.</div></button>
+                <button data-testid="epoch-fictif" onClick={() => setHistorical(false)} className={`rounded-lg border p-4 text-left ${!historical ? "border-gold bg-yellow-500/10" : "border-ink-700 bg-ink-850 hover:border-ink-500"}`}><div className="font-semibold">🔮 2027 — un monde imaginaire</div><div className="mt-1 text-xs text-ink-300">Départ le 4 janvier 2027. Les marchés, crises et événements sont entièrement simulés : personne ne sait ce qui va arriver.</div></button>
+              </div>
+            </div>}
             <h2 className="text-xl font-semibold">Niveau de difficulté</h2>
             <div className="grid gap-3 md:grid-cols-2">{DIFF.map((d) => <button key={d.id} onClick={() => setDifficulty(d.id)} className={`rounded-lg border p-4 text-left ${difficulty === d.id ? "border-accent bg-blue-500/10" : "border-ink-700 bg-ink-850 hover:border-ink-500"}`}><div className="font-semibold">{d.label}</div><div className="text-xs text-ink-300">{d.desc}</div></button>)}</div>
             <p className="text-xs text-ink-400">La difficulté ne modifie pas artificiellement vos gains : elle change l'assistance, les marges, la sévérité des contrôles et l'exigence des PNJ.</p>
@@ -104,8 +112,8 @@ function Wizard() {
             <p className="text-xs text-ink-400">Il s'agit d'argent fictif. Votre patrimoine personnel est strictement séparé du capital de la banque et des fonds de vos clients.</p></>}</div>}
           {cur === "C'est parti" && <div className="space-y-2 text-sm"><h2 className="text-xl font-semibold">Récapitulatif</h2>
             <div className="grid gap-2 md:grid-cols-2"><div className="rounded-md bg-ink-900 p-3"><div className="text-ink-400">Personnage</div><div className="font-semibold">{p.firstName} {p.lastName}, {p.age} ans — {p.nationality}</div><div className="text-xs text-ink-300">{p.education} · {KNOW.find((k) => k.id === p.knowledge)?.label}</div></div>
-            <div className="rounded-md bg-ink-900 p-3"><div className="text-ink-400">Partie</div><div className="font-semibold">{mode === "carriere" ? `${TRACKS[track].name} chez ${bank.name}` : mode === "defi" ? CHALLENGES.find((c) => c.id === challenge)?.name : "Bac à sable"}</div><div className="text-xs text-ink-300">Difficulté {difficulty} · Capital {mode === "defi" ? "fixé par le défi" : `${capital.toLocaleString("fr-FR")} €`}</div></div></div>
-            {mode === "carriere" && <p className="text-xs text-ink-300">Vous commencerez votre première journée à {bank.city} le lundi 4 janvier 2027 à 7 h. Votre responsable vous attend.</p>}
+            <div className="rounded-md bg-ink-900 p-3"><div className="text-ink-400">Partie</div><div className="font-semibold">{mode === "carriere" ? `${TRACKS[track].name} chez ${bank.name}` : mode === "defi" ? CHALLENGES.find((c) => c.id === challenge)?.name : "Bac à sable"}</div><div className="text-xs text-ink-300">{mode !== "defi" && (historical ? "Histoire réelle depuis 2000 · " : "Monde imaginaire 2027 · ")}Difficulté {difficulty} · Capital {mode === "defi" ? "fixé par le défi" : `${capital.toLocaleString("fr-FR")} €`}</div></div></div>
+            {mode === "carriere" && <p className="text-xs text-ink-300">Vous commencerez votre première journée à {bank.city} {historical ? "le lundi 3 janvier 2000" : "le lundi 4 janvier 2027"} à 7 h. Votre responsable vous attend.</p>}
             {err && <div className="text-loss">{err}</div>}
           </div>}
           <div className="mt-6 flex justify-between"><Button variant="ghost" onClick={() => (step === 0 ? router.push("/") : setStep(step - 1))}>Retour</Button>{step < steps.length - 1 ? <Button data-testid="next" disabled={!canNext} onClick={() => setStep(step + 1)}>Continuer</Button> : <Button data-testid="create" variant="success" disabled={busy} onClick={create}>{busy ? "Génération du monde financier…" : "Commencer"}</Button>}</div>

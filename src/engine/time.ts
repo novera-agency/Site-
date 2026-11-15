@@ -1,8 +1,12 @@
 /**
- * Temps simulé : minutes écoulées depuis le 1er janvier 2027 00:00 (heure de Paris, sans DST).
- * Le calendrier est entièrement dérivé de ce compteur → aucune dépendance à l'horloge réelle.
+ * Temps simulé : minutes écoulées depuis le 1er janvier de l'année de départ de la partie, 00:00 (heure de Paris, sans DST).
+ * Monde fictif : 2027. Mode historique : 2000. Le calendrier est entièrement dérivé de ce compteur → aucune dépendance à l'horloge réelle.
+ * L'époque est un réglage de module : `useEpoch(s)` doit être appelé avant de manipuler une partie (fait par le moteur et les vues).
  */
-export const EPOCH_UTC = Date.UTC(2027, 0, 1, 0, 0, 0);
+export let EPOCH_YEAR = 2027;
+export let EPOCH_UTC = Date.UTC(2027, 0, 1, 0, 0, 0);
+export function setEpochYear(y: number) { if (y === EPOCH_YEAR) return; EPOCH_YEAR = y; EPOCH_UTC = Date.UTC(y, 0, 1, 0, 0, 0); }
+export function useEpoch(s: { epochYear?: number }) { setEpochYear(s.epochYear ?? 2027); }
 export const STEP_MIN = 5; // pas de simulation fixe (minutes simulées)
 export const MIN_PER_DAY = 1440;
 export const START_T = 3 * MIN_PER_DAY + 7 * 60; // lundi 4 janvier 2027, 07:00
@@ -17,7 +21,11 @@ export function minuteOfDay(t: number) { return ((t % MIN_PER_DAY) + MIN_PER_DAY
 export function weekday(t: number) { return dateOf(t).getUTCDay(); }
 export function isWeekend(t: number) { const w = weekday(t); return w === 0 || w === 6; }
 export function dayOfMonth(t: number) { return dateOf(t).getUTCDate(); }
-export function monthIndex(t: number) { const d = dateOf(t); return (d.getUTCFullYear() - 2027) * 12 + d.getUTCMonth(); }
+export function monthIndex(t: number) { const d = dateOf(t); return (d.getUTCFullYear() - EPOCH_YEAR) * 12 + d.getUTCMonth(); }
+/** Index de jour d'une date réelle (année, mois 0-11, jour) dans l'époque courante */
+export function dayOfDate(y: number, m: number, d: number) { return Math.floor((Date.UTC(y, m, d) - EPOCH_UTC) / 86400000); }
+/** Premier jour ouvré de l'année de l'époque, à 7 h */
+export function startTForEpoch() { let d = 1; while (isWeekend(d * MIN_PER_DAY)) d++; return d * MIN_PER_DAY + 7 * 60; }
 export function tOfDay(day: number, hour = 0, minute = 0) { return day * MIN_PER_DAY + hour * 60 + minute; }
 export function startOfDay(t: number) { return dayIndex(t) * MIN_PER_DAY; }
 export function yearsBetween(t1: number, t2: number) { return (t2 - t1) / (365 * MIN_PER_DAY); }
@@ -27,6 +35,11 @@ const MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", 
 export function fmtDate(t: number, withDay = true) {
   const d = dateOf(t);
   return `${withDay ? JOURS[d.getUTCDay()] + " " : ""}${d.getUTCDate()} ${MOIS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+/** Date d'une partie dont l'époque peut différer de l'époque courante (listes de sauvegardes) */
+export function fmtDateFor(t: number, epochYear = 2027, withDay = true) {
+  const prev = EPOCH_YEAR; setEpochYear(epochYear);
+  try { return fmtDate(t, withDay); } finally { setEpochYear(prev); }
 }
 export function fmtShortDate(t: number) {
   const d = dateOf(t);

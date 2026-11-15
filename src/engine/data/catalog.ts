@@ -57,7 +57,7 @@ const STOCKS: Row[] = [
   ["CURA", "Curalis Pharma", "Santé", "FR", 1250, 45000, 0.2, 10000, 0.5, 0.04, 14, 0.18, 0.65, 0.85, "Laboratoire pharmaceutique diversifié.", "Pipeline en oncologie prometteur.", ["Expiration de brevets", "Échecs cliniques"]],
   ["BIOH", "BioHelix Therapeutics", "Santé", "US", 900, 21000, 0.18, 5000, 0.0, 0.18, 28, 0.42, 1.1, 0.7, "Biotech spécialisée dans les thérapies géniques.", "Décision réglementaire clé attendue.", ["Risque binaire réglementaire"]],
   ["MEDT", "Medtrona Devices", "Santé", "US", 1300, 34000, 0.16, 15000, 0.45, 0.05, 20, 0.2, 0.75, 0.8, "Dispositifs médicaux (cardiologie, diabète).", "Croissance stable.", ["Rappels de produits"]],
-  ["ALPN", "Alpenrose Pharma", "Santé", "CH", 2200, 64000, 0.24, 20000, 0.55, 0.04, 16, 0.16, 0.6, 0.85, "Groupe pharmaceutique suisse.", "Lancements de produits en 2027.", ["Pression sur les prix"]],
+  ["ALPN", "Alpenrose Pharma", "Santé", "CH", 2200, 64000, 0.24, 20000, 0.55, 0.04, 16, 0.16, 0.6, 0.85, "Groupe pharmaceutique suisse.", "Plusieurs lancements de produits dans les deux ans.", ["Pression sur les prix"]],
   ["SAKU", "Sakura Life Sciences", "Santé", "JP", 1600, 4_000_000, 0.1, 500_000, 0.4, 0.04, 22, 0.22, 0.7, 0.7, "Pharmacie japonaise.", "Expansion américaine.", ["Endettement après acquisition"]],
   // Luxe
   ["MAIS", "Maison Valombre", "Luxe", "FR", 500, 86000, 0.2, 10000, 0.5, 0.07, 24, 0.24, 1.0, 0.95, "Premier groupe mondial du luxe (maroquinerie, mode, vins).", "Demande chinoise en reprise.", ["Ralentissement chinois", "Change"]],

@@ -248,6 +248,10 @@ export interface GameSettings {
 
 export interface GameState {
   version: number;
+  /** Année de départ du calendrier (2027 : monde fictif ; 2000 : mode historique) */
+  epochYear?: number;
+  /** Mode historique 2000 → 2025 : événements réels datés et trajectoires de marché approchées */
+  historical?: boolean;
   id: string;
   ownerId: string;
   name: string;

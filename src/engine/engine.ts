@@ -10,7 +10,7 @@ import { Rng, seedRng } from "./rng";
 import { buildCatalog } from "./data/catalog";
 import { BANK_BY_ID } from "./data/banks";
 import { LESSON_BY_ID } from "./data/learning";
-import { initMacro, dailyMacro, stepYields, centralBankDecision, releaseStatistic, scheduleCalendar, updateConsensus } from "./macro";
+import { initMacro, dailyMacro, stepYields, centralBankDecision, releaseStatistic, scheduleCalendar, updateConsensus, setRegime } from "./macro";
 import { newQuote, stepMarket, refreshDerived, realizedVol, applyShock } from "./market";
 import { initFundamentals, releaseEarnings, payDividend, dailyBonds } from "./corporate";
 import { processOrders, checkMargins, processExpiries, dailyFuturesSettlement, listFutures, sweepNegativeCash } from "./orders";
@@ -29,13 +29,16 @@ import { bondStats } from "./analytics";
 import { cashAcc, post } from "./ledger";
 import { toCents } from "./money";
 import { changeRep, gainXp, notify, pushNews, nextId, fx, logDecision } from "./core";
-import { dayIndex, minuteOfDay, MIN_PER_DAY, START_T, STEP_MIN, tOfDay, weekday, isWeekend, firstBusinessDayOfMonth, dateOf, nextBusinessDay } from "./time";
+import { histInitialPrices, initHistorical, histAdjust, histAfterHistory, histDaily, histActive, histScriptedCrisis, HIST_EPOCH } from "./historical";
+import { dayIndex, minuteOfDay, MIN_PER_DAY, START_T, STEP_MIN, tOfDay, weekday, isWeekend, firstBusinessDayOfMonth, dateOf, nextBusinessDay, EPOCH_UTC, setEpochYear, startTForEpoch, useEpoch } from "./time";
 import "./meetings";
 import { isAlly, isHostile, mondayRelations, monthlyRelations, checkRelationChanges } from "./relations";
 
 export interface NewGameOptions {
   ownerId: string; name?: string; mode: GameMode; difficulty: Difficulty; seed?: string; profile: Profile; bankId: string; track: Track;
   startingCapital: number; settings?: Partial<GameSettings>; challengeId?: string;
+  /** Mode historique : départ le 3 janvier 2000, événements réels et trajectoires approchées */
+  historical?: boolean;
 }
 
 export const CHALLENGES = [
@@ -48,16 +51,20 @@ export function createGame(o: NewGameOptions): GameState {
   const seed = o.seed || `${Date.now()}-${o.ownerId}`.slice(0, 40);
   const rngState = seedRng(seed);
   const rng = new Rng(rngState);
+  const hist = !!o.historical && o.mode !== "defi";
+  setEpochYear(hist ? HIST_EPOCH : 2027);
+  const T0 = hist ? startTForEpoch() : START_T;
   const cat = buildCatalog();
+  if (hist) histInitialPrices(T0, cat.initialPrices, cat.fxInit);
   const bank = BANK_BY_ID[o.bankId] ?? BANK_BY_ID["lutece"];
-  const startDay = dayIndex(START_T);
+  const startDay = dayIndex(T0);
   const difficulty = o.difficulty;
   const s: GameState = {
-    version: SAVE_VERSION, id: "", ownerId: o.ownerId, name: o.name || `${o.profile.firstName} ${o.profile.lastName}`, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-    mode: o.mode, difficulty, challengeId: o.challengeId, seed, rng: rngState, t: START_T, speed: 1, paused: true, pauseReason: "Bienvenue",
+    version: SAVE_VERSION, ...(hist ? { epochYear: HIST_EPOCH, historical: true } : {}), id: "", ownerId: o.ownerId, name: o.name || `${o.profile.firstName} ${o.profile.lastName}`, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    mode: o.mode, difficulty, challengeId: o.challengeId, seed, rng: rngState, t: T0, speed: 1, paused: true, pauseReason: "Bienvenue",
     settings: { minutesPerSecond: 1, autoPauseImportant: true, livingExpenses: o.mode === "carriere", allowShort: difficulty !== "debutant", aiEnabled: true, explanations: difficulty === "debutant" || difficulty === "normal", ...o.settings },
     profile: o.profile,
-    career: { track: o.track, bankId: bank.id, rank: 1, salaryAnnual: toCents(salaryFor(bank.id, 1)), hiredT: START_T, employed: o.mode === "carriere", deskLimitVaR: 0, deskMaxPosition: 0.25, objectives: [], reviews: [], warnings: 0, stress: 15, energy: 90, missionsDone: 0, missionsFailed: 0, breaches: 0, pendingOffers: [], history: [], ytdBonusPool: 0, weekStartEquity: 0, quarterStartEquity: 0, yearStartEquity: 0 },
+    career: { track: o.track, bankId: bank.id, rank: 1, salaryAnnual: toCents(salaryFor(bank.id, 1)), hiredT: T0, employed: o.mode === "carriere", deskLimitVaR: 0, deskMaxPosition: 0.25, objectives: [], reviews: [], warnings: 0, stress: 15, energy: 90, missionsDone: 0, missionsFailed: 0, breaches: 0, pendingOffers: [], history: [], ytdBonusPool: 0, weekStartEquity: 0, quarterStartEquity: 0, yearStartEquity: 0 },
     skills: { analyse: 0, marches: 0, maths: 0, macro: 0, risque: 0, client: 0, management: 0, entrepreneuriat: 0 },
     skillLog: [],
     reputation: { professionnelle: 40, commerciale: 40, clients: 45, interne: 45, fiabilite: 50, risque: 50, conformite: 60, leadership: 30 },
@@ -71,6 +78,7 @@ export function createGame(o: NewGameOptions): GameState {
   for (const b of Object.keys(s.skills) as (keyof typeof s.skills)[]) s.skills[b] = Math.round(k[o.profile.knowledge] * (o.profile.knowledge === "trader" && (b === "marches" || b === "risque") ? 1.4 : o.profile.knowledge === "entrepreneur" && b === "entrepreneuriat" ? 2 : o.profile.knowledge === "analyste" && b === "analyse" ? 1.4 : 0.6));
   // Instruments
   for (const d of cat.defs) { s.instruments[d.id] = d; s.quotes[d.id] = newQuote(cat.initialPrices[d.id] ?? 100); }
+  if (hist) initHistorical(s);
   for (const [cur, v] of Object.entries(cat.fxInit)) s.macro.fxLog[cur as Currency] = Math.log(v);
   for (const d of cat.defs) if (d.cls === "devise") s.quotes[d.id].price = Math.exp(s.macro.fxLog[d.id.slice(0, 3) as Currency] - s.macro.fxLog[d.id.slice(3) as Currency]);
   for (const z of Object.values(s.macro.zones)) s.macro.factors[`y10_0_${z.id}`] = z.y10;
@@ -89,7 +97,8 @@ export function createGame(o: NewGameOptions): GameState {
   }
   refreshDerived(s, null);
   initFundamentals(s, rng);
-  simulateHistory(s, rng, startDay, 260);
+  simulateHistory(s, rng, startDay, 260, hist ? histAdjust(s) : undefined);
+  if (hist) histAfterHistory(s);
   refreshDerived(s, null);
   for (const q of Object.values(s.quotes)) { q.prevClose = q.daily.length ? q.daily[q.daily.length - 1].c : q.price; q.dayOpen = q.dayHigh = q.dayLow = q.price; }
   listFutures(s);
@@ -131,7 +140,8 @@ export function createGame(o: NewGameOptions): GameState {
     s.settings.livingExpenses = false; s.settings.allowShort = true; s.accounts.perso.allowShort = true;
   }
   if (o.mode !== "carriere") { s.paused = false; s.pauseReason = undefined; }
-  pushNews(s, { category: "marches", title: "Ouverture d'une nouvelle année boursière", body: `Les stratégistes anticipent une année de ${s.macro.regime === "expansion" ? "croissance modérée" : "transition"}. Inflation américaine à ${s.macro.zones.US.inflation.toFixed(1)} %, taux directeur à ${s.macro.zones.US.policyRate.toFixed(2)} %. Simulation — données fictives.`, impact: "faible", tickers: [], zones: ["US", "EZ"], sentiment: 0.1 });
+  if (hist) pushNews(s, { category: "marches", title: "3 janvier 2000 : les marchés ouvrent le nouveau millénaire au sommet", body: "Mode historique : vous vivez les marchés de 2000 à 2025 avec les événements réels (bulle Internet, 11 septembre, crise de 2008, crise de l'euro, Brexit, Covid, inflation 2022…). Les grandes trajectoires de marché sont reconstituées de façon approchée ; les sociétés cotées et les banques du jeu restent fictives. Monnaie virtuelle.", impact: "moyen", tickers: [], zones: ["US", "EZ"], sentiment: 0.3 });
+  else pushNews(s, { category: "marches", title: "Ouverture d'une nouvelle année boursière", body: `Les stratégistes anticipent une année de ${s.macro.regime === "expansion" ? "croissance modérée" : "transition"}. Inflation américaine à ${s.macro.zones.US.inflation.toFixed(1)} %, taux directeur à ${s.macro.zones.US.policyRate.toFixed(2)} %. Simulation — données fictives.`, impact: "faible", tickers: [], zones: ["US", "EZ"], sentiment: 0.1 });
   return s;
 }
 
@@ -238,11 +248,13 @@ function newDay(s: GameState, rng: Rng) {
   const day = dayIndex(s.t);
   const weekend = isWeekend(s.t);
   s.stats.daysPlayed++;
+  if (s.historical) histDaily(s, setRegime);
   if (!weekend) {
     dailyMacro(s, rng);
     dailyBonds(s, rng);
     dailyCompetitors(s, rng);
-    maybeTriggerCrises(s, rng);
+    if (s.historical && histActive(s)) { const hc = histScriptedCrisis(s); if (hc) startCrisis(s, hc[1], rng, hc[2]); }
+    else maybeTriggerCrises(s, rng);
     if (!s.flags["vacationUntil"] || s.t >= (s.flags["vacationUntil"] as number)) { delete s.flags["vacationUntil"]; maybeCareerEvent(s, rng); planDay(s, rng); }
     if (weekday(s.t) === 1) { assignWeeklyMissions(s, rng); mondayRelations(s); }
     checkRelationChanges(s);
@@ -264,7 +276,7 @@ function newDay(s: GameState, rng: Rng) {
     monthlyRelations(s);
   }
   const date = dateOf(s.t);
-  if (!weekend && date.getUTCMonth() === 11 && day === nextBusinessDay(Math.floor((Date.UTC(date.getUTCFullYear(), 11, 15) - Date.UTC(2027, 0, 1)) / 86400000))) annualReview(s);
+  if (!weekend && date.getUTCMonth() === 11 && day === nextBusinessDay(Math.floor((Date.UTC(date.getUTCFullYear(), 11, 15) - EPOCH_UTC) / 86400000))) annualReview(s);
   s.career.pendingOffers = s.career.pendingOffers.filter((o) => o.expiresT > s.t);
   s.lastDay = day;
 }
@@ -345,6 +357,7 @@ export function step(s: GameState) {
 
 /** Avance la simulation de `minutes` minutes simulées (s'arrête si une pause automatique survient) */
 export function advance(s: GameState, minutes: number) {
+  useEpoch(s);
   const steps = Math.floor(minutes / STEP_MIN);
   let n = 0;
   for (; n < steps; n++) {
@@ -356,6 +369,7 @@ export function advance(s: GameState, minutes: number) {
 }
 /** Avance jusqu'à une heure donnée (ex. « passer au lendemain 7 h 30 ») en respectant les pauses */
 export function advanceTo(s: GameState, targetT: number, maxSteps = 4000) {
+  useEpoch(s);
   let n = 0;
   const wasPaused = s.paused;
   s.paused = false;
@@ -381,6 +395,7 @@ export function completeLesson(s: GameState, lessonId: string, answer: number) {
 /** Migration des sauvegardes entre versions */
 export function migrate(raw: GameState): GameState {
   const s = raw as GameState & { version: number };
+  useEpoch(s);
   if (s.version < 2) {
     for (const q of Object.values(s.quotes)) { q.pending ??= 0; q.rv ??= 0; q.lastBarDay ??= q.daily.length ? Math.floor(q.daily[q.daily.length - 1].t / MIN_PER_DAY) : -1; }
     s.alerts ??= []; s.impulses ??= []; s.ledgerArchive ??= { count: 0, checksum: {} };

@@ -3,9 +3,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { Button, Card, Empty, Badge } from "./ui";
-import { fmtDateTime } from "@/engine/time";
+import { fmtDateFor } from "@/engine/time";
 
-interface Meta { gameId: string; name: string; mode: string; bank: string; t: number; updatedAt: string; slot?: number; difficulty: string; rank?: string; }
+interface Meta { gameId: string; name: string; mode: string; bank: string; t: number; updatedAt: string; slot?: number; difficulty: string; epochYear?: number; rank?: string; }
 export function SavesManager({ currentGameId }: { currentGameId?: string | null }) {
   const router = useRouter();
   const [d, setD] = useState<{ games: Meta[]; slots: Meta[] } | null>(null);
@@ -21,12 +21,12 @@ export function SavesManager({ currentGameId }: { currentGameId?: string | null 
     {msg && <div className="rounded-md bg-ink-800 px-3 py-2 text-sm">{msg}</div>}
     <Card title="Parties (sauvegarde automatique)" right={process.env.NEXT_PUBLIC_STATIC ? "Sauvegarde automatique dans ce navigateur (IndexedDB)" : "Sauvegarde automatique toutes les ~20 s de jeu actif"}>
       {d.games.length === 0 ? <Empty>Aucune partie.</Empty> : <div className="space-y-2">{d.games.map((g) => <div key={g.gameId} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-ink-900 px-3 py-2">
-        <div><div className="font-medium">{g.name} {g.gameId === currentGameId && <Badge tone="info">en cours</Badge>}</div><div className="text-xs text-ink-400">{g.mode} · {g.difficulty} · {g.rank} · jeu : {fmtDateTime(g.t)} · {new Date(g.updatedAt).toLocaleString("fr-FR")}</div></div>
+        <div><div className="font-medium">{g.name} {g.gameId === currentGameId && <Badge tone="info">en cours</Badge>}</div><div className="text-xs text-ink-400">{g.mode} · {g.difficulty} · {g.rank} · jeu : {fmtDateFor(g.t, g.epochYear, false)} · {new Date(g.updatedAt).toLocaleString("fr-FR")}</div></div>
         <div className="flex flex-wrap gap-1">{g.gameId !== currentGameId && <Button size="sm" data-testid="open-save" onClick={() => open(g.gameId)}>Reprendre</Button>}{[1, 2, 3].map((n) => <Button key={n} size="sm" variant="ghost" onClick={() => post({ action: "save_slot", gameId: g.gameId, slot: n })}>→ Empl. {n}</Button>)}<Button size="sm" variant="outline" onClick={() => exportGame(g.gameId)}>Exporter</Button>{g.gameId !== currentGameId && <Button size="sm" variant="danger" onClick={() => { if (confirm("Supprimer définitivement cette partie ?")) post({ action: "delete", gameId: g.gameId }); }}>Supprimer</Button>}</div>
       </div>)}</div>}
     </Card>
     <Card title="Emplacements manuels">
-      <div className="grid gap-2 md:grid-cols-3">{[1, 2, 3].map((n) => { const s = d.slots.find((x) => x.slot === n); return <div key={n} className="rounded-md border border-ink-700 bg-ink-900 p-3"><div className="text-xs uppercase tracking-wider text-ink-400">Emplacement {n}</div>{s ? <><div className="font-medium">{s.name}</div><div className="text-xs text-ink-400">Jeu : {fmtDateTime(s.t)}</div><Button size="sm" className="mt-2" onClick={async () => { const r = await post({ action: "load_slot", slot: n }); if (r.ok && r.gameId) open(r.gameId); }}>Charger</Button></> : <div className="text-sm text-ink-500">Vide</div>}</div>; })}</div>
+      <div className="grid gap-2 md:grid-cols-3">{[1, 2, 3].map((n) => { const s = d.slots.find((x) => x.slot === n); return <div key={n} className="rounded-md border border-ink-700 bg-ink-900 p-3"><div className="text-xs uppercase tracking-wider text-ink-400">Emplacement {n}</div>{s ? <><div className="font-medium">{s.name}</div><div className="text-xs text-ink-400">Jeu : {fmtDateFor(s.t, s.epochYear, false)}</div><Button size="sm" className="mt-2" onClick={async () => { const r = await post({ action: "load_slot", slot: n }); if (r.ok && r.gameId) open(r.gameId); }}>Charger</Button></> : <div className="text-sm text-ink-500">Vide</div>}</div>; })}</div>
     </Card>
     <Card title="Importer une sauvegarde"><input type="file" accept="application/json" onChange={(e) => e.target.files?.[0] && importGame(e.target.files[0])} className="text-sm" /><p className="mt-1 text-xs text-ink-400">Les sauvegardes sont versionnées et migrées automatiquement vers la version courante du jeu.</p></Card>
   </div>;

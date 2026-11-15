@@ -42,6 +42,10 @@ src/engine/        Moteur pur, déterministe, sans dépendance au navigateur ni 
   company.ts       Entreprise du joueur, états financiers
   agenda.ts        Cycle quotidien (agenda, rendez-vous)
   history.ts       Pré-historique de marché (≈ 1 an) au même modèle
+  historical.ts    Mode historique 2000 → 2025 : guidage des cours vers des trajectoires approchées
+                   (avance de la cible + rappel, correction collective par zone pour que l'indice suive),
+                   décisions réelles des banques centrales, régimes et événements datés, réémission des obligations
+  data/history2000.ts  Repères de marché approchés, taux directeurs, macro annuelle, chronologie des événements
   engine.ts        Orchestration, création de partie, tutoriel, migrations de sauvegarde
 src/server/        Autorité serveur : sessions (auth.ts), persistance (store.ts), actions validées (actions.ts),
                    vues de lecture (views.ts), IA (ai.ts), utilitaires HTTP (http.ts)
@@ -70,3 +74,8 @@ Les modules communiquent par l'état partagé typé et par des événements mét
 ## Performance
 
 Un pas coûte ≈ 0,2 ms pour 117 instruments ; x100 = 20 pas/s. Les barres intrajournalières sont limitées à 300 par instrument, les journalières à 520 ; le grand livre vivant à 4 000 écritures (les plus anciennes sont archivées avec leur somme de contrôle, les soldes restent exacts). Les sauvegardes compactent les séries de prix (≈ 3 Mo en début de partie).
+
+## Époque d'une partie
+`time.ts` exprime le temps en minutes depuis le 1er janvier de l'année de départ (`epochYear` : 2027 par défaut, 2000 en mode historique).
+L'époque est un réglage de module : `useEpoch(s)` est appelé par `advance`, `applyAction`, `snapshot`, `buildView` et à la désérialisation ;
+le navigateur la reçoit avec chaque instantané (`epochYear`). Les listes de sauvegardes formatent les dates avec `fmtDateFor(t, epochYear)`.

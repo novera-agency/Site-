@@ -2,7 +2,7 @@
 import type { AgendaItem, GameState } from "./types";
 import { Rng } from "./rng";
 import { nextId, notify, pause, changeRep, changeTrust } from "./core";
-import { dayIndex, isWeekend, MIN_PER_DAY, tOfDay } from "./time";
+import { dayIndex, isWeekend, MIN_PER_DAY, tOfDay, EPOCH_UTC } from "./time";
 
 export function addAgendaItem(s: GameState, item: Omit<AgendaItem, "id" | "status">) {
   const it: AgendaItem = { ...item, id: nextId(s, "ag"), status: "prevu" };
@@ -30,7 +30,7 @@ export function planDay(s: GameState, rng: Rng) {
     const tpl = pickClientTemplate(s, c.id, rng);
     addAgendaItem(s, { t: tOfDay(day, rng.int(10, 16), rng.pick([0, 15, 30, 45])), durationMin: 20, title: `Appel client — ${c.name}`, kind: "appel", meetingTemplate: tpl, params: { client: c.id } });
   }
-  const wd = new Date(Date.UTC(2027, 0, 1) + day * 86400000).getUTCDay();
+  const wd = new Date(EPOCH_UTC + day * 86400000).getUTCDay();
   if (wd === 5) addAgendaItem(s, { t: tOfDay(day, 17, 0), durationMin: 45, title: "Comité des risques hebdomadaire", kind: "reunion", meetingTemplate: "comite_risques" });
   if (wd === 3 && rng.chance(0.6)) addAgendaItem(s, { t: tOfDay(day, 11, 0), durationMin: 60, title: "Comité d'investissement", kind: "reunion", meetingTemplate: "comite_investissement" });
   addAgendaItem(s, { t: tOfDay(day, 18, 0), durationMin: 15, title: "Bilan de fin de journée", kind: "personnel" });

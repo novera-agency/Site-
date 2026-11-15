@@ -27,3 +27,5 @@ Voir `PROGRESS.md` (section « Vérifications »).
 Pour tester l'édition navigateur : `BASE_PATH=/Site- npm run build:static`, servir `out/` sous `/Site-/`, puis `E2E_URL=http://localhost:8080 E2E_BASE=/Site- npx playwright test`.
 
 | `tests/appel.test.ts` | Appel client parfait (montant investi), fautes successives → le client raccroche, messagerie → rappel planifié sans objectif ni pénalité. |
+| `tests/historique.test.ts` | Mode historique : départ le 3 janvier 2000 (taux Fed 5,5 %, BCE 3 %, euro ≈ 1 $, or ≈ 288 $, cryptoactifs pas encore créés, historique 1999 reconstitué) ; 140 jours simulés : hausse réelle de la Fed du 16 mai 2000, krach du Nasdaq publié, indice américain et Brent proches de leurs trajectoires, comptabilité équilibrée ; la sauvegarde conserve l'époque et une partie fictive reste en 2027. |
+| `tests/mission-terminal.test.ts` | Progression des missions recalculée après chaque action ; « premier ordre » non validé par les ordres automatiques. |

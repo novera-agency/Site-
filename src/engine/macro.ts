@@ -6,8 +6,9 @@ import type { CalendarEvent, GameState, MacroState, RegimeId, Zone, ZoneId } fro
 import { Rng } from "./rng";
 import { REGIMES, TRANSITIONS } from "./regimes";
 import { applyShock, shockFx } from "./market";
-import { isSessionOpen, stepYearFraction, dayIndex, nextBusinessDay, fmtDate } from "./time";
+import { isSessionOpen, stepYearFraction, dayIndex, nextBusinessDay, fmtDate, EPOCH_UTC, dayOfDate } from "./time";
 import { notify, pushNews, pause, ZONE_NAMES, clamp, nextId } from "./core";
+import { histActive, histCbDecision, y10Target, steer } from "./historical";
 
 const POTENTIAL: Record<ZoneId, number> = { US: 2.0, EZ: 1.2, UK: 1.3, JP: 0.8, CN: 4.5, EM: 3.8 };
 const NEUTRAL_REAL: Record<ZoneId, number> = { US: 0.8, EZ: 0.2, UK: 0.6, JP: -0.6, CN: 0.5, EM: 1.5 };
@@ -42,14 +43,17 @@ export function stepYields(s: GameState, rng: Rng): Partial<Record<ZoneId, numbe
     if (!isSessionOpen(ses, s.t)) continue;
     const dt = stepYearFraction(ses), sq = Math.sqrt(dt);
     const exp2 = expectedPolicy(z);
-    const t10 = 0.45 * exp2 + 0.55 * (NEUTRAL_REAL[z.id] + 1.2 + z.inflationExp) + termPremium(s, z);
-    const t30 = t10 + 0.35 + z.debt / 400;
+    const hist = histActive(s);
+    const t10 = hist ? y10Target(z.id, s.t) : 0.45 * exp2 + 0.55 * (NEUTRAL_REAL[z.id] + 1.2 + z.inflationExp) + termPremium(s, z);
+    const t30 = t10 + (hist ? 0.4 : 0.35 + z.debt / 400);
     const flight = s.macro.riskAversion > 0.7 && (z.id === "US" || z.id === "EZ") ? -0.6 : 0;
     const dz = rng.normal();
-    const d2 = 1.5 * (exp2 - z.y2) * dt + 0.9 * reg.volMult ** 0.5 * sq * (0.7 * dz + 0.71 * rng.normal());
-    const d10 = 0.9 * (t10 + flight - z.y10) * dt + 0.8 * reg.volMult ** 0.5 * sq * dz + (s.macro.factors[`ypend_${z.id}`] ?? 0) * 0.3;
+    const d2 = (histActive(s) ? 6 * (z.policyRate + 0.15 * (taylor(z) - z.policyRate) - z.y2) : 1.5 * (exp2 - z.y2)) * dt + 0.9 * reg.volMult ** 0.5 * sq * (0.7 * dz + 0.71 * rng.normal());
+    const d10 = hist
+      ? steer(s, `y10_${z.id}`, t10, z.y10, 10, dt) + 0.6 * reg.volMult ** 0.5 * sq * dz + (s.macro.factors[`ypend_${z.id}`] ?? 0) * 0.3
+      : 0.9 * (t10 + flight - z.y10) * dt + 0.8 * reg.volMult ** 0.5 * sq * dz + (s.macro.factors[`ypend_${z.id}`] ?? 0) * 0.3;
     s.macro.factors[`ypend_${z.id}`] = (s.macro.factors[`ypend_${z.id}`] ?? 0) * 0.7;
-    const d30 = 0.6 * (t30 - z.y30) * dt + 0.7 * sq * dz;
+    const d30 = hist ? d10 + 4 * (t30 - z.y30) * dt : 0.6 * (t30 - z.y30) * dt + 0.7 * sq * dz;
     z.y2 += d2; z.y10 += d10; z.y30 += d30;
     out[z.id] = d10;
   }
@@ -100,6 +104,7 @@ export function dailyMacro(s: GameState, rng: Rng) {
 }
 
 function regimeTransition(s: GameState, rng: Rng) {
+  if (histActive(s)) return; // mode historique : les régimes suivent la chronologie réelle
   const m = s.macro;
   const day = dayIndex(s.t);
   if (day - m.regimeSinceDay < 8) return;
@@ -135,6 +140,7 @@ export function setRegime(s: GameState, r: RegimeId, cause?: string) {
 
 /** Décision de politique monétaire */
 export function centralBankDecision(s: GameState, zoneId: ZoneId, rng: Rng, consensus: number) {
+  if (histActive(s)) { const h = histCbDecision(s, zoneId); if (h) return h; }
   const z = s.macro.zones[zoneId];
   const tgt = taylor(z) - (s.macro.riskAversion > 0.8 ? 1.5 : 0) - (s.macro.liquidity < 0.6 ? 1 : 0);
   const diff = tgt - z.policyRate;
@@ -217,7 +223,7 @@ export function releaseStatistic(s: GameState, ev: CalendarEvent, rng: Rng) {
 export function scheduleCalendar(s: GameState, upToDay: number) {
   const startDay = (s.flags["calendarUntil"] as number | undefined) ?? dayIndex(s.t) - 1;
   for (let d = startDay + 1; d <= upToDay; d++) {
-    const date = new Date(Date.UTC(2027, 0, 1) + d * 86400000);
+    const date = new Date(EPOCH_UTC + d * 86400000);
     const dom = date.getUTCDate(), wd = date.getUTCDay();
     if (wd === 0 || wd === 6) continue;
     const zonesStat: ZoneId[] = ["US", "EZ", "UK", "JP", "CN"];
@@ -247,7 +253,7 @@ export function updateConsensus(s: GameState) {
     if (ev.done || ev.day > today + 2) continue;
     const z = ev.zone ? s.macro.zones[ev.zone] : undefined;
     if (!z) continue;
-    if (ev.kind === "banque_centrale") { const c = cbConsensus(z); ev.consensus = String(c); }
+    if (ev.kind === "banque_centrale") { if (histActive(s)) ev.consensus = ""; else { const c = cbConsensus(z); ev.consensus = String(c); } }
     else if (ev.ref?.startsWith("CPI")) ev.consensus = r1(z.inflation - 0.05 * (z.inflation - z.inflationExp)).toFixed(1);
     else if (ev.ref?.startsWith("UNEMP")) ev.consensus = r1(z.unemployment).toFixed(1);
     else if (ev.ref?.startsWith("GDP")) ev.consensus = r1(z.growth * 0.8 + POTENTIAL[z.id] * 0.2).toFixed(1);

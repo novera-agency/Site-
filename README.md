@@ -1,7 +1,11 @@
 # FINANCIAL EMPIRE
 
 Simulateur de carrière dans la finance de marché, entièrement en français.
-**Simulation — monnaie virtuelle — aucune transaction réelle.** Toutes les sociétés, banques, personnes, cotations et cryptoactifs sont fictifs. L'application n'est pas une plateforme de courtage.
+**Simulation — monnaie virtuelle — aucune transaction réelle.** Toutes les sociétés, banques, personnes et cryptoactifs du jeu sont fictifs. L'application n'est pas une plateforme de courtage.
+
+Deux époques au choix :
+- **2000 → 2025, l'histoire réelle** (par défaut) : départ le 3 janvier 2000. Les vrais événements sont publiés à leur date (bulle Internet, 11 septembre, Enron, guerre d'Irak, subprimes, Lehman Brothers, crise de l'euro, Fukushima, Brexit, élections françaises et américaines, Covid, guerre en Ukraine, inflation 2022, SVB, droits de douane 2025…). Les banques centrales appliquent leurs décisions réelles. Les indices, matières premières, changes et taux suivent leurs trajectoires réelles, **reconstituées de façon approchée** (repères de fin d'année et points de retournement, voir `src/engine/data/history2000.ts`), avec la volatilité du modèle par-dessus : ce ne sont pas des cours officiels. À partir de 2026, le marché redevient simulé.
+- **2027, monde imaginaire** : marchés, crises et événements entièrement simulés.
 
 ## Démarrage
 

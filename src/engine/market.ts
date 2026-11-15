@@ -7,9 +7,10 @@
 import type { Bar, Currency, GameState, InstrumentDef, InstrumentState, ZoneId } from "./types";
 import { Rng } from "./rng";
 import { REGIMES, EQUITY_DURATION } from "./regimes";
-import { isSessionOpen, stepYearFraction, dayIndex, MIN_PER_DAY, STEP_MIN, SESSIONS, type SessionId, minuteOfDay, isWeekend } from "./time";
+import { isSessionOpen, stepYearFraction, dayIndex, MIN_PER_DAY, STEP_MIN, SESSIONS, type SessionId, minuteOfDay, isWeekend, EPOCH_UTC } from "./time";
 import { bondPriceFromYield, zoneYield, blackScholes, modelIV, futurePrice } from "./pricing";
 import { fx, multiplier, toEur } from "./core";
+import { histActive, targetLog, steer, fxLogAt, spreadTarget } from "./historical";
 
 export const CUR_ZONE: Record<Currency, ZoneId> = { EUR: "EZ", USD: "US", GBP: "UK", JPY: "JP", CHF: "EZ", CNY: "CN", CAD: "US", AUD: "EM" };
 const FX_VOL: Record<Currency, number> = { USD: 0, EUR: 0.075, GBP: 0.085, JPY: 0.1, CHF: 0.07, CAD: 0.065, AUD: 0.1, CNY: 0.035 };
@@ -141,6 +142,7 @@ export function fairValue(s: GameState, d: InstrumentDef) {
 /** Avance le marché d'un pas de 5 minutes */
 export function stepMarket(s: GameState, rng: Rng, dyByZone: Partial<Record<ZoneId, number>>) {
   const t = s.t;
+  const hist = histActive(s);
   const reg = REGIMES[s.macro.regime];
   const zG = rng.normal();
   const open: Record<SessionId, boolean> = { EU: isSessionOpen("EU", t), US: isSessionOpen("US", t), ASIA: isSessionOpen("ASIA", t), FX: isSessionOpen("FX", t), CRYPTO: isSessionOpen("CRYPTO", t), COMMO: isSessionOpen("COMMO", t) };
@@ -151,6 +153,18 @@ export function stepMarket(s: GameState, rng: Rng, dyByZone: Partial<Record<Zone
     for (const sec of SECTORS) secZ[sec] = rng.normal();
   }
   const sigM = 0.15 * reg.volMult, sigS = 0.1 * reg.volMult;
+  // Mode historique : écart (log) entre l'indice de chaque zone et sa trajectoire cible, corrigé collectivement
+  const zoneGap: Partial<Record<ZoneId, number>> = {};
+  if (hist) {
+    const sp: Record<string, number> = {}, st: Record<string, number> = {};
+    for (const d of Object.values(s.instruments)) {
+      if (d.cls !== "action" || s.quotes[d.id].defaulted) continue;
+      const L = targetLog(s, d.id, t); if (L === null) continue;
+      const w = d.shares ?? 1;
+      sp[d.zone] = (sp[d.zone] ?? 0) + w * s.quotes[d.id].price; st[d.zone] = (st[d.zone] ?? 0) + w * Math.exp(L);
+    }
+    for (const z of Object.keys(sp) as ZoneId[]) zoneGap[z] = Math.log(sp[z] / st[z]);
+  }
   const rho = Math.sqrt(reg.corr);
   for (const d of Object.values(s.instruments)) {
     if (d.cls !== "action") continue;
@@ -169,7 +183,10 @@ export function stepMarket(s: GameState, rng: Rng, dyByZone: Partial<Record<Zone
     const mr = (s.macro.regime === "bulle" ? 0.1 : 0.35) * (Math.log(fair) - Math.log(q.price));
     const dur = EQUITY_DURATION[d.sector!] ?? 8;
     const rateEff = -(dur * (dyByZone[d.zone] ?? 0)) / 100;
-    const ret = (drift + mr - 0.5 * volEff * volEff) * dt + d.beta * fZone + (d.sectorBeta ?? 0.8) * fSec + idio * sq * rng.normal() + rateEff + releasePending(q);
+    const L = hist ? targetLog(s, d.id, t) : null;
+    const ret = L !== null && L !== undefined
+      ? steer(s, d.id, L, Math.log(q.price), 6, dt) - 25 * (zoneGap[d.zone] ?? 0) * dt - 0.5 * volEff * volEff * dt + d.beta * fZone + (d.sectorBeta ?? 0.8) * fSec + idio * sq * rng.normal() + releasePending(q)
+      : (drift + mr - 0.5 * volEff * volEff) * dt + d.beta * fZone + (d.sectorBeta ?? 0.8) * fSec + idio * sq * rng.normal() + rateEff + releasePending(q);
     q.price = Math.max(0.01, q.price * Math.exp(ret));
     const vol = (d.shares! * 1e6 * 0.004 * d.liquidity * STEP_MIN) / (SESSIONS[d.session].close - SESSIONS[d.session].open) * (0.5 + Math.abs(ret) / (volEff * sq + 1e-9));
     updateBars(q, t, q.price, Math.round(vol), false);
@@ -187,7 +204,8 @@ export function stepMarket(s: GameState, rng: Rng, dyByZone: Partial<Record<Zone
       const key = `fxpend_${cur}`;
       const pend = s.macro.factors[key] ?? 0;
       const rel = pend * 0.3; s.macro.factors[key] = pend - rel;
-      s.macro.fxLog[cur] += (carry + haven) * dt + FX_VOL[cur] * reg.volMult ** 0.5 * sq * rng.normal() + rel;
+      if (hist) s.macro.fxLog[cur] += steer(s, `fx_${cur}`, fxLogAt(cur, t / MIN_PER_DAY + EPOCH_UTC / 86400000), s.macro.fxLog[cur], 10, dt) + FX_VOL[cur] * 0.7 * reg.volMult ** 0.5 * sq * rng.normal() + rel;
+      else s.macro.fxLog[cur] += (carry + haven) * dt + FX_VOL[cur] * reg.volMult ** 0.5 * sq * rng.normal() + rel;
     }
     for (const d of Object.values(s.instruments)) {
       if (d.cls !== "devise") continue;
@@ -211,7 +229,10 @@ export function stepMarket(s: GameState, rng: Rng, dyByZone: Partial<Record<Zone
       const z = oil ? 0.9 * zC + 0.436 * rng.normal() : rng.normal();
       const geo = isEnergy ? s.macro.geopolitics * 0.15 + s.macro.oilSupplyShock * 0.4 : d.id === "GOLD" ? (s.macro.riskAversion - 0.35) * 0.25 + (s.macro.zones.US.inflation - 2.5) * 0.02 : 0;
       const growthDrift = (d.beta * (s.macro.zones.CN.growth + s.macro.zones.US.growth - 6)) * 0.02;
-      const ret = (geo + growthDrift - 0.5 * volEff * volEff + (d.meanRevert ?? 0) * (Math.log(anchor) - Math.log(q.price))) * dt + d.beta * 0.12 * reg.volMult * sq * zG + volEff * sq * z + releasePending(q);
+      const L = hist ? targetLog(s, d.id, t) : null;
+      const ret = L !== null && L !== undefined
+        ? steer(s, d.id, L, Math.log(q.price), 6, dt) - 0.5 * volEff * volEff * dt + 0.8 * volEff * sq * z + releasePending(q)
+        : (geo + growthDrift - 0.5 * volEff * volEff + (d.meanRevert ?? 0) * (Math.log(anchor) - Math.log(q.price))) * dt + d.beta * 0.12 * reg.volMult * sq * zG + volEff * sq * z + releasePending(q);
       q.price = Math.max(0.01, q.price * Math.exp(ret));
       updateBars(q, t, q.price, Math.round(advUnits(s, d.id) / 168), false);
     }
@@ -224,7 +245,15 @@ export function stepMarket(s: GameState, rng: Rng, dyByZone: Partial<Record<Zone
     for (const d of Object.values(s.instruments)) {
       if (d.cls !== "crypto") continue;
       const q = s.quotes[d.id];
+      if (q.halted) continue;
       const volEff = d.vol * (0.8 + 0.2 * reg.volMult) * (1 + 0.5 * q.ivBump);
+      const L = hist ? targetLog(s, d.id, t) : null;
+      if (L !== null && L !== undefined) {
+        const r = steer(s, d.id, L, Math.log(q.price), 6, dt) - 0.5 * volEff * volEff * dt + 0.7 * volEff * sq * (0.75 * zK + 0.66 * rng.normal()) + releasePending(q);
+        q.price = Math.max(1e-6, q.price * Math.exp(r));
+        updateBars(q, t, q.price, Math.round(advUnits(s, d.id) / 288), false);
+        continue;
+      }
       const ret = (reg.cryptoDrift - 0.5 * volEff * volEff - 1.2 * (s.macro.riskAversion - 0.35)) * dt + volEff * sq * (0.75 * zK + 0.66 * rng.normal()) + 0.3 * zG * sq * 0.5 + jump * (d.vol / 0.7) + releasePending(q);
       q.price = Math.max(1e-6, q.price * Math.exp(ret));
       updateBars(q, t, q.price, Math.round(advUnits(s, d.id) / 288), false);
@@ -308,7 +337,8 @@ export function bondYield(s: GameState, d: InstrumentDef, day: number) {
   const ra = s.macro.riskAversion;
   const hy = b.rating.startsWith("B") && !b.rating.startsWith("BBB");
   const mult = Math.max(0.4, 1 + (hy ? 3 : 1.5) * (ra - 0.3)) * (1 + 10 * stress * stress);
-  const spread = (b.spreadBps * mult + (s.macro.factors[`spread_${d.id}`] ?? 0)) / 100;
+  const hs = histActive(s) ? spreadTarget(d.id, day * MIN_PER_DAY) : null;
+  const spread = hs !== null ? hs / 100 : (b.spreadBps * mult + (s.macro.factors[`spread_${d.id}`] ?? 0)) / 100;
   return (base + spread) / 100;
 }
 export function bondPrice(s: GameState, d: InstrumentDef, day: number) {

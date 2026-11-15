@@ -20,7 +20,7 @@ import { relationStatus } from "@/engine/relations";
 import { BANKS, BANK_BY_ID, TRACKS, BASE_SALARY } from "@/engine/data/banks";
 import { LESSONS } from "@/engine/data/learning";
 import { skillLevel, SKILL_LEVELS, SKILL_NAMES, REP_NAMES, avgRep, toEur, multiplier } from "@/engine/core";
-import { dayIndex, MIN_PER_DAY, fmtDate } from "@/engine/time";
+import { dayIndex, MIN_PER_DAY, fmtDate, useEpoch } from "@/engine/time";
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
 const px = (x: number) => (Math.abs(x) >= 1000 ? Math.round(x * 100) / 100 : Number(x.toPrecision(6)));
@@ -60,6 +60,7 @@ export function nextSteps(s: GameState) {
 
 /** Instantané léger renvoyé à chaque tick */
 export function snapshot(s: GameState, aiAvailable = false) {
+  useEpoch(s);
   const quotes: Record<string, [number, number]> = {};
   for (const [id, d] of Object.entries(s.instruments)) {
     if (d.option && !s.watchlist.includes(id) && !Object.values(s.accounts).some((a) => a.positions[id])) continue;
@@ -69,7 +70,7 @@ export function snapshot(s: GameState, aiAvailable = false) {
   const pend = typeof s.flags["pendingMeeting"] === "string" ? JSON.parse(s.flags["pendingMeeting"] as string) as { template: string; title: string } : null;
   const nextAgenda = s.agenda.find((a) => a.status === "prevu" && a.t >= s.t);
   return {
-    id: s.id, t: s.t, speed: s.speed, paused: s.paused, pauseReason: s.pauseReason, mode: s.mode, difficulty: s.difficulty, regime: s.macro.regime, regimeLabel: REGIMES[s.macro.regime].label,
+    id: s.id, t: s.t, epochYear: s.epochYear ?? 2027, historical: !!s.historical, speed: s.speed, paused: s.paused, pauseReason: s.pauseReason, mode: s.mode, difficulty: s.difficulty, regime: s.macro.regime, regimeLabel: REGIMES[s.macro.regime].label,
     minutesPerSecond: s.settings.minutesPerSecond,
     quotes, sessions: marketStatus(s),
     wealth: r2(wealth(s)), perso: r2(accountEquity(s, "perso")), persoCash: r2(cashEur(s, "perso")), desk: s.accounts.desk && s.career.employed ? r2(accountEquity(s, "desk")) : null,
@@ -94,6 +95,7 @@ function accountSummary(s: GameState, id: string) {
 }
 
 export function buildView(s: GameState, name: string, p: Record<string, string>): unknown {
+  useEpoch(s);
   switch (name) {
     case "dashboard": {
       const day = dayIndex(s.t);

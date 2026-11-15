@@ -1,7 +1,7 @@
 /** Mutations validées (Zod) : toute modification de l'état passe par ici, côté serveur. */
 import { z } from "zod";
 import type { GameState } from "@/engine/types";
-import { SPEEDS, MIN_PER_DAY, tOfDay, dayIndex, nextBusinessDay, minuteOfDay, isWeekend } from "@/engine/time";
+import { SPEEDS, MIN_PER_DAY, tOfDay, dayIndex, nextBusinessDay, minuteOfDay, isWeekend, useEpoch } from "@/engine/time";
 import { placeOrder, cancelOrder, convertCash } from "@/engine/orders";
 import { startMeeting, answerMeeting, explainTerm } from "@/engine/meetingEngine";
 import { answerMission, checkMissions } from "@/engine/missions";
@@ -50,6 +50,7 @@ export type ActionResult = { ok: boolean; message?: string; error?: string; data
 
 /** Applique une action puis met à jour tout de suite la progression des missions (même en pause) */
 export function applyAction(s: GameState, a: Action): ActionResult {
+  useEpoch(s);
   const r = applyActionInner(s, a);
   if (r.ok) checkMissions(s);
   return r;

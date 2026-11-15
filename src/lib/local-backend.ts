@@ -26,8 +26,8 @@ const get = <T>(k: string) => idb<T | undefined>("readonly", (s) => s.get(k));
 const del = (k: string) => idb<void>("readwrite", (s) => s.delete(k));
 const keys = () => idb<string[]>("readonly", (s) => s.getAllKeys());
 
-interface Meta { gameId: string; name: string; mode: string; bank: string; t: number; updatedAt: string; slot?: number; difficulty: string; rank?: string; }
-const metaOf = (s: GameState, slot?: number): Meta => ({ gameId: s.id, name: s.name, mode: s.mode, bank: s.career.bankId, t: s.t, updatedAt: s.updatedAt, slot, difficulty: s.difficulty, rank: s.career.employed ? `${s.career.track} · rang ${s.career.rank}` : s.company ? s.company.name : "—" });
+interface Meta { gameId: string; name: string; mode: string; bank: string; t: number; updatedAt: string; slot?: number; difficulty: string; epochYear?: number; rank?: string; }
+const metaOf = (s: GameState, slot?: number): Meta => ({ gameId: s.id, name: s.name, mode: s.mode, bank: s.career.bankId, t: s.t, epochYear: s.epochYear, updatedAt: s.updatedAt, slot, difficulty: s.difficulty, rank: s.career.employed ? `${s.career.track} · rang ${s.career.rank}` : s.company ? s.company.name : "—" });
 
 interface Runtime { state: GameState; lastTickReal: number; accMinutes: number; dirty: boolean; lastSaved: number; }
 const games = new Map<string, Runtime>();
@@ -76,7 +76,7 @@ export async function localApi(url: string, body?: any): Promise<unknown> {
       if (!bank) return { ok: false, error: "Banque inconnue." };
       if (b.mode === "carriere" && !bank.tracks.includes(b.track)) return { ok: false, error: `${bank.name} ne recrute pas ce métier.` };
       const capital = b.mode === "carriere" ? (b.startingCapital === 10000 || b.difficulty === "debutant" ? 10000 : b.startingCapital) : b.startingCapital;
-      const s = createGame({ ownerId: OWNER, mode: b.mode, difficulty: b.difficulty, profile: b.profile, bankId: bank.id, track: b.track, startingCapital: capital, seed: b.seed, challengeId: b.challengeId, settings: b.minutesPerSecond ? { minutesPerSecond: b.minutesPerSecond } : undefined });
+      const s = createGame({ ownerId: OWNER, mode: b.mode, difficulty: b.difficulty, profile: b.profile, bankId: bank.id, track: b.track, startingCapital: capital, seed: b.seed, challengeId: b.challengeId, settings: b.minutesPerSecond ? { minutesPerSecond: b.minutesPerSecond } : undefined, historical: !!b.historical });
       s.id = uuid();
       const rt = { state: s, lastTickReal: Date.now(), accMinutes: 0, dirty: true, lastSaved: 0 };
       games.set(s.id, rt); await save(rt);
