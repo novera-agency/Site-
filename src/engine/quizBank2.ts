@@ -2,7 +2,7 @@
 import type { QuizQ, QuizCat } from "./quiz";
 
 const hash = (s: string) => { let x = 2166136261; for (let i = 0; i < s.length; i++) x = Math.imul(x ^ s.charCodeAt(i), 16777619) >>> 0; return x; };
-const R = (id: string, cat: QuizCat, level: 1 | 2 | 3, q: string, right: string, wrong: [string, string, string], explain: string): QuizQ => {
+export const R = (id: string, cat: QuizCat, level: 1 | 2 | 3, q: string, right: string, wrong: [string, string, string], explain: string): QuizQ => {
   const pos = hash(id) % 4;
   const options = [...wrong]; options.splice(pos, 0, right);
   return { id, cat, level, q, options, correct: pos, explain };

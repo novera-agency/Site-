@@ -7,6 +7,7 @@ import type { GameState } from "./types";
 import { gainXp, notify, changeRep } from "./core";
 import { dayIndex } from "./time";
 import { BANK2 } from "./quizBank2";
+import { BANK3 } from "./quizBank3";
 import { genQuestion, histQuestion, histIds, GEN_FAMILIES, HIST_COUNT } from "./quizGen";
 
 export type QuizCat = "micro" | "macro" | "finance" | "histoire" | "calcul";
@@ -68,7 +69,7 @@ const BANK1: QuizQ[] = [
   Q("ma_ratio", "macro", 3, "Un pays a une dette publique de 3 000 Md€ et un PIB de 2 500 Md€. Son ratio dette/PIB est d'environ…", ["120 %", "83 %", "12 %", "250 %"], 0, "3 000 ÷ 2 500 = 1,2, soit 120 % du PIB. On compare ainsi les pays entre eux (le critère de Maastricht fixe 60 %)."),
 ];
 
-export const QUIZ_BANK: QuizQ[] = [...BANK1, ...BANK2];
+export const QUIZ_BANK: QuizQ[] = [...BANK1, ...BANK2, ...BANK3];
 const BY_ID = Object.fromEntries(QUIZ_BANK.map((q) => [q.id, q]));
 const cache = new Map<string, QuizQ>();
 /** Retrouve une question par identifiant : banque rédigée, exercice de calcul (g:famille:graine) ou événement historique (h:n) */
