@@ -36,8 +36,8 @@ test("séance de formation avec le N+1 : questions, corrections, bilan, carnet",
   // Accessibilité de la réunion
   const ax = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(ax.violations.map((v) => `${v.id} ×${v.nodes.length}`)).toEqual([]);
-  // Trois questions : le responsable corrige à chaque réponse
-  for (let q = 0; q < 3; q++) {
+  // Deux questions (1 h = 2 questions) : le responsable corrige à chaque réponse
+  for (let q = 0; q < 2; q++) {
     await expect(room.getByTestId("choice-c0")).toBeVisible();
     const before = await log.locator("> *").count();
     await room.getByTestId("choice-c0").click();
@@ -47,7 +47,7 @@ test("séance de formation avec le N+1 : questions, corrections, bilan, carnet",
   await expect(log).toContainText("Séance de formation :", { timeout: 15000 });
   // Bilan sur la page Planning, avec le carnet de formation
   await go(page, "/play/planning");
-  await expect(page.getByTestId("tr-summary")).toContainText("/ 3", { timeout: 20000 });
+  await expect(page.getByTestId("tr-summary")).toContainText("/ 2", { timeout: 20000 });
   await expect(page.getByTestId("notebook")).toBeVisible();
   await page.getByTestId("tr-close").click();
   await expect(page.getByTestId("tr-summary")).toHaveCount(0);
@@ -74,7 +74,7 @@ test("séance interrompue : le responsable reprend là où on s'était arrêté"
   expect((await post({ type: "leave_meeting" })).ok).toBe(true);
   await go(page, "/play/planning");
   await expect(page.getByTestId("training")).toBeVisible({ timeout: 20000 });
-  await expect(page.getByText("1 / 3 questions")).toBeVisible();
+  await expect(page.getByText("1 / 2 questions")).toBeVisible();
   await page.getByTestId("tr-resume").click();
   await expect(page.getByTestId("meeting-room")).toBeVisible({ timeout: 20000 });
   await page.getByTestId("meeting-room").getByTestId("mode-ecrit").click();

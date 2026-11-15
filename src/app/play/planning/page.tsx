@@ -91,6 +91,7 @@ export default function Planning() {
     ? `Journée plus longue que la référence (+${fr(dh)} h) : stress, fatigue et moral en pâtissent chaque jour, mais votre responsable apprécie votre présence.`
     : `Journée plus courte que la référence (${fr(dh)} h) : vous êtes plus serein, mais votre responsable s'inquiète de votre présence.`;
   const maxH = Math.max(1, d.overtime.maxHours);
+  const blockedTraining = d.trainedToday && !(d.training && !d.training.done);
   return <>
     <PageTitle env="Bureau" title="Planning et sommeil" subtitle={sub} />
     {d.training && <TrainingStatus key={d.training.id + (d.training.done ? "d" : "")} t={d.training} act={act} />}
@@ -128,7 +129,8 @@ export default function Planning() {
             {d.overtime.focus.map((f: any) => <label key={f.id} className="flex cursor-pointer items-start gap-2 rounded-md border border-ink-700 bg-ink-900 p-2"><input type="radio" name="focus" className="mt-1" checked={focus === f.id} onChange={() => setFocus(f.id)} data-testid={`ot-focus-${f.id}`} /><span><span className="block text-xs font-medium text-ink-100">{f.label}</span><span className="block text-[11px] text-ink-400">{f.desc}</span></span></label>)}
           </fieldset>
           {focus === "formation" && <Field label="Matière de la séance"><select data-testid="ot-subject" aria-label="Matière de la séance" className={inputCls} value={subject} onChange={(e) => setSubject(e.target.value)}>{SUBJECTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>}
-          <Button data-testid="ot-btn" disabled={d.overtime.maxHours === 0} onClick={() => act({ type: "overtime", hours: Math.min(hours, maxH), focus, ...(focus === "formation" ? { subject } : {}) })}>⏱️ Faire {Math.min(hours, maxH)} h supplémentaire{Math.min(hours, maxH) > 1 ? "s" : ""}</Button>
+          {focus === "formation" && <p className="text-[11px] text-ink-300" data-testid="ot-formation-hint">{blockedTraining ? "Vous avez déjà fait votre séance de formation aujourd'hui (une seule par jour) : revenez demain." : `Séance du jour : ${Math.min(hours, maxH) + 1} questions avec votre responsable (une seule séance par jour, de 2 à 5 questions selon la durée).`}</p>}
+          <Button data-testid="ot-btn" disabled={d.overtime.maxHours === 0 || (focus === "formation" && blockedTraining)} onClick={() => act({ type: "overtime", hours: Math.min(hours, maxH), focus, ...(focus === "formation" ? { subject } : {}) })}>⏱️ Faire {Math.min(hours, maxH)} h supplémentaire{Math.min(hours, maxH) > 1 ? "s" : ""}</Button>
           <div className="text-xs text-ink-300">Avance en réserve : <b className="num text-white" data-testid="ahead">{d.overtime.ahead} h</b> / {d.overtime.maxAhead} h
             <Bar value={d.overtime.ahead} max={d.overtime.maxAhead} tone="gain" /></div>
         </div>

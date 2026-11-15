@@ -27,7 +27,7 @@ import { canCall } from "@/engine/prospects";
 import { CHAPTERS, ACHIEVEMENTS, currentChapter, careerScore, endingAvailable, ENDINGS } from "@/engine/progression";
 import { wealthOf } from "@/engine/wealth";
 import { isWorkDay, workWindow, getPlan, planEffects, sleepCheck, sleepLabel, overtimeCheck, OVERTIME_FOCUS, STANDARD_NET_H, MAX_AHEAD_H } from "@/engine/schedule";
-import { trainingView, notebookView } from "@/engine/training";
+import { trainingView, notebookView, trainedToday } from "@/engine/training";
 import { quizState, quizBatch, quizToday, quizById, quizCorrectCount, QUIZ_TOTALS, QUIZ_TOTAL, type QuizCat } from "@/engine/quiz";
 import { CITIES, CITY_BY_ID, TYPE_NAME, COND_NAME, marketValue, marketRent, rentCap, rentProbability, saleProbability, cityPrice, cityRent, listings, propertiesEquity, loanBurden } from "@/engine/realestate";
 import { payslip, monthlyBills, freeHours, activityBlocked, priceLevel, HOUSING, HOUSING_BY_ID, rentOf, priceOf, housingEquity, mortgageRate, TRANSPORT, SUBS, ACTIVITIES } from "@/engine/life";
@@ -262,7 +262,7 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
         lastSleep: l.sleep ? { hours: l.sleep.hours, label: sleepLabel(l.sleep.hours), ago: Math.round((s.t - l.sleep.endT) / 60) } : null,
         overtime: { maxHours: maxOt, error: otErr, ahead: l.ahead ?? 0, maxAhead: MAX_AHEAD_H, weekHours: l.ot && l.ot.week === monday ? l.ot.hours : 0, todayHours: l.ot && l.ot.today.day === day ? l.ot.today.hours : 0, focus: Object.entries(OVERTIME_FOCUS).map(([id, f]) => ({ id, ...f })) },
         stress: Math.round(s.career.stress), life: { mental: Math.round(l.mental), physique: Math.round(l.physique) },
-        training: trainingView(s), notebook: notebookView(s),
+        training: trainingView(s), trainedToday: trainedToday(s), notebook: notebookView(s),
       };
     }
     case "culture": {

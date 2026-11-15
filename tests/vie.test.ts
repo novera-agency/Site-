@@ -9,7 +9,7 @@ import { answerMeeting } from "@/engine/meetingEngine";
 import { createGame } from "@/engine/engine";
 import { getPlan, setPlan, workWindow, sleepCheck, plannedNetHours, DEFAULT_PLAN, hhmm } from "@/engine/schedule";
 import { planDay } from "@/engine/agenda";
-import { buildQuestion, answerTraining, startTraining, closeTraining, trainingView, notebookView } from "@/engine/training";
+import { buildQuestion, answerTraining, startTraining, closeTraining, trainingView, notebookView, trainedToday } from "@/engine/training";
 import { LESSONS } from "@/engine/data/learning";
 import { meetingChoices } from "@/engine/meetingEngine";
 import "@/engine/meetings";
@@ -227,7 +227,7 @@ describe("Planning, sommeil et heures supplémentaires", () => {
     active.forEach((m, i) => expect(m.deadlineT).toBe(before[i] + 12 * 60));
     s.t = tOfDay(dayIndex(s.t), 18, 0);
     expect(act(s, { type: "overtime", hours: 1, focus: "formation" }).ok).toBe(true);
-    expect(s.life!.training?.items.length).toBe(3); // la formation donne une séance de questions, pas de l'XP gratuite
+    expect(s.life!.training?.items.length).toBe(2); // la formation donne une séance de questions, pas de l'XP gratuite
     act(s, { type: "leave_meeting" });
     s.life!.ahead = 4; s.t = tOfDay(dayIndex(s.t), 18, 0);
     expect(act(s, { type: "overtime", hours: 1, focus: "avance" }).message).toMatch(/réserve pleine/);
@@ -267,15 +267,15 @@ describe("Planning, sommeil et heures supplémentaires", () => {
 describe("Séances de formation (heures supplémentaires « me former »)", () => {
   const evening = (seed: string) => { const s = game("carriere", seed); s.t = tOfDay(nextBusinessDay(dayIndex(s.t) + 1), 18, 0); s.agenda = []; s.paused = true; return s; };
   const right = (it: { k: "lesson" | "def" | "calc" | "quiz"; id: string; seed?: number }) => { const q = buildQuestion(it)!; return q.kind === "qcm" ? { choice: q.answer } : { value: q.answer }; };
-  it("une séance de 2 h = 6 questions variées (fiche, définition, calcul), sans bonne réponse dans la vue", () => {
+  it("une séance de 2 h = 3 questions variées (fiche, définition, calcul), sans bonne réponse dans la vue", () => {
     const s = evening("fm-1");
     const r = act(s, { type: "overtime", hours: 2, focus: "formation" });
     expect(r.ok).toBe(true);
     const tr = s.life!.training!;
-    expect(tr.items.length).toBe(6);
+    expect(tr.items.length).toBe(3);
     expect(tr.items.map((i) => i.k)).toEqual(expect.arrayContaining(["lesson", "def", "calc"]));
     const v = trainingView(s)!;
-    expect(v.items.length).toBe(6);
+    expect(v.items.length).toBe(3);
     expect(v.items.every((i) => i.result === null)).toBe(true);
     expect(JSON.stringify(v)).not.toContain('"answer"');
     expect(v.items.some((i) => i.label === "Fiche et exercice")).toBe(true);
@@ -292,12 +292,12 @@ describe("Séances de formation (heures supplémentaires « me former »)", () =
     const trust0 = s.npcs.boss.trust;
     let last: any;
     for (let i = 0; i < tr.items.length; i++) { last = answerTraining(s, i, right(tr.items[i])); expect(last.ok).toBe(true); expect(last.data.ok).toBe(true); expect(last.data.explain.length).toBeGreaterThan(20); }
-    expect(last.data.finished).toEqual(expect.objectContaining({ correct: 3, total: 3 }));
+    expect(last.data.finished).toEqual(expect.objectContaining({ correct: 2, total: 2 }));
     expect(Object.values(s.skills).reduce((a, b) => a + b, 0)).toBeGreaterThan(xp0 + 20);
     expect(s.npcs.boss.trust).toBeGreaterThan(trust0);
     const lessonItem = tr.items.find((i) => i.k === "lesson");
     if (lessonItem) expect(s.learning.completed).toContain(lessonItem.id);
-    expect(s.life!.trainStats).toEqual({ sessions: 1, perfect: 1, correct: 3, total: 3 });
+    expect(s.life!.trainStats).toEqual({ sessions: 1, perfect: 1, correct: 2, total: 2 });
     expect(s.notifications.some((n) => n.title.includes("Séance de formation réussie"))).toBe(true);
     checkProgress(s);
     expect(s.progress!.achievements).toEqual(expect.arrayContaining(["study1", "studyperfect"]));
@@ -317,13 +317,15 @@ describe("Séances de formation (heures supplémentaires « me former »)", () =
     }
     expect(s.npcs.boss.trust).toBe(trust0);
     const nb = notebookView(s);
-    expect(nb.notes.length).toBe(3);
+    expect(nb.notes.length).toBe(2);
     expect(nb.notes[0].text.length).toBeGreaterThan(20);
     expect(s.life!.trainStats!.perfect).toBe(0);
     expect(closeTraining(s).ok).toBe(true);
     act(s, { type: "leave_meeting" });
     s.t = tOfDay(dayIndex(s.t), 18, 0);
-    expect(act(s, { type: "overtime", hours: 1, focus: "formation" }).ok).toBe(true); // nouvelle séance possible
+    expect(act(s, { type: "overtime", hours: 1, focus: "formation" }).ok).toBe(false); // une seule séance par jour
+    s.t = tOfDay(dayIndex(s.t) + 1, 18, 0); s.agenda = [];
+    expect(act(s, { type: "overtime", hours: 1, focus: "formation" }).ok).toBe(true); // le lendemain, c'est possible
   });
   it("les leçons passent par ordre de niveau, jamais deux fois la même dans une séance ; une leçon validée n'est plus proposée en priorité", () => {
     const s = evening("fm-4");
@@ -336,7 +338,8 @@ describe("Séances de formation (heures supplémentaires « me former »)", () =
       expect(q).toBeTruthy();
       if (q.kind === "qcm") { expect(new Set(q.options).size).toBe(q.options!.length); expect(q.answer).toBeGreaterThanOrEqual(0); expect(q.answer).toBeLessThan(q.options!.length); }
     }
-    for (let i = 0; i < 12; i++) answerTraining(s, i, right(s.life!.training!.items[i]));
+    expect(s.life!.training!.items.length).toBe(5);
+    for (let i = 0; i < 5; i++) answerTraining(s, i, right(s.life!.training!.items[i]));
     const done = new Set(s.learning.completed);
     closeTraining(s);
     s.t = tOfDay(dayIndex(s.t) + 1, 18, 0); s.life!.ot = undefined;
@@ -352,7 +355,7 @@ describe("Séances de formation (heures supplémentaires « me former »)", () =
     for (const sub of ["marches", "analyse", "maths", "macro", "risque"] as const) {
       closeTraining(s);
       expect(startTraining(s, 4, sub).ok).toBe(true);
-      expect(s.life!.training!.items.length).toBe(12);
+      expect(s.life!.training!.items.length).toBe(5);
       for (const it of s.life!.training!.items) expect(buildQuestion(it), `${sub} ${it.k} ${it.id}`).toBeTruthy();
     }
   });
@@ -400,9 +403,9 @@ describe("Séances de formation (heures supplémentaires « me former »)", () =
       });
       expect(m.done).toBe(true);
       expect(m.vars.failed).toBeUndefined();
-      expect(m.outcome).toMatch(/Séance de formation : 2\/3/);
+      expect(m.outcome).toMatch(/Séance de formation : 1\/2/);
       expect(s.activeMeetingId).toBeUndefined();
-      expect(t.done).toEqual(expect.objectContaining({ correct: 2, total: 3 }));
+      expect(t.done).toEqual(expect.objectContaining({ correct: 1, total: 2 }));
       expect(notebookView(s).notes.length).toBe(1);
       expect(s.npcs.boss.trust).toBeGreaterThanOrEqual(trust0 - 3);
       expect(trainingView(s)!.done).toBeTruthy();
@@ -425,8 +428,32 @@ describe("Séances de formation (heures supplémentaires « me former »)", () =
       // le reste de la séance se termine normalement
       for (let i = 2; i < t.items.length; i++) answerMeeting(s, m2.id, { choiceId: `c${buildQuestion(t.items[i])!.answer}` });
       expect(m2.done).toBe(true);
-      expect(t.done!.total).toBe(6);
+      expect(t.done!.total).toBe(3);
       expect(act(s, { type: "training_resume" }).ok).toBe(false); // plus rien à reprendre
     });
+  });
+
+  it("une séance par jour, de 2 à 5 questions selon la durée (1 h = 2 … 4 h = 5)", () => {
+    for (const [h, n] of [[1, 2], [2, 3], [3, 4], [4, 5]] as const) {
+      const s = evening(`fm-q${h}`);
+      expect(act(s, { type: "overtime", hours: h, focus: "formation" }).ok).toBe(true);
+      expect(s.life!.training!.items.length).toBe(n);
+    }
+    // Même jour : une 2e séance est refusée, y compris après avoir terminé la première
+    const s = evening("fm-jour");
+    expect(act(s, { type: "overtime", hours: 1, focus: "formation" }).ok).toBe(true);
+    s.life!.training!.items.forEach((it, i) => answerTraining(s, i, right(it)));
+    act(s, { type: "leave_meeting" });
+    s.t = tOfDay(dayIndex(s.t), 20, 0);
+    const r = act(s, { type: "overtime", hours: 1, focus: "formation" });
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/une seule par jour/);
+    expect(trainedToday(s)).toBe(true);
+    // Les autres heures supplémentaires restent possibles le même jour
+    expect(act(s, { type: "overtime", hours: 1, focus: "dossiers" }).ok).toBe(true);
+    // Le lendemain, une nouvelle séance est possible
+    s.t = tOfDay(dayIndex(s.t) + 1, 18, 0); s.agenda = [];
+    expect(trainedToday(s)).toBe(false);
+    expect(act(s, { type: "overtime", hours: 2, focus: "formation" }).ok).toBe(true);
   });
 });

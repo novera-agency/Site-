@@ -13,6 +13,8 @@ import { gainXp, changeTrust, changeRep, notify, skillLevel, nextId } from "./co
 import { dayIndex } from "./time";
 
 export type TItem = { k: "lesson" | "def" | "calc" | "quiz"; id: string; seed?: number };
+/** Une séance par jour, de 2 à 5 questions */
+export const MIN_Q = 2, MAX_Q = 5;
 export const TRAIN_BRANCHES: SkillBranch[] = ["marches", "analyse", "maths", "macro", "risque"];
 const LESSON_BY_ID = Object.fromEntries(LESSONS.map((l) => [l.id, l]));
 const QUIZ_CATS: Record<string, string[]> = { marches: ["finance"], analyse: ["micro", "immobilier", "finance"], maths: ["finance"], macro: ["macro", "histoire"], risque: ["assurance", "finance"] };
@@ -83,6 +85,8 @@ export function buildQuestion(it: TItem): TQ | null {
 }
 
 /** Choix des questions : leçons pas encore validées de la compétence ciblée d'abord, puis définitions, calculs et culture */
+/** Une séance de formation par jour de jeu */
+export function trainedToday(s: GameState) { return s.life?.trainDay === dayIndex(s.t); }
 export function startTraining(s: GameState, hours: number, subject: SkillBranch | "auto") {
   const l = s.life!;
   if (l.training && !l.training.done) return { ok: false as const, error: "Terminez d'abord votre séance de formation en cours (ou fermez-la)." };
@@ -100,28 +104,35 @@ export function startTraining(s: GameState, hours: number, subject: SkillBranch 
   const items: TItem[] = [];
   const quizPool = QUIZ_BANK.filter((q) => (QUIZ_CATS[branch] ?? []).includes(q.cat)).map((q) => q.id);
   const notes = new Set((l.notebook ?? []).map((n) => n.title));
-  for (let h = 0; h < hours; h++) {
-    // 1. une leçon (fiche + exercice) : nouvelle de préférence ; sinon une question de culture de la même matière ; sinon révision
-    let lesson: Lesson | undefined = fresh.find((x) => !used.has(x.id));
-    if (!lesson) {
-      const qid = quizPool.filter((id) => !used.has(id) && !(s.quiz?.done[id] === 1)).sort((a, b) => hash(a + s.seed + h) - hash(b + s.seed + h))[0];
-      if (qid) { used.add(qid); items.push({ k: "quiz", id: qid }); }
-      else {
+  // 2 à 5 questions : 1 h → 2 questions … 4 h → 5 questions, selon le schéma leçon, définition, calcul, leçon, définition
+  const count = Math.max(MIN_Q, Math.min(MAX_Q, hours + 1));
+  const PATTERN: ("lesson" | "def" | "calc")[] = ["lesson", "def", "calc", "lesson", "def"];
+  for (let h = 0; h < count; h++) {
+    const kind = PATTERN[h];
+    if (kind === "lesson") {
+      // une leçon (fiche + exercice) : nouvelle de préférence ; sinon une question de culture de la même matière ; sinon révision
+      let lesson: Lesson | undefined = fresh.find((x) => !used.has(x.id));
+      if (!lesson) {
+        const qid = quizPool.filter((id) => !used.has(id) && !(s.quiz?.done[id] === 1)).sort((a, b) => hash(a + s.seed + h) - hash(b + s.seed + h))[0];
+        if (qid) { used.add(qid); items.push({ k: "quiz", id: qid }); continue; }
         lesson = freshAny.find((x) => !used.has(x.id)) ?? inBranch.filter((x) => !used.has(x.id)).sort((a, b) => hash(a.id + s.seed + h) - hash(b.id + s.seed + h))[0];
       }
+      if (lesson) { used.add(lesson.id); items.push({ k: "lesson", id: lesson.id }); continue; }
     }
-    if (lesson) { used.add(lesson.id); items.push({ k: "lesson", id: lesson.id }); }
-    // 2. une définition (de la même matière, hors fiche du jour)
+    if (kind === "calc") {
+      const fam = Math.floor(rnd() * GEN_FAMILIES);
+      items.push({ k: "calc", id: `${fam}:${Math.floor(rnd() * 1e6) + 1}` });
+      continue;
+    }
+    // définition (de la même matière, hors fiches déjà utilisées)
     const poolDef = (inBranch.length > 3 ? inBranch : LESSONS).filter((x) => !used.has("d:" + x.id));
     const def = poolDef.sort((a, b) => hash(a.id + s.seed + h + stats.sessions) - hash(b.id + s.seed + h + stats.sessions))[0] ?? LESSONS[0];
     used.add("d:" + def.id);
     items.push({ k: "def", id: def.id, seed: Math.floor(rnd() * 1e6) });
-    // 3. un exercice de calcul
-    const fam = Math.floor(rnd() * GEN_FAMILIES);
-    items.push({ k: "calc", id: `${fam}:${Math.floor(rnd() * 1e6) + 1}` });
   }
   void notes;
   l.training = { id: nextId(s, "train"), startT: s.t, hours, subject: branch, items, answers: [] };
+  l.trainDay = dayIndex(s.t);
   return { ok: true as const, branch, count: items.length };
 }
 
