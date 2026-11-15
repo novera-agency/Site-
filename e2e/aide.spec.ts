@@ -23,7 +23,8 @@ test("aide de mission : activée par le joueur, visible partout, réductible et 
   await expect(panel.getByText("Pour réussir")).toBeVisible();
   // Toujours visible sur un autre onglet, et le lien mène au bon écran
   await page.getByTestId("cat-pro").click();
-  await page.getByTestId("category-sheet").getByText("Salle des marchés").click();
+  await expect(page).toHaveURL(/\/play\/pro/);
+  await page.getByTestId("hub").getByText("Salle des marchés").click();
   await expect(page).toHaveURL(/terminal/);
   await expect(panel).toBeVisible();
   // Réduire puis rouvrir

@@ -3,7 +3,7 @@ import { test, expect, type Page } from "@playwright/test";
 /** Vérifie chaque onglet : affichage, absence d'erreur, défilement à la molette (y compris au-dessus d'un graphique), barre du bas. */
 const BASE = process.env.E2E_BASE ?? "";
 const go = (page: Page, path: string) => page.goto(BASE + path);
-const PAGES = ["/play", "/play/agenda", "/play/messagerie", "/play/reunions", "/play/terminal", "/play/recherche", "/play/ordres", "/play/options", "/play/structures", "/play/portefeuille", "/play/transactions", "/play/risques", "/play/patrimoine", "/play/actualites", "/play/calendrier", "/play/macro", "/play/carriere", "/play/clients", "/play/missions", "/play/competences", "/play/reputation", "/play/reseau", "/play/rh", "/play/remuneration", "/play/banques", "/play/entreprise", "/play/formation", "/play/dictionnaire", "/play/parametres", "/play/sauvegardes", "/play/vie", "/play/actif/?id=MAIS", "/play/actif/?id=DE10Y"];
+const PAGES = ["/play", "/play/agenda", "/play/messagerie", "/play/reunions", "/play/terminal", "/play/recherche", "/play/ordres", "/play/options", "/play/structures", "/play/portefeuille", "/play/transactions", "/play/risques", "/play/patrimoine", "/play/actualites", "/play/calendrier", "/play/macro", "/play/carriere", "/play/clients", "/play/missions", "/play/competences", "/play/reputation", "/play/reseau", "/play/rh", "/play/remuneration", "/play/banques", "/play/entreprise", "/play/formation", "/play/dictionnaire", "/play/parametres", "/play/sauvegardes", "/play/vie", "/play/pro", "/play/perso", "/play/relations", "/play/reglages", "/play/actif/?id=MAIS", "/play/actif/?id=DE10Y"];
 
 async function newCareer(page: Page) {
   await go(page, "/");
@@ -40,25 +40,23 @@ for (const vp of [{ name: "ordinateur", width: 1440, height: 900 }, { name: "mob
       }
       await expect(page.getByTestId("bottom-nav")).toBeVisible();
     }
-    // Navigation par les 5 catégories de la barre du bas
+    // Navigation : chaque onglet du bas ouvre sa propre page
     await go(page, "/play");
     const nav = page.getByTestId("bottom-nav");
     for (const c of ["Bureau", "Vie pro", "Vie perso", "Relations", "Options"]) await expect(nav.getByText(c, { exact: true })).toBeVisible();
-    await page.getByTestId("cat-pro").click();
-    const sheet = page.getByTestId("category-sheet");
-    await expect(sheet).toContainText("Marchés");
-    await sheet.getByText("Portefeuille", { exact: true }).click();
-    await expect(page).toHaveURL(/portefeuille/);
-    await expect(sheet).toHaveCount(0);
-    await page.getByTestId("cat-perso").click();
-    await page.getByTestId("category-sheet").getByText("Vie privée", { exact: true }).click();
-    await expect(page).toHaveURL(/\/vie/);
-    await page.getByTestId("cat-relations").click();
-    await page.getByTestId("category-sheet").getByText("Clients", { exact: true }).click();
-    await expect(page).toHaveURL(/clients/);
-    await page.getByTestId("cat-pro").click();
-    await page.getByTestId("category-sheet").getByText("Formation", { exact: true }).click();
-    await expect(page).toHaveURL(/formation/);
+    for (const [id, url, title, tile, dest] of [["pro", /\/play\/pro\/?$/, "Vie professionnelle", "Portefeuille", /portefeuille/], ["perso", /\/play\/perso\/?$/, "Vie personnelle", "Vie privée", /\/vie/], ["relations", /\/play\/relations\/?$/, "Relations", "Clients", /clients/], ["options", /\/play\/reglages\/?$/, "Options", "Sauvegardes", /sauvegardes/]] as const) {
+      await page.getByTestId(`cat-${id}`).click();
+      await expect(page).toHaveURL(url);
+      await expect(page.locator("main h1").first()).toHaveText(title);
+      await expect(page.getByTestId(`cat-${id}`)).toHaveAttribute("aria-current", "page");
+      await page.getByTestId("hub").getByText(tile, { exact: true }).click();
+      await expect(page).toHaveURL(dest);
+      await expect(page.getByTestId(`cat-${id}`)).toHaveAttribute("aria-current", "page"); // l'onglet reste actif sur les sous-pages
+    }
+    await page.getByTestId("cat-bureau").click();
+    await expect(page).toHaveURL(/\/play\/?$/);
+    await page.getByTestId("hub").getByText("Missions", { exact: true }).click();
+    await expect(page).toHaveURL(/missions/);
     // La salle de réunion défile sur petit écran et les choix sont atteignables
     await page.getByTestId("speed-100").click();
     await page.waitForTimeout(2000);

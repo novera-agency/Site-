@@ -91,41 +91,20 @@ function Tutorial({ snap }: { snap: Snapshot }) {
 function useBadge(snap: Snapshot) {
   return (k?: string) => k === "msgs" ? snap.unreadMsgs : k === "missions" ? snap.missionsActive : k === "meeting" ? (snap.pendingMeeting || snap.activeMeetingId ? "!" : 0) : 0;
 }
-/** Feuille d'une catégorie : grandes tuiles claires avec une ligne d'explication */
-function CategorySheet({ cat, snap, path, onClose }: { cat: NavCategory; snap: Snapshot; path: string; onClose: () => void }) {
-  const badge = useBadge(snap);
-  return <div className="fixed inset-0 z-40 bg-black/60" onClick={onClose}>
-    <div className="scroll-thin absolute inset-x-0 bottom-16 max-h-[78vh] overflow-y-auto overscroll-contain rounded-t-2xl border-t border-ink-600 bg-ink-900 p-4 pb-6" onClick={(e) => e.stopPropagation()} data-testid="category-sheet">
-      <div className="mb-3 flex items-start justify-between gap-3"><div><div className="text-lg font-semibold text-white">{cat.icon} {cat.label}</div><div className="text-xs text-ink-400">{cat.intro}</div></div><button onClick={onClose} className="rounded-md bg-ink-800 px-2.5 py-1 text-ink-300" aria-label="Fermer">✕</button></div>
-      {cat.sections.map((sec, i) => <div key={i} className="mb-3">
-        {sec.title && <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-gold/80">{sec.title}</div>}
-        <div className="grid gap-1.5 sm:grid-cols-2">{sec.items.map((it) => { const b = badge(it.badge); const on = path === it.href || path === it.href + "/"; return <Link key={it.href} href={it.href} onClick={onClose} className={`relative flex items-center gap-3 rounded-xl px-3 py-2.5 ${on ? "bg-accent/25 ring-1 ring-accent" : "bg-ink-800 hover:bg-ink-700"}`}>
-          <span className="text-2xl">{it.icon}</span><span className="min-w-0"><span className="block text-sm font-medium text-white">{it.label}</span><span className="block text-[11px] leading-snug text-ink-400">{it.desc}</span></span>
-          {b ? <span className="ml-auto rounded-full bg-gold px-1.5 text-[10px] font-bold text-black">{b}</span> : null}
-        </Link>; })}</div>
-      </div>)}
-    </div>
-  </div>;
-}
+/** Barre du bas : chaque catégorie ouvre sa propre page */
 function BottomNav({ snap, path }: { snap: Snapshot; path: string }) {
-  const [open, setOpen] = useState<string | null>(null);
-  useEffect(() => { setOpen(null); }, [path]);
   const badge = useBadge(snap);
   const current = categoryOf(path);
   const catBadge = (c: NavCategory) => c.sections.flatMap((x) => x.items).reduce((a, it) => { const b = badge(it.badge); return b === "!" ? "!" : a === "!" ? a : (Number(a) || 0) + (Number(b) || 0); }, 0 as number | string);
-  const cat = CATEGORIES.find((c) => c.id === open);
-  return <>
-    {cat && <CategorySheet cat={cat} snap={snap} path={path} onClose={() => setOpen(null)} />}
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-ink-700 bg-ink-950/95 backdrop-blur" style={{ paddingBottom: "env(safe-area-inset-bottom)" }} data-testid="bottom-nav">
-      <div className="mx-auto grid max-w-3xl grid-cols-5">
-        {CATEGORIES.map((c) => { const on = open ? open === c.id : current === c.id; const b = catBadge(c); return <button key={c.id} data-testid={`cat-${c.id}`} onClick={() => setOpen(open === c.id ? null : c.id)} className={`relative flex flex-col items-center gap-0.5 py-2 text-[10px] transition ${on ? "text-white" : "text-ink-400 hover:text-white"}`}>
-          {on && <span className="absolute inset-x-3 top-0 h-0.5 rounded bg-gold" />}
-          <span className="text-xl leading-none">{c.icon}</span><span className="truncate font-medium">{c.short}</span>
-          {b ? <span className="absolute right-[24%] top-1 min-w-4 rounded-full bg-gold px-1 text-center text-[9px] font-bold text-black">{b}</span> : null}
-        </button>; })}
-      </div>
-    </nav>
-  </>;
+  return <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-ink-700 bg-ink-950/95 backdrop-blur" style={{ paddingBottom: "env(safe-area-inset-bottom)" }} data-testid="bottom-nav">
+    <div className="mx-auto grid max-w-3xl grid-cols-5">
+      {CATEGORIES.map((c) => { const on = current === c.id; const b = catBadge(c); return <Link key={c.id} href={c.hub} data-testid={`cat-${c.id}`} aria-current={on ? "page" : undefined} className={`relative flex flex-col items-center gap-0.5 py-2 text-[10px] transition ${on ? "text-white" : "text-ink-400 hover:text-white"}`}>
+        {on && <span className="absolute inset-x-3 top-0 h-0.5 rounded bg-gold" />}
+        <span className="text-xl leading-none">{c.icon}</span><span className="truncate font-medium">{c.short}</span>
+        {b ? <span className="absolute right-[24%] top-1 min-w-4 rounded-full bg-gold px-1 text-center text-[9px] font-bold text-black">{b}</span> : null}
+      </Link>; })}
+    </div>
+  </nav>;
 }
 
 /** Menu latéral (ordinateur) : les 5 mêmes catégories, celle de la page courante ouverte */
@@ -134,7 +113,7 @@ function SideNav({ snap, path }: { snap: Snapshot; path: string }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const badge = useBadge(snap);
   return <>{CATEGORIES.map((c) => { const isOpen = open[c.id] ?? c.id === current; return <div key={c.id} className="mb-1.5">
-    <button onClick={() => setOpen({ ...open, [c.id]: !isOpen })} className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm font-semibold ${c.id === current ? "text-white" : "text-ink-300 hover:text-white"}`}><span className="w-5 text-center">{c.icon}</span>{c.label}<span className="ml-auto text-[10px] text-ink-500">{isOpen ? "▾" : "▸"}</span></button>
+    <div className="flex items-center"><Link href={c.hub} className={`flex flex-1 items-center gap-2 rounded-md px-2 py-2 text-sm font-semibold ${c.id === current ? "text-white" : "text-ink-300 hover:text-white"}`}><span className="w-5 text-center">{c.icon}</span>{c.label}</Link><button onClick={() => setOpen({ ...open, [c.id]: !isOpen })} aria-label={isOpen ? "Replier" : "Déplier"} className="px-2 py-2 text-[10px] text-ink-500 hover:text-white">{isOpen ? "▾" : "▸"}</button></div>
     {isOpen && <div className="mb-1 ml-3 border-l border-ink-800 pl-2">{c.sections.map((sec, i) => <div key={i}>{sec.title && <div className="mt-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-500">{sec.title}</div>}{sec.items.map((it) => { const b = badge(it.badge); const on = path === it.href || path === it.href + "/"; return <Link key={it.href} href={it.href} title={it.desc} className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] ${on ? "bg-ink-700 text-white" : "text-ink-300 hover:bg-ink-800 hover:text-white"}`}><span className="w-5 text-center">{it.icon}</span>{it.label}{b ? <span className="ml-auto rounded-full bg-gold px-1.5 text-[10px] font-bold text-black">{b}</span> : null}</Link>; })}</div>)}</div>}
   </div>; })}</>;
 }

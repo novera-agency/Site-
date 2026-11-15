@@ -9,6 +9,7 @@ import { fmtTime, fmtShortDate } from "@/engine/time";
 import { People, useJoinMeeting } from "@/components/MeetingRoom";
 import { HelpButton } from "@/components/MissionHelp";
 import { Button } from "@/components/ui";
+import { CategoryHub } from "@/components/CategoryHub";
 
 export default function Bureau() {
   const { data } = useView<any>("dashboard");
@@ -20,6 +21,7 @@ export default function Bureau() {
   const desk = data.accounts.find((a: any) => a.id === "desk");
   return <>
     <PageTitle env="Bureau personnel" title={`Bonjour ${snap.player.name.split(" ")[0]}`} subtitle={data.career ? `${data.career.title} — ${data.career.bank.name}` : snap.mode === "defi" ? "Mode défi" : "Investisseur indépendant"} right={<div className="flex gap-2"><Link href="/play/terminal" className="rounded-md bg-accent px-3 py-2 text-sm font-medium">Ouvrir le terminal</Link><Link href="/play/agenda" className="rounded-md bg-ink-700 px-3 py-2 text-sm">Agenda</Link></div>} />
+    <CategoryHub id="bureau" compact />
     {data.challenge && <Card title={`Défi : ${data.challenge.def?.name}`} className="mb-4"><div className="flex flex-wrap gap-6"><Stat label="Performance" value={fmtPct(data.challenge.perf * 100)} tone={data.challenge.perf >= 0 ? "gain" : "loss"} /><Stat label="Objectif" value={fmtPct(data.challenge.target * 100)} /><Stat label="Échéance" value={fmtShortDate(data.challenge.deadlineT)} /><Stat label="Statut" value={data.challenge.status} /></div><p className="mt-2 text-xs text-ink-400">{data.challenge.def?.description}</p></Card>}
     <div className="mb-4 grid gap-4 xl:grid-cols-3">
       <Card title="À faire maintenant" className="xl:col-span-2 border-gold/40">

@@ -1,11 +1,11 @@
 /** Organisation unique des écrans : 5 catégories, utilisées par la barre du bas (mobile) et le menu latéral (ordinateur). */
 export interface NavItem { href: string; label: string; icon: string; desc: string; badge?: "missions" | "msgs" | "meeting" }
 export interface NavSection { title?: string; items: NavItem[] }
-export interface NavCategory { id: string; label: string; short: string; icon: string; intro: string; sections: NavSection[] }
+export interface NavCategory { id: string; label: string; short: string; icon: string; intro: string; hub: string; sections: NavSection[] }
 
 export const CATEGORIES: NavCategory[] = [
   {
-    id: "bureau", label: "Bureau", short: "Bureau", icon: "🏢", intro: "Votre journée : ce qui vous attend aujourd'hui.",
+    id: "bureau", hub: "/play", label: "Bureau", short: "Bureau", icon: "🏢", intro: "Votre journée : ce qui vous attend aujourd'hui.",
     sections: [{ items: [
       { href: "/play", label: "Mon bureau", icon: "🏢", desc: "Résumé de la journée et prochains rendez-vous" },
       { href: "/play/missions", label: "Missions", icon: "🎯", desc: "Les tâches du jour confiées par votre hiérarchie", badge: "missions" },
@@ -16,7 +16,7 @@ export const CATEGORIES: NavCategory[] = [
     ] }],
   },
   {
-    id: "pro", label: "Vie professionnelle", short: "Vie pro", icon: "💼", intro: "Marchés, portefeuilles et progression de carrière.",
+    id: "pro", hub: "/play/pro", label: "Vie professionnelle", short: "Vie pro", icon: "💼", intro: "Marchés, portefeuilles et progression de carrière.",
     sections: [
       { title: "Marchés", items: [
         { href: "/play/terminal", label: "Salle des marchés", icon: "📈", desc: "Cours en direct et graphiques" },
@@ -44,7 +44,7 @@ export const CATEGORIES: NavCategory[] = [
     ],
   },
   {
-    id: "perso", label: "Vie personnelle", short: "Vie perso", icon: "🏠", intro: "Votre argent et votre équilibre en dehors du bureau.",
+    id: "perso", hub: "/play/perso", label: "Vie personnelle", short: "Vie perso", icon: "🏠", intro: "Votre argent et votre équilibre en dehors du bureau.",
     sections: [{ items: [
       { href: "/play/vie", label: "Vie privée", icon: "🏠", desc: "Santé mentale, loisirs, logement, factures" },
       { href: "/play/remuneration", label: "Salaire", icon: "💶", desc: "Fiche de paie, bonus, grille salariale" },
@@ -52,7 +52,7 @@ export const CATEGORIES: NavCategory[] = [
     ] }],
   },
   {
-    id: "relations", label: "Relations", short: "Relations", icon: "👥", intro: "Les personnes qui comptent dans votre carrière.",
+    id: "relations", hub: "/play/relations", label: "Relations", short: "Relations", icon: "👥", intro: "Les personnes qui comptent dans votre carrière.",
     sections: [{ items: [
       { href: "/play/reseau", label: "Collègues et réseau", icon: "🕸️", desc: "Ce que chacun pense de vous" },
       { href: "/play/clients", label: "Clients", icon: "👥", desc: "Appeler, conseiller, fidéliser" },
@@ -62,7 +62,7 @@ export const CATEGORIES: NavCategory[] = [
     ] }],
   },
   {
-    id: "options", label: "Options", short: "Options", icon: "⚙️", intro: "Réglages de la partie.",
+    id: "options", hub: "/play/reglages", label: "Options", short: "Options", icon: "⚙️", intro: "Réglages de la partie.",
     sections: [{ items: [
       { href: "/play/parametres", label: "Paramètres", icon: "⚙️", desc: "Vitesse, difficulté, aides" },
       { href: "/play/sauvegardes", label: "Sauvegardes", icon: "💾", desc: "Sauvegarder, charger, exporter" },
@@ -76,6 +76,7 @@ const norm = (p: string) => (p.length > 1 ? p.replace(/\/$/, "") : p);
 export function categoryOf(path: string): string {
   const p = norm(path);
   if (p.startsWith("/play/actif")) return "pro";
+  for (const c of CATEGORIES) if (norm(c.hub) === p) return c.id;
   for (const c of CATEGORIES) for (const s of c.sections) for (const it of s.items) if (norm(it.href) === p) return c.id;
   return "bureau";
 }
