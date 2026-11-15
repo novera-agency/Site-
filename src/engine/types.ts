@@ -225,7 +225,7 @@ export interface Mission {
   /** Mission du jour (générée automatiquement) et niveau d'enjeu : 1 faible · 2 moyen · 3 élevé */
   daily?: boolean; stakes?: 1 | 2 | 3;
 }
-export interface Notification { id: string; t: number; level: "info" | "succes" | "alerte" | "critique"; title: string; body?: string; link?: string; read: boolean; }
+export interface Notification { id: string; t: number; level: "info" | "succes" | "alerte" | "critique"; title: string; body?: string; link?: string; read: boolean; count?: number; }
 export interface Message { id: string; t: number; from: string; subject: string; body: string; read: boolean; actions?: { label: string; action: string; payload?: Record<string, string> }[]; handled?: boolean; }
 export interface NewsItem { id: string; t: number; category: "macro" | "entreprises" | "banques_centrales" | "geopolitique" | "matieres" | "marches" | "reglementation" | "crises"; title: string; body: string; impact: "faible" | "moyen" | "fort"; tickers: string[]; zones: ZoneId[]; sentiment: number; }
 export interface CalendarEvent { id: string; day: number; minute: number; title: string; zone?: ZoneId; kind: "banque_centrale" | "statistique" | "resultats" | "echeance" | "observation" | "dividende"; ref?: string; importance: 1 | 2 | 3; done?: boolean; consensus?: string; actual?: string; }
@@ -248,6 +248,10 @@ export interface Company {
 export interface Decision { t: number; kind: string; text: string; }
 
 export interface GameSettings {
+  /** Notifications affichées : toutes, importantes (alertes, succès, critiques) ou critiques seulement */
+  notifLevel?: "toutes" | "importantes" | "critiques";
+  /** Musique d'ambiance et effets sonores */
+  sound?: boolean;
   minutesPerSecond: number;     // ratio temps réel → simulé à x1
   autoPauseImportant: boolean;
   livingExpenses: boolean;
@@ -277,12 +281,18 @@ export interface LifeState {
   lastRaiseAskT?: number;
   log: { t: number; text: string }[];
   budget: { month: number; bills: number; net: number }[];
+  /** Vie sentimentale et familiale */
+  partner?: { name: string; since: number; bond: number; married?: boolean };
+  children?: number;
   /** Investissements locatifs */
   properties?: Property[];
   reBought?: string[];
 }
 export interface GameState {
   version: number;
+  /** Parcours, succès et fin de partie */
+  progress?: { chapters: string[]; objectives: string[]; achievements: string[] };
+  ended?: { id: "retraite" | "faillite" | "fortune"; t: number; score: number };
   /** Prospects à démarcher (donnés par le N+1 ou recommandés) */
   prospects?: Prospect[];
   /** Vie privée (mode carrière) */

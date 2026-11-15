@@ -30,6 +30,8 @@ import { cashAcc, post } from "./ledger";
 import { toCents } from "./money";
 import { changeRep, gainXp, notify, pushNews, nextId, fx, logDecision } from "./core";
 import { assignProspects } from "./prospects";
+import { checkProgress } from "./progression";
+import { maybeWorldEvent } from "./worldEvents";
 import { repairUnaffordablePurchases } from "./realestate";
 import { initLife, dailyLife, housingEquity, priceLevel } from "./life";
 import { histInitialPrices, initHistorical, histAdjust, histAfterHistory, histDaily, histActive, histScriptedCrisis, HIST_EPOCH } from "./historical";
@@ -260,6 +262,7 @@ function newDay(s: GameState, rng: Rng) {
     dailyBonds(s, rng);
     dailyLiteCorporate(s, rng, trackedSet(s));
     dailyCompetitors(s, rng);
+    if (!histActive(s)) maybeWorldEvent(s, rng);
     if (s.historical && histActive(s)) { const hc = histScriptedCrisis(s); if (hc) startCrisis(s, hc[1], rng, hc[2]); }
     else maybeTriggerCrises(s, rng);
     if (!s.flags["vacationUntil"] || s.t >= (s.flags["vacationUntil"] as number)) { delete s.flags["vacationUntil"]; maybeCareerEvent(s, rng); planDay(s, rng); }
@@ -273,6 +276,7 @@ function newDay(s: GameState, rng: Rng) {
   dailyStructured(s);
   dailyWellbeing(s, weekend);
   dailyLife(s, rng);
+  checkProgress(s, true);
   sweepNegativeCash(s);
   // Mensuel
   if (!weekend && day === firstBusinessDayOfMonth(s.t)) {
@@ -332,6 +336,7 @@ function checkAlerts(s: GameState) {
 
 /** Un pas de simulation */
 export function step(s: GameState) {
+  if (s.ended) { s.paused = true; return; }
   const rng = new Rng(s.rng);
   const prevDay = dayIndex(s.t);
   s.t += STEP_MIN;

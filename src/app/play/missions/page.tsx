@@ -6,6 +6,7 @@ import { MissionQuiz, HelpButton } from "@/components/MissionHelp";
 import { useView, useAction } from "@/lib/hooks";
 import { Card, PageTitle, Loading, Badge, Bar, Button, inputCls, Tabs, Empty } from "@/components/ui";
 import { fmtShortDate } from "@/engine/time";
+import { Portrait } from "@/components/Portrait";
 
 function due(deadline: number, now: number) {
   const d = (deadline - now) / 1440;
@@ -23,7 +24,7 @@ export default function Missions() {
   const ap = data.appreciation as number;
   const STAKE: Record<number, [string, string, string]> = { 1: ["🟢 Enjeu faible", "gain", "Peu de risque, petite récompense."], 2: ["🟡 Enjeu moyen", "warn", "Récompense correcte ; un échec est remarqué."], 3: ["🔴 Enjeu élevé", "loss", "Grosse récompense et bonus ; un échec coûte cher en confiance et en réputation."] };
   const renderCard = (m: any) => (<Card key={m.id} title={m.title} right={<Badge tone={m.status === "reussie" ? "gain" : m.status === "echouee" ? "loss" : "info"}>{m.status === "active" ? `à rendre ${due(m.deadlineT, now)} (${fmtShortDate(m.deadlineT)})` : m.status === "reussie" ? "réussie" : "échouée"}</Badge>}>
-      {m.giverInfo ? <div className="mb-3 flex items-center gap-3 rounded-lg bg-ink-900 p-2.5"><span className="text-3xl">{m.giverInfo.avatar}</span><div className="min-w-0"><div className="text-[11px] uppercase tracking-wider text-ink-400">Mission confiée par</div><div className="font-semibold text-white">{m.giverInfo.name}</div><div className="text-xs text-ink-300">{m.giverInfo.role}</div></div></div> : <div className="mb-3 text-xs text-ink-400">Objectif personnel</div>}
+      {m.giverInfo ? <div className="mb-3 flex items-center gap-3 rounded-lg bg-ink-900 p-2.5"><Portrait id={m.giverInfo.id} size={44} title={m.giverInfo.name} /><div className="min-w-0"><div className="text-[11px] uppercase tracking-wider text-ink-400">Mission confiée par</div><div className="font-semibold text-white">{m.giverInfo.name}</div><div className="text-xs text-ink-300">{m.giverInfo.role}</div></div></div> : <div className="mb-3 text-xs text-ink-400">Objectif personnel</div>}
       {m.daily && m.stakes && <div className="mb-2 flex flex-wrap items-center gap-2 text-xs"><Badge tone={STAKE[m.stakes][1] as any}>{STAKE[m.stakes][0]}</Badge><span className="text-ink-400">{STAKE[m.stakes][2]}</span></div>}
       <p className="text-sm text-ink-100">{m.description}</p>
       {m.status === "active" && <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-ink-700 bg-ink-900 p-2.5"><HelpButton missionId={m.id} size="sm" /><span className="text-xs text-ink-400">Affiche les étapes et un conseil pour réussir dans un panneau à l'écran, même en changeant d'onglet.</span></div>}

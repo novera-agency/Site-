@@ -2,6 +2,7 @@
 import { z } from "zod";
 import type { GameState } from "@/engine/types";
 import { canCall, RECALL_DAYS } from "@/engine/prospects";
+import { checkProgress, endingAvailable, endGame } from "@/engine/progression";
 import { buyProperty, setRent, setSale, withdraw, renovate } from "@/engine/realestate";
 import { doActivity, moveHousing, sellHousing, setTransport, setSub } from "@/engine/life";
 import { SPEEDS, MIN_PER_DAY, tOfDay, dayIndex, nextBusinessDay, minuteOfDay, isWeekend, useEpoch, fmtDate } from "@/engine/time";
@@ -50,13 +51,14 @@ export const ActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("life_transport"), mode: z.enum(["commun", "velo", "occasion", "neuve"]) }),
   z.object({ type: z.literal("life_sub"), key: z.enum(["mutuelle", "assurance", "sport", "streaming"]), on: z.boolean() }),
   z.object({ type: z.literal("ask_raise") }),
+  z.object({ type: z.literal("end_game"), ending: z.enum(["retraite", "fortune"]) }),
   z.object({ type: z.literal("call_prospect"), id: z.string().max(40) }),
   z.object({ type: z.literal("re_buy"), listing: z.string().max(60), credit: z.boolean() }),
   z.object({ type: z.literal("re_rent"), id: z.string().max(40), rent: num.positive().max(100000) }),
   z.object({ type: z.literal("re_sell"), id: z.string().max(40), price: num.positive().max(1e8) }),
   z.object({ type: z.literal("re_withdraw"), id: z.string().max(40) }),
   z.object({ type: z.literal("re_renovate"), id: z.string().max(40) }),
-  z.object({ type: z.literal("settings"), minutesPerSecond: num.min(0.25).max(60).optional(), autoPauseImportant: z.boolean().optional(), livingExpenses: z.boolean().optional(), aiEnabled: z.boolean().optional(), explanations: z.boolean().optional(), allowShort: z.boolean().optional(), name: z.string().min(1).max(60).optional() }),
+  z.object({ type: z.literal("settings"), notifLevel: z.enum(["toutes", "importantes", "critiques"]).optional(), sound: z.boolean().optional(), minutesPerSecond: num.min(0.25).max(60).optional(), autoPauseImportant: z.boolean().optional(), livingExpenses: z.boolean().optional(), aiEnabled: z.boolean().optional(), explanations: z.boolean().optional(), allowShort: z.boolean().optional(), name: z.string().min(1).max(60).optional() }),
   z.object({ type: z.literal("tutorial_visit"), page: z.string().max(40) }),
   z.object({ type: z.literal("leave_meeting") }),
 ]);
@@ -67,7 +69,7 @@ export type ActionResult = { ok: boolean; message?: string; error?: string; data
 export function applyAction(s: GameState, a: Action): ActionResult {
   useEpoch(s);
   const r = applyActionInner(s, a);
-  if (r.ok) checkMissions(s);
+  if (r.ok) { checkMissions(s); checkProgress(s); }
   return r;
 }
 
@@ -170,6 +172,10 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
       const m = startMeeting(s, "prospection", { pros: p.id });
       return m ? { ok: true, data: { meetingId: m.id } } : { ok: false, error: "Appel impossible." };
     }
+    case "end_game": {
+      if (!endingAvailable(s).includes(a.ending)) return { ok: false, error: a.ending === "retraite" ? "La retraite est possible à 55 ans ou avec 2 millions d'euros de patrimoine." : "Il faut 50 millions d'euros de patrimoine." };
+      const r = endGame(s, a.ending); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error };
+    }
     case "ask_raise": {
       if (s.mode !== "carriere" || !s.career.employed) return { ok: false, error: "Vous n'êtes pas en poste." };
       if (s.activeMeetingId) return { ok: false, error: "Vous êtes déjà en réunion." };
@@ -181,6 +187,8 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
     case "lifestyle": s.flags["lifestyle"] = a.level; logDecision(s, "patrimoine", `Train de vie réglé au niveau ${a.level}`); return { ok: true, message: "Train de vie mis à jour." };
     case "settings": {
       if (a.minutesPerSecond !== undefined) s.settings.minutesPerSecond = a.minutesPerSecond;
+      if (a.notifLevel) s.settings.notifLevel = a.notifLevel;
+      if (a.sound !== undefined) s.settings.sound = a.sound;
       if (a.autoPauseImportant !== undefined) s.settings.autoPauseImportant = a.autoPauseImportant;
       if (a.livingExpenses !== undefined && s.mode === "carriere") s.settings.livingExpenses = a.livingExpenses;
       if (a.aiEnabled !== undefined) s.settings.aiEnabled = a.aiEnabled;

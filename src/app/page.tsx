@@ -7,9 +7,10 @@ import { BANK_BY_ID, TRACKS } from "@/engine/data/banks";
 import { fmtDateFor } from "@/engine/time";
 import { Button, inputCls } from "@/components/ui";
 import { Intro } from "@/components/Intro";
+import { hallOfFame, type HallEntry } from "@/lib/hall";
 
 interface Meta { gameId: string; name: string; mode: string; bank: string; t: number; updatedAt: string; rank?: string; difficulty: string; epochYear?: number; }
-type Item = "continuer" | "nouvelle" | "charger" | "libre" | "defis" | "options";
+type Item = "continuer" | "nouvelle" | "charger" | "libre" | "defis" | "honneur" | "options";
 
 const CHALLENGES = [
   { id: "survivre_krach", name: "Survivre au krach", text: "100 000 € en poche, et le marché va s'effondrer. Tenez 30 jours en perdant moins de 10 %." },
@@ -69,6 +70,25 @@ export default function Home() {
   const [name, setName] = useState(""); const [pw, setPw] = useState(""); const [msg, setMsg] = useState("");
   const [mps, setMps] = useState(1);
   const panelRef = useRef<HTMLElement>(null);
+  const [hall, setHall] = useState<HallEntry[]>([]);
+  useEffect(() => { setHall(hallOfFame()); }, []);
+  const [ioMsg, setIoMsg] = useState("");
+  const exportAll = async () => {
+    const list = await api<{ games: Meta[] }>("/api/saves");
+    const games: string[] = [];
+    for (const g of list.games ?? []) { const r = await api<{ ok: boolean; data?: string }>("/api/saves", { action: "export_json", gameId: g.gameId }); if (r.ok && r.data) games.push(r.data); }
+    const blob = new Blob([JSON.stringify({ format: "financial-empire-backup", version: 1, games })], { type: "application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `financial-empire-sauvegarde-${new Date().toISOString().slice(0, 10)}.json`; a.click();
+    setIoMsg(`${games.length} partie${games.length > 1 ? "s" : ""} téléchargée${games.length > 1 ? "s" : ""}.`);
+  };
+  const importAll = async (f: File) => {
+    try {
+      const txt = await f.text(); const j = JSON.parse(txt);
+      const games: string[] = j?.format === "financial-empire-backup" ? j.games : [txt];
+      let n = 0; for (const g of games) { const r = await api<{ ok: boolean }>("/api/saves", { action: "import", data: g }); if (r.ok) n++; }
+      setIoMsg(`${n} partie${n > 1 ? "s" : ""} restaurée${n > 1 ? "s" : ""}.`); load();
+    } catch { setIoMsg("Fichier illisible : choisissez un fichier téléchargé depuis Financial Empire."); }
+  };
 
   const load = useCallback(async () => {
     const r = await api<{ session: { name: string; guest: boolean } | null }>("/api/auth");
@@ -89,6 +109,7 @@ export default function Home() {
     { id: "charger", label: "Charger une partie", hint: saves?.length ? `${saves.length} partie${saves.length > 1 ? "s" : ""} enregistrée${saves.length > 1 ? "s" : ""}` : "Aucune partie pour l'instant" },
     { id: "libre", label: "Partie libre", hint: "Investir sans patron ni horaires" },
     { id: "defis", label: "Défis", hint: "Scénarios courts et chronométrés" },
+    { id: "honneur", label: "Tableau d'honneur", hint: "Vos meilleures fins de carrière" },
     { id: "options", label: "Options", hint: STATIC ? "Vitesse du temps" : "Vitesse du temps, compte" },
   ];
   const visible = items.filter((i) => !i.hidden);
@@ -141,6 +162,12 @@ export default function Home() {
             <span className="min-w-0"><b className="block truncate text-white">{g.name}</b><span className="block truncate text-xs text-ink-400">{careerLine(g)} · {fmtDateFor(g.t, g.epochYear, false)}</span></span><span className="shrink-0 text-sm text-gold">Jouer</span>
           </button></li>))}
         </ul>)}
+      <div className="mt-5 rounded-lg border border-ink-700 bg-ink-950/60 p-3 text-sm">
+        <div className="font-medium text-white">💾 Garder ses parties en sécurité</div>
+        <p className="mt-1 text-xs text-ink-400">{STATIC ? "Sur ce site, vos parties sont enregistrées uniquement dans ce navigateur : changer d'appareil ou effacer les données du site les ferait disparaître. Téléchargez régulièrement une copie." : "Téléchargez une copie de vos parties pour les garder ou les transférer."}</p>
+        <div className="mt-2 flex flex-wrap gap-2"><Button size="sm" data-testid="export-all" onClick={exportAll}>📤 Télécharger toutes mes parties</Button><label className="cursor-pointer rounded-md border border-ink-600 px-3 py-1.5 text-xs text-ink-200 hover:border-gold">📥 Restaurer depuis un fichier<input type="file" accept="application/json,.json" className="hidden" data-testid="import-all" onChange={(e) => { const f = e.target.files?.[0]; if (f) importAll(f); }} /></label></div>
+        {ioMsg && <p className="mt-2 text-xs text-gold">{ioMsg}</p>}
+      </div>
       <Link href="/sauvegardes" className="mt-4 inline-block text-sm text-ink-300 underline-offset-4 hover:underline">Gérer les sauvegardes (emplacements, export, import)</Link>
     </>,
     libre: <>
@@ -155,6 +182,11 @@ export default function Home() {
       <ul className="mt-4 space-y-2">{CHALLENGES.map((c) => (
         <li key={c.id} className="rounded-lg border border-ink-700 bg-ink-900/80 p-3"><div className="flex items-center justify-between gap-3"><b className="text-white">{c.name}</b><Button size="sm" onClick={() => go(`/nouvelle?mode=defi&defi=${c.id}`)}>Relever</Button></div><p className="mt-1 text-sm text-ink-400">{c.text}</p></li>))}
       </ul>
+    </>,
+    honneur: <>
+      <h2 className="text-2xl font-semibold text-white">Tableau d'honneur</h2>
+      <p className="mt-2 text-sm text-ink-400">Les scores des carrières terminées sur cet appareil (retraite, empire bâti ou faillite). Terminez une partie depuis Bureau → Parcours et succès.</p>
+      {hall.length === 0 ? <p className="mt-4 text-sm text-ink-500">Aucune carrière terminée pour l'instant.</p> : <ol className="mt-4 space-y-2" data-testid="hall">{hall.map((h, i) => <li key={i} className="flex items-center justify-between gap-3 rounded-lg border border-ink-700 bg-ink-900/80 px-4 py-2.5"><span className="min-w-0"><b className="text-white">{i + 1}. {h.name}</b><span className="block truncate text-xs text-ink-400">{h.title} · {h.ending === "retraite" ? "retraite" : h.ending === "fortune" ? "empire bâti" : "faillite"} · {h.epoch === 2000 ? "depuis 2000" : "monde 2027"}</span></span><span className="num text-lg font-semibold text-gold">{h.score}</span></li>)}</ol>}
     </>,
     options: <>
       <h2 className="text-2xl font-semibold text-white">Options</h2>

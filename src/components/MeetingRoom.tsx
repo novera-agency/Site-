@@ -4,6 +4,7 @@ import { useView, useAction } from "@/lib/hooks";
 import { useGame } from "@/lib/store";
 import { Button, Badge, inputCls } from "./ui";
 import { SoundTest } from "./SoundTest";
+import { Portrait } from "./Portrait";
 import { voiceSupport, voiceFor, voiceCast, ringTone, speak, stopSpeaking, listen, unlockAudio, type Listener } from "@/lib/voice";
 import { matchChoice, parseFrenchNumber } from "@/lib/voice-match";
 import { isTermQuestion } from "@/engine/glossary";
@@ -197,7 +198,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
         ) : mode === null ? (
           /* ───── Choix du mode à l'entrée ───── */
           <div className="flex flex-1 flex-col items-center justify-center gap-6 p-6 text-center" data-testid="mode-chooser">
-            <div><div className="text-sm text-ink-400">Autour de la table</div><div className="mt-3 flex flex-wrap justify-center gap-3">{m.participants.map((p) => <div key={p.id} className="flex items-center gap-2 rounded-lg bg-ink-800 px-3 py-2 text-left"><span className="text-2xl">{p.avatar}</span><div><div className="text-sm font-medium text-white">{p.name}</div><div className="text-[11px] text-ink-400">{p.role}</div></div></div>)}</div></div>
+            <div><div className="text-sm text-ink-400">Autour de la table</div><div className="mt-3 flex flex-wrap justify-center gap-3">{m.participants.map((p) => <div key={p.id} className="flex items-center gap-2 rounded-lg bg-ink-800 px-3 py-2 text-left"><Portrait id={p.id} size={36} title={p.name} /><div><div className="text-sm font-medium text-white">{p.name}</div><div className="text-[11px] text-ink-400">{p.role}</div></div></div>)}</div></div>
             {m.phone && <div className="text-sm text-ink-200">{m.pickup ? `📞 ${callee?.name} décroche.` : `📞 ${callee?.name} ne répond pas : vous tombez sur la messagerie.`}</div>}
             {salesBar && m.pickup && <div className="flex w-full justify-center">{salesBar}</div>}
             <div className="text-lg font-semibold text-white">{m.phone ? "Comment voulez-vous mener cet appel ?" : "Comment voulez-vous mener cette réunion ?"}</div>
@@ -223,7 +224,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
                 {warn}
                 {salesBar}
                 <div className="flex flex-wrap justify-center gap-4">{m.participants.map((p) => <div key={p.id} className={`flex w-36 flex-col items-center rounded-xl px-3 py-4 text-center transition ${speaker === p.id ? "bg-yellow-500/15 ring-2 ring-gold" : "bg-ink-800/80"}`}>
-                  <span className={`text-4xl ${speaker === p.id ? "animate-pulse" : ""}`}>{p.avatar}</span><div className="mt-2 text-sm font-medium text-white">{p.name}</div><div className="text-[11px] text-ink-400">{p.role}</div><div className="mt-1 text-[10px] text-ink-500" data-testid="voice-label">🔊 {cast.get(p.id)?.label}</div>{speaker === p.id && <div className="mt-1 text-[11px] font-semibold text-gold">parle…</div>}</div>)}</div>
+                  <Portrait id={p.id} size={64} active={speaker === p.id} title={p.name} /><div className="mt-2 text-sm font-medium text-white">{p.name}</div><div className="text-[11px] text-ink-400">{p.role}</div><div className="mt-1 text-[10px] text-ink-500" data-testid="voice-label">🔊 {cast.get(p.id)?.label}</div>{speaker === p.id && <div className="mt-1 text-[11px] font-semibold text-gold">parle…</div>}</div>)}</div>
                 <div className="w-full max-w-xl text-center">
                   {m.done ? <div><Badge tone={m.failed ? "loss" : "gold"}>{m.failed ? "Réunion ratée" : "Réunion terminée"}</Badge><p className="mt-3 text-sm text-ink-200">{m.outcome}</p><button onClick={() => setMode("ecrit")} className="mt-4 rounded-full bg-ink-800 px-4 py-2 text-sm text-ink-200 hover:bg-ink-700" data-testid="show-transcript">📄 Voir le compte rendu écrit</button></div>
                     : phase === "speaking" ? <div className="text-ink-200"><div className="text-lg">🔊 {speakingP ? `${speakingP.name} vous parle…` : "Écoutez…"}</div><button onClick={() => { runId.current++; stopSpeaking(); setSpeaker(null); startListening(); }} className="mt-2 text-xs text-ink-400 underline">passer</button></div>
@@ -247,7 +248,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
               <div className="flex min-h-0 flex-col">
                 <div className="flex gap-3 overflow-x-auto border-b border-ink-800 px-4 py-3 scroll-thin">
                   {sup.tts && <button data-testid="read-aloud" onClick={() => { if (readAloud) { stopVoice(); setReadAloud(false); } else { unlockAudio(); let k = 0; m.log.forEach((l, i) => { if (l.who.includes("(vous)")) k = i + 1; }); spokenUpTo.current = k; setReadAloud(true); } }} className={`shrink-0 rounded-lg px-3 py-2 text-xs ${readAloud ? "bg-gold text-ink-950" : "bg-ink-800 text-ink-200 hover:bg-ink-700"}`}>{readAloud ? "🔊 Voix activées" : "🔈 Entendre les voix"}</button>}
-                  {m.participants.map((p) => <div key={p.id} className="flex min-w-[170px] items-center gap-2 rounded-lg bg-ink-800 px-3 py-2"><span className="text-2xl">{p.avatar}</span><div className="min-w-0"><div className="truncate text-sm font-medium">{p.name}</div><div className="truncate text-[11px] text-ink-400">{p.role} · confiance {Math.round(p.trust)}</div></div></div>)}
+                  {m.participants.map((p) => <div key={p.id} className="flex min-w-[170px] items-center gap-2 rounded-lg bg-ink-800 px-3 py-2"><Portrait id={p.id} size={36} title={p.name} /><div className="min-w-0"><div className="truncate text-sm font-medium">{p.name}</div><div className="truncate text-[11px] text-ink-400">{p.role} · confiance {Math.round(p.trust)}</div></div></div>)}
                 </div>
                 <div className="scroll-thin flex-1 space-y-3 overflow-y-auto p-4" ref={logRef} style={{ maxHeight: "52vh" }} data-testid="meeting-log">
                   {m.log.map((l, i) => {

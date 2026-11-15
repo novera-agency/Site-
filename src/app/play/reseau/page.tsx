@@ -1,4 +1,5 @@
 "use client";
+import { Portrait } from "@/components/Portrait";
 import { useState } from "react";
 import { useView } from "@/lib/hooks";
 import { useGame } from "@/lib/store";
@@ -28,7 +29,7 @@ export default function Reseau() {
   return <>
     <PageTitle env="Relations professionnelles" title="Réseau et personnages" subtitle={`Chaque personnage a une personnalité, des objectifs, une mémoire et une opinion sur vous. Dialogue : ${ai ? "IA activée (côté serveur) — l'IA propose, le moteur valide." : "mode hors ligne scénarisé (aucune clé API configurée)."}`} />
     <div className="grid gap-4 xl:grid-cols-[360px_1fr]">
-      <Card pad={false}><ul className="divide-y divide-ink-800">{data.npcs.map((x: any) => <li key={x.id}><button onClick={() => setSel(x.id)} className={`flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-ink-800 ${n?.id === x.id ? "bg-ink-800" : ""}`}><span className="text-2xl">{x.avatar}</span><div className="min-w-0 flex-1"><div className="truncate text-sm font-medium">{x.name}</div><div className="truncate text-[11px] text-ink-400">{x.role}</div><Bar value={x.trust} tone={x.trust < 35 ? "loss" : x.trust < 55 ? "warn" : "gain"} /></div>{x.status && <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${x.status.tier === "allie" ? "bg-green-500/15 text-green-300" : x.status.tier === "defavorable" ? "bg-red-500/15 text-red-300" : x.status.tier === "reserve" ? "bg-amber-500/15 text-amber-300" : "bg-ink-700 text-ink-300"}`}>{x.status.label}</span>}</button></li>)}</ul></Card>
+      <Card pad={false}><ul className="divide-y divide-ink-800">{data.npcs.map((x: any) => <li key={x.id}><button onClick={() => setSel(x.id)} className={`flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-ink-800 ${n?.id === x.id ? "bg-ink-800" : ""}`}><Portrait id={x.id} size={36} title={x.name} /><div className="min-w-0 flex-1"><div className="truncate text-sm font-medium">{x.name}</div><div className="truncate text-[11px] text-ink-400">{x.role}</div><Bar value={x.trust} tone={x.trust < 35 ? "loss" : x.trust < 55 ? "warn" : "gain"} /></div>{x.status && <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${x.status.tier === "allie" ? "bg-green-500/15 text-green-300" : x.status.tier === "defavorable" ? "bg-red-500/15 text-red-300" : x.status.tier === "reserve" ? "bg-amber-500/15 text-amber-300" : "bg-ink-700 text-ink-300"}`}>{x.status.label}</span>}</button></li>)}</ul></Card>
       {n && <div className="space-y-4">
         <Card title={`${n.avatar} ${n.name}`} right={<Badge>{n.relation}</Badge>}>
           <div className="text-sm text-ink-200">{n.role}</div><div className="mt-1 text-xs text-ink-300">{n.personality}</div>

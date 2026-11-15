@@ -5,7 +5,7 @@
  */
 import type { GameState, LifeState } from "./types";
 import { Rng } from "./rng";
-import { clamp, notify, nextId, logDecision } from "./core";
+import { clamp, notify, nextId, logDecision, changeTrust } from "./core";
 import { cashAcc, post, cashOf } from "./ledger";
 const EXT_LIVING = "ext:depenses_vie";
 /** Solde du compte courant personnel, en euros (le grand livre compte en centimes) */
@@ -71,6 +71,8 @@ export const ACTIVITIES: Activity[] = [
   { id: "shopping", name: "Shopping", cost: 250, hours: 2, m: 1, p: 0, so: 1, f: 7, desc: "Se faire plaisir (mais l'effet s'estompe vite).", emoji: "🛍️" },
   { id: "psy", name: "Séance chez un psychologue", cost: 70, hours: 1, m: 11, p: 0, so: 0, f: 0, desc: "Parler à un professionnel aide vraiment.", emoji: "🛋️" },
   { id: "repos", name: "Grasse matinée et repos", cost: 0, hours: 4, m: 3, p: 5, so: 0, f: 2, weekend: true, desc: "Récupérer, tout simplement.", emoji: "😴" },
+  { id: "amour", name: "Soirée en amoureux", cost: 80, hours: 3, m: 4, p: 0, so: 3, f: 6, desc: "Du temps rien que pour vous deux (si vous êtes en couple).", emoji: "💞" },
+  { id: "enfants", name: "Journée avec les enfants", cost: 40, hours: 6, m: 6, p: 1, so: 4, f: 5, weekend: true, desc: "Parc, jeux, devoirs… (si vous avez des enfants).", emoji: "🧸" },
   { id: "weekend", name: "Week-end à la campagne", cost: 420, hours: 14, m: 12, p: 4, so: 6, f: 14, weekend: true, desc: "Deux jours loin de tout.", emoji: "🏡" },
 ];
 
@@ -92,7 +94,8 @@ function apply(s: GameState, m: number, p: number, so: number, f: number) { cons
 export function freeHours(s: GameState) {
   const l = s.life!;
   const vac = !!s.flags["vacationUntil"] && s.t < (s.flags["vacationUntil"] as number);
-  const total = isWeekend(s.t) || vac || !s.career.employed ? 14 : l.perks.teletravail ? 5 : HOUSING_BY_ID[l.housing.id].commute ? 3 : 4;
+  const kids = l.children ?? 0;
+  const total = Math.max(1, (isWeekend(s.t) || vac || !s.career.employed ? 14 - 3 * kids : (l.perks.teletravail ? 5 : HOUSING_BY_ID[l.housing.id].commute ? 3 : 4) - kids));
   const used = l.free.day === dayIndex(s.t) ? l.free.used : 0;
   return { total, used, left: Math.max(0, total - used) };
 }
@@ -104,6 +107,8 @@ export function doActivity(s: GameState, id: string) {
   if (s.activeMeetingId) return { ok: false as const, error: "Vous êtes en réunion." };
   const l = s.life!;
   if (a.weekend && !isWeekend(s.t) && !(s.flags["vacationUntil"] && s.t < (s.flags["vacationUntil"] as number))) return { ok: false as const, error: "Possible seulement le week-end ou en congés." };
+  if (a.id === "amour" && !l.partner) return { ok: false as const, error: "Vous n'êtes pas en couple pour l'instant." };
+  if (a.id === "enfants" && !(l.children ?? 0)) return { ok: false as const, error: "Vous n'avez pas d'enfant." };
   const fh = freeHours(s);
   if (fh.left < a.hours) return { ok: false as const, error: `Il ne vous reste que ${fh.left} h de temps libre aujourd'hui (il en faut ${a.hours}).` };
   const cost = a.id === "sport" && l.subs.sport ? 0 : Math.round(a.cost * priceLevel(s));
@@ -117,6 +122,7 @@ export function doActivity(s: GameState, id: string) {
   s.flags[key] = s.t;
   if (cost > 0) post(s, EXT_LIVING, cashAcc("perso"), toCents(cost), "EUR", `Loisirs : ${a.name}`);
   apply(s, a.m * tired, a.p * (a.p > 0 ? tired : 1), a.so * tired, a.f * tired);
+  if (l.partner) l.partner.bond = bar(l.partner.bond + (a.id === "amour" ? 14 : ["weekend", "resto", "concert", "cine", "famille", "enfants"].includes(a.id) ? 4 : 0) * tired);
   if (a.id === "club") s.career.stress = clamp(s.career.stress + 2, 0, 100);
   else s.career.stress = clamp(s.career.stress - Math.max(0, a.m) * 0.6 * tired, 0, 100);
   lg(s, `${a.emoji} ${a.name}${cost ? ` (−${cost} €)` : ""}`);
@@ -152,6 +158,7 @@ export function monthlyBills(s: GameState): [string, number][] {
   out.push(["Courses et alimentation", Math.round(380 * k)]);
   out.push([TRANSPORT[l.transport].name + (h.commute && l.transport === "commun" ? " (abonnement grande banlieue)" : ""), Math.round(TRANSPORT[l.transport].cost * k * (h.commute && l.transport === "commun" ? 1.4 : 1))]);
   out.push(["Téléphone", Math.round(25 * k)]);
+  if (l.children) out.push([`Enfants : garde, cantine, vêtements (${l.children})`, Math.round(650 * l.children * k)]);
   for (const [key, sub] of Object.entries(SUBS) as [keyof LifeState["subs"], (typeof SUBS)[keyof typeof SUBS]][]) if (l.subs[key]) out.push([sub.name, Math.round(sub.cost * k)]);
   return out;
 }
@@ -262,7 +269,12 @@ export function setSub(s: GameState, key: keyof LifeState["subs"], on: boolean) 
 export function housingEquity(s: GameState) { const l = s.life; if (!l) return 0; return (l.housing.owned ? ((l.housing.value ?? 0) - (l.housing.mortgage?.principal ?? 0)) / 100 : 0) + propertiesEquity(s); }
 
 // ───────────── Chaque jour ─────────────
+const colleague = (s: GameState, rng: Rng) => { const ids = ["colleague", "senior", "analyst", "risk"].filter((x) => s.npcs[x]); const id = rng.pick(ids); s.flags["storyNpc"] = id; return s.npcs[id]; };
 const LIFE_EVENTS: { id: string; w: (s: GameState) => number; fire: (s: GameState, rng: Rng) => void }[] = [
+  { id: "collegue_divorce", w: (s) => (s.career.employed ? 0.5 : 0), fire: (s, rng) => { const n = colleague(s, rng); choice(s, "collegue_divorce", `${n.name} traverse un divorce`, `${n.name} (${n.role}) vous confie traverser un divorce difficile et vous demande de prendre le relais sur un dossier cette semaine.`, [["Apporter votre soutien et reprendre le dossier", "go"], ["Expliquer que vous êtes débordé", "no"]]); } },
+  { id: "collegue_bebe", w: (s) => (s.career.employed ? 0.6 : 0), fire: (s, rng) => { const n = colleague(s, rng); choice(s, "collegue_bebe", `${n.name} vient d'être parent`, `L'équipe organise une cagnotte (30 €) pour la naissance du bébé de ${n.name}.`, [["Participer", "go"], ["Ne pas participer", "no"]]); } },
+  { id: "collegue_burnout", w: (s) => (s.career.employed ? 0.35 : 0), fire: (s, rng) => { const n = colleague(s, rng); choice(s, "collegue_burnout", `${n.name} est en arrêt pour épuisement`, `${n.name} est en arrêt pour trois semaines. Votre responsable demande qui peut reprendre une partie de ses dossiers.`, [["Se porter volontaire", "go"], ["Ne pas se proposer", "no"]]); } },
+  { id: "collegue_pot", w: (s) => (s.career.employed ? 0.7 : 0), fire: (s, rng) => { const n = colleague(s, rng); choice(s, "collegue_pot", `Pot de départ de ${n.name} ?`, `${n.name} fête sa promotion ce soir dans un bar près de la banque.`, [["Y passer", "go"], ["Rentrer chez soi", "no"]]); } },
   { id: "panne", w: () => 1, fire: (s, rng) => { const l = s.life!; const cost = Math.round(rng.range(250, 900) * priceLevel(s)); const pay = l.housing.owned ? cost : Math.round(cost * 0.1); post(s, EXT_LIVING, cashAcc("perso"), toCents(pay), "EUR", "Réparation imprévue (chauffe-eau, électroménager)"); apply(s, -3, 0, 0, -1); notify(s, "alerte", "Panne à la maison", `${l.housing.owned ? "Propriétaire, vous payez tout" : "Votre propriétaire prend l'essentiel en charge"} : ${pay} € à votre charge.`, "/play/vie"); lg(s, `🔧 Panne à la maison (−${pay} €)`); } },
   { id: "degat", w: () => 0.4, fire: (s) => { const l = s.life!; const cost = Math.round((l.subs.assurance ? 150 : 1800) * priceLevel(s)); post(s, EXT_LIVING, cashAcc("perso"), toCents(cost), "EUR", `Dégât des eaux${l.subs.assurance ? " (franchise de l'assurance)" : " (non assuré)"}`); apply(s, -5, 0, 0, -2); notify(s, l.subs.assurance ? "info" : "critique", "Dégât des eaux", l.subs.assurance ? `Votre assurance couvre tout sauf la franchise : ${cost} €.` : `Sans assurance habitation, la facture est lourde : ${cost} €.`, "/play/vie"); lg(s, `💧 Dégât des eaux (−${cost} €)`); } },
   { id: "grippe", w: () => 0.8, fire: (s) => { const l = s.life!; const cost = Math.round((l.subs.mutuelle ? 25 : 180) * priceLevel(s)); post(s, EXT_LIVING, cashAcc("perso"), toCents(cost), "EUR", `Médecin et pharmacie${l.subs.mutuelle ? "" : " (sans mutuelle)"}`); apply(s, -4, -15, -2, -3); s.career.stress = clamp(s.career.stress + 4, 0, 100); notify(s, "alerte", "Vous êtes malade", `Une mauvaise grippe : forme en berne. Frais restant à votre charge : ${cost} €.`, "/play/vie"); lg(s, "🤒 Grippe"); } },
@@ -276,6 +288,32 @@ function choice(s: GameState, ev: string, subject: string, body: string, opts: [
   s.messages.unshift({ id: nextId(s, "msg"), t: s.t, from: "Vie privée", subject, body, read: false, actions: opts.map(([label, c]) => ({ label, action: "life_choice", payload: { ev, choice: c } })) });
   notify(s, "info", subject, "Une décision personnelle vous attend dans la messagerie.", "/play/messagerie");
 }
+/** Vie sentimentale et familiale : rencontre, entretien du lien, mariage, enfants, rupture */
+const FIRST_NAMES = ["Camille", "Alex", "Sacha", "Charlie", "Lou", "Noa", "Maël", "Eden", "Andréa", "Morgan", "Jules", "Inès", "Léo", "Clara", "Hugo", "Sarah"];
+function dailyLove(s: GameState, rng: Rng) {
+  const l = s.life!;
+  const p = l.partner;
+  if (!p) {
+    if (l.social >= 55 && rng.chance(0.01) && !s.messages.some((m) => !m.handled && m.actions?.some((a) => a.payload?.ev === "rencontre"))) {
+      const name = rng.pick(FIRST_NAMES);
+      s.flags["metName"] = name;
+      choice(s, "rencontre", `Une rencontre : ${name}`, `Lors d'une soirée, vous avez longuement discuté avec ${name}. Le courant passe très bien, et ${name} vous propose de vous revoir.`, [["Accepter un rendez-vous", "go"], ["Pas le moment, le travail d'abord", "no"]]);
+    }
+    return;
+  }
+  p.bond = bar(p.bond - (s.career.stress > 70 ? 1.6 : 1));
+  if (p.bond >= 60) l.mental = bar(l.mental + 0.3);
+  if ((l.children ?? 0) > 0) { l.mental = bar(l.mental + 0.15 * (l.children ?? 0)); l.physique = bar(l.physique - 0.1); }
+  if (p.bond < 12) {
+    notify(s, "critique", `Rupture avec ${p.name}`, "Vous ne vous voyiez plus. La séparation est douloureuse.", "/play/vie");
+    lg(s, `💔 Rupture avec ${p.name}`);
+    apply(s, -20, 0, -10, -10); s.career.stress = clamp(s.career.stress + 10, 0, 100);
+    l.partner = undefined; return;
+  }
+  const years = (s.t - p.since) / (365 * MIN_PER_DAY);
+  if (!p.married && p.bond >= 80 && years >= 1 && rng.chance(0.004)) choice(s, "mariage_soi", `Et si vous vous mariiez avec ${p.name} ?`, `Cela fait plus d'un an que vous êtes ensemble. ${p.name} évoque l'idée d'un mariage (environ 15 000 € de cérémonie).`, [["Dire oui !", "go"], ["Pas maintenant", "no"]]);
+  if ((l.children ?? 0) < 3 && p.bond >= 70 && years >= 1.5 && rng.chance(0.003)) choice(s, "enfant", "Un projet d'enfant", `${p.name} aimerait agrandir la famille. Un enfant, c'est de la joie… et moins de temps libre, plus de dépenses (garde, cantine…).`, [["Oui, fondons une famille", "go"], ["Pas encore", "no"]]);
+}
 export function lifeChoice(s: GameState, ev: string, c: string): string {
   if (!s.life) return "";
   const k = priceLevel(s);
@@ -285,6 +323,13 @@ export function lifeChoice(s: GameState, ev: string, c: string): string {
     case "mariage": if (go) { pay(400, "Mariage d'un ami : voyage et cadeau"); apply(s, 6, -2, 14, 10); lg(s, "💍 Mariage d'un ami"); return "Une journée inoubliable. Votre ami est touché."; } apply(s, -3, 0, -10, -2); return "Votre ami est déçu.";
     case "anniv": if (go) { pay(80, "Cadeau d'anniversaire"); apply(s, 5, 0, 8, 4); lg(s, "🎂 Anniversaire en famille"); return "Votre mère est ravie de vous voir."; } apply(s, -2, 0, -5, 0); return "Elle comprend… mais aurait préféré vous voir.";
     case "weekend_amis": if (go) { pay(420, "Week-end entre amis"); apply(s, 8, 2, 12, 15); s.career.stress = clamp(s.career.stress - 8, 0, 100); lg(s, "🏡 Week-end entre amis"); return "Deux jours de rires : vous revenez rechargé."; } apply(s, -1, 0, -6, -2); return "Vous restez chez vous.";
+    case "rencontre": if (go) { const name = String(s.flags["metName"] ?? "Camille"); s.life.partner = { name, since: s.t, bond: 55 }; apply(s, 8, 0, 6, 8); lg(s, `❤️ Début d'une histoire avec ${name}`); return `Premier rendez-vous réussi avec ${name}. Entretenez votre relation : soirées en amoureux, sorties à deux.`; } return "Vous restez concentré sur votre carrière.";
+    case "mariage_soi": if (go && s.life.partner) { pay(15000, `Mariage avec ${s.life.partner.name}`); s.life.partner.married = true; s.life.partner.bond = 100; apply(s, 15, 0, 15, 15); lg(s, `💍 Mariage avec ${s.life.partner.name}`); return "Un mariage magnifique, entouré de vos proches."; } if (s.life.partner) s.life.partner.bond = bar(s.life.partner.bond - 10); return "Votre partenaire comprend, mais la déception se lit dans son regard.";
+    case "enfant": if (go) { s.life.children = (s.life.children ?? 0) + 1; apply(s, 12, -4, 6, 10); lg(s, "👶 Naissance d'un enfant"); notify(s, "succes", "Naissance !", "Félicitations : votre famille s'agrandit. Prévoyez la garde et un peu moins de temps libre.", "/play/vie"); return "Neuf mois plus tard… félicitations !"; } if (s.life.partner) s.life.partner.bond = bar(s.life.partner.bond - 6); return "Vous en reparlerez plus tard.";
+    case "collegue_divorce": { const id = String(s.flags["storyNpc"] ?? "colleague"); if (go) { s.career.stress = clamp(s.career.stress + 5, 0, 100); changeTrust(s, id, 10, "Vous l'avez soutenu pendant son divorce"); return "Votre collègue vous en sera longtemps reconnaissant·e."; } changeTrust(s, id, -4, "Pas de soutien pendant son divorce"); return "Votre collègue comprend… mais s'en souviendra."; }
+    case "collegue_bebe": { const id = String(s.flags["storyNpc"] ?? "colleague"); if (go) { pay(30, "Cagnotte naissance d'un collègue"); changeTrust(s, id, 4, "Cadeau de naissance"); apply(s, 1, 0, 2, 1); return "Votre geste fait chaud au cœur."; } changeTrust(s, id, -1); return "Vous ne participez pas."; }
+    case "collegue_burnout": { const id = String(s.flags["storyNpc"] ?? "colleague"); if (go) { s.career.stress = clamp(s.career.stress + 8, 0, 100); changeTrust(s, id, 12, "A repris ses dossiers pendant son arrêt"); changeTrust(s, "boss", 3, "Esprit d'équipe"); return "Semaine chargée, mais l'équipe vous en est reconnaissante."; } changeTrust(s, "boss", -2, "Manque d'esprit d'équipe"); return "Le responsable répartit les dossiers autrement."; }
+    case "collegue_pot": { const id = String(s.flags["storyNpc"] ?? "colleague"); if (go) { apply(s, 2, -1, 6, 4); changeTrust(s, id, 3, "Présent à son pot"); s.career.stress = clamp(s.career.stress - 2, 0, 100); return "Bonne ambiance : vous apprenez au passage deux ou trois choses sur la banque."; } return "Vous rentrez directement."; }
     case "demenagement_ami": if (go) { apply(s, 2, -3, 9, 1); lg(s, "📦 Coup de main à un ami"); return "Courbatures, mais un ami reconnaissant."; } apply(s, 0, 0, -5, 0); return "Votre ami se débrouillera sans vous.";
   }
   return "";
@@ -298,11 +343,11 @@ export function dailyLife(s: GameState, rng: Rng) {
   const vac = !!s.flags["vacationUntil"] && s.t < (s.flags["vacationUntil"] as number);
   const h = HOUSING_BY_ID[l.housing.id];
   // Usure naturelle : sans entretien, les jauges baissent
-  l.social = bar(l.social - 1.0);
-  l.fun = bar(l.fun - 1.2);
+  l.social = bar(l.social - 1.4);
+  l.fun = bar(l.fun - 1.6);
   l.physique = bar(l.physique - (l.transport === "velo" ? 0.1 : 0.45) + (l.subs.sport ? 0.15 : 0));
   let dm = 0;
-  if (!weekend && !vac && c.employed) dm -= Math.max(0, c.stress - 35) / 25 + (h.commute && !l.perks.teletravail ? 0.4 : 0);
+  if (!weekend && !vac && c.employed) dm -= 0.35 + Math.max(0, c.stress - 35) / 25 + (h.commute && !l.perks.teletravail ? 0.4 : 0);
   if (weekend || vac) dm += 1.2;
   dm += (h.comfort - 2) * 0.15 + (l.perks.teletravail ? 0.25 : 0) + (l.subs.streaming ? 0.1 : 0);
   if (l.social < 25) dm -= 0.8;
@@ -324,6 +369,7 @@ export function dailyLife(s: GameState, rng: Rng) {
   }
   if (l.mental <= 8 && !s.flags["burnoutUntil"]) c.stress = Math.max(c.stress, 93); // déclenche l'arrêt pour épuisement
   dailyRealEstate(s, rng);
+  dailyLove(s, rng);
   // Événements de la vie (environ un par semaine)
   if (rng.chance(0.14)) {
     const pool = LIFE_EVENTS.filter((e) => e.w(s) > 0 && s.t - ((s.eventCooldowns[`life_${e.id}`] as number) ?? -1e9) > 45 * MIN_PER_DAY);

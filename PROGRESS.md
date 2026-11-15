@@ -73,11 +73,22 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 
 ## Vérifications (dernière exécution)
 - `npm run lint` : OK
-- `npm test` : 79/79
-- `npm run e2e` : 9/9 (dont parcours 20 étapes et appel client)
+- `npm test` : 87/87
+- `npm run e2e` : 18/18 (dont parcours 20 étapes, appel client, immobilier, vie privée, voix)
+- Affichage émulé iPhone 13, Pixel 7 et iPad : aucune page ne déborde horizontalement (38 écrans)
 - `npm run build` : OK
 
 ## Bugs corrigés pendant les tests
 - Coupons dont la date tombait un week-end jamais versés → rattrapage au jour ouvré suivant.
 - Volatilité réalisée trop élevée (cumul des chocs de volatilité) → amortissement et plafonnement.
 - Historique obligataire décalé du prix courant → recollage sur le dernier cours.
+
+## Dernier lot (parcours, fins, vie de famille, équilibrage)
+- ✅ Chapitres, succès, score, fins de partie (retraite, faillite après 120 jours de dettes, fortune) et tableau d'honneur.
+- ✅ Couple, mariage, enfants (coûts et temps libre), histoires de collègues, événements mondiaux simulés.
+- ✅ Notifications regroupées (×n) et filtrées (toutes / importantes / critiques), son et musique désactivables, portraits.
+- ✅ Export / import de toutes les sauvegardes en un fichier.
+- ✅ Équilibrage vérifié par simulation de 3 ans : un joueur passif n'est plus promu (confiance du N+1 ≥ 45 et 50 % de missions réussies requises), plus de burn-out en boucle (récupération à 45, avertissement puis congé forcé au troisième).
+- ❌ Version anglaise : non faite (tous les textes sont écrits en français dans le code).
+- ❌ Synchronisation dans le cloud : impossible sur un hébergement statique ; remplacée par l'export de fichier.
+- ⚠️ Classement : local à l'appareil uniquement. Tests mobiles : émulés, pas sur de vrais téléphones.

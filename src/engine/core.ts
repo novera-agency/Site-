@@ -24,7 +24,16 @@ export function priceOf(s: GameState, id: string) { return s.quotes[id]?.price ?
 /** Valeur de marché d'une quantité (devise de l'instrument). Futures : valeur notionnelle. */
 export function marketValueLocal(s: GameState, id: string, qty: number) { const d = s.instruments[id]; return priceOf(s, id) * qty * multiplier(d); }
 
+/** Notifications regroupées : plusieurs notifications du même type rapprochées n'en forment qu'une (« ×3 ») */
+const groupKey = (t: string) => t.replace(/\s*\(×\d+\)$/, "").split(/ : | — /)[0].trim();
 export function notify(s: GameState, level: Notification["level"], title: string, body?: string, link?: string) {
+  const last = s.notifications.find((n) => !n.read && groupKey(n.title) === groupKey(title) && s.t - n.t < 6 * 60);
+  if (last && level !== "critique") {
+    const n = (last.count ?? 1) + 1;
+    last.count = n; last.t = s.t; last.title = `${groupKey(title)} (×${n})`; last.body = body; if (link) last.link = link;
+    const i = s.notifications.indexOf(last); s.notifications.splice(i, 1); s.notifications.unshift(last);
+    return;
+  }
   s.notifications.unshift({ id: nextId(s, "n"), t: s.t, level, title, body, link, read: false });
   if (s.notifications.length > 150) s.notifications.length = 150;
 }

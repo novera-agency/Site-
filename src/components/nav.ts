@@ -8,6 +8,7 @@ export const CATEGORIES: NavCategory[] = [
     id: "bureau", hub: "/play", label: "Bureau", short: "Bureau", icon: "🏢", intro: "Votre journée : ce qui vous attend aujourd'hui.",
     sections: [{ items: [
       { href: "/play", label: "Mon bureau", icon: "🏢", desc: "Résumé de la journée et prochains rendez-vous" },
+      { href: "/play/parcours", label: "Parcours et succès", icon: "🧭", desc: "Vos objectifs par chapitre, trophées, score" },
       { href: "/play/missions", label: "Missions", icon: "🎯", desc: "Les tâches du jour confiées par votre hiérarchie", badge: "missions" },
       { href: "/play/agenda", label: "Agenda", icon: "🗓️", desc: "Votre emploi du temps" },
       { href: "/play/reunions", label: "Réunions", icon: "🤝", desc: "Rejoindre ou relire vos réunions", badge: "meeting" },

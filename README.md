@@ -76,5 +76,10 @@ Le workflow `.github/workflows/pages.yml` vérifie le code (TypeScript, 37 tests
 - **Appeler vos clients** depuis l'écran Clients : sonnerie, le client décroche (ou messagerie et rappel le lendemain), et **chaque faute fait baisser l'objectif de vente** (−5 à −30 %) ; sous 30 % de l'objectif initial, il raccroche. Chaque collaborateur a sa propre voix.
 - 17 réunions jouables, 12 PNJ persistants + clients, 22 modèles de missions paramétrables, 35 modules de formation, crises à phases.
 - Création de société (6 types) avec bilan, compte de résultat, flux de trésorerie et risque de faillite.
+- **Parcours** : 8 chapitres avec objectifs, 27 succès, score de carrière ; trois fins (retraite, faillite, fortune) et tableau d'honneur local.
+- **Vie privée complète** : salaire précis, factures, logement, jauges (santé mentale, forme, vie sociale, plaisir), rencontres, couple, mariage, enfants, histoires de collègues.
+- Investissement immobilier dans 13 villes françaises, prospection confiée par le N+1, au moins deux missions générées par jour.
+- Événements mondiaux simulés (parties fictives), notifications regroupées avec trois niveaux, musique et bruitages synthétisés, portraits générés.
+- Sauvegarde complète exportable en fichier et réimportable depuis l'accueil.
 
 Voir `ARCHITECTURE.md`, `FINANCIAL_MODELS.md`, `TESTING.md` et l'état exact dans `PROGRESS.md`.

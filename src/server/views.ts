@@ -23,6 +23,8 @@ import { skillLevel, SKILL_LEVELS, SKILL_NAMES, REP_NAMES, avgRep, toEur, multip
 import { dayIndex, MIN_PER_DAY, fmtDate, useEpoch, isWeekend } from "@/engine/time";
 import { appreciation } from "@/engine/missions";
 import { canCall } from "@/engine/prospects";
+import { CHAPTERS, ACHIEVEMENTS, currentChapter, careerScore, endingAvailable, ENDINGS } from "@/engine/progression";
+import { wealthOf } from "@/engine/wealth";
 import { CITIES, CITY_BY_ID, TYPE_NAME, COND_NAME, marketValue, marketRent, rentCap, rentProbability, saleProbability, cityPrice, cityRent, listings, propertiesEquity, loanBurden } from "@/engine/realestate";
 import { payslip, monthlyBills, freeHours, priceLevel, HOUSING, HOUSING_BY_ID, rentOf, priceOf, housingEquity, mortgageRate, TRANSPORT, SUBS, ACTIVITIES } from "@/engine/life";
 
@@ -63,6 +65,7 @@ export function nextSteps(s: GameState) {
 }
 
 /** Instantané léger renvoyé à chaque tick */
+const visibleNotif = (s: GameState, n: GameState["notifications"][number]) => { const l = s.settings.notifLevel ?? "importantes"; return l === "toutes" || n.level === "critique" || (l === "importantes" && n.level !== "info"); };
 export function snapshot(s: GameState, aiAvailable = false) {
   useEpoch(s);
   const quotes: Record<string, [number, number]> = {};
@@ -75,14 +78,16 @@ export function snapshot(s: GameState, aiAvailable = false) {
   const pend = typeof s.flags["pendingMeeting"] === "string" ? JSON.parse(s.flags["pendingMeeting"] as string) as { template: string; title: string } : null;
   const nextAgenda = s.agenda.find((a) => a.status === "prevu" && a.t >= s.t);
   return {
+    chapter: (() => { if (s.mode !== "carriere") return null; const c = currentChapter(s); if (!c) return null; const done = s.progress?.objectives ?? []; const next = c.objectives.find((o) => !done.includes(o.id)); return { title: c.title, done: c.objectives.filter((o) => done.includes(o.id)).length, total: c.objectives.length, next: next ? { label: next.label, hint: next.hint, link: next.link } : null }; })(),
+    ended: s.ended ?? null,
     life: s.life && s.mode === "carriere" ? { mental: Math.round(s.life.mental), physique: Math.round(s.life.physique), social: Math.round(s.life.social), fun: Math.round(s.life.fun) } : null,
     id: s.id, t: s.t, epochYear: s.epochYear ?? 2027, historical: !!s.historical, speed: s.speed, paused: s.paused, pauseReason: s.pauseReason, mode: s.mode, difficulty: s.difficulty, regime: s.macro.regime, regimeLabel: REGIMES[s.macro.regime].label,
     minutesPerSecond: s.settings.minutesPerSecond,
     quotes, sessions: marketStatus(s),
     wealth: r2(wealth(s)), perso: r2(accountEquity(s, "perso")), persoCash: r2(cashEur(s, "perso")), desk: s.accounts.desk && s.career.employed ? r2(accountEquity(s, "desk")) : null,
     deskPnlWeek: s.accounts.desk && s.career.employed ? r2(accountEquity(s, "desk") - s.career.weekStartEquity) : null,
-    unread: s.notifications.filter((n) => !n.read).length, missionsActive: s.missions.filter((m) => m.status === "active").length, unreadMsgs: s.messages.filter((m) => !m.read).length,
-    notifications: s.notifications.slice(0, 6),
+    unread: s.notifications.filter((n) => !n.read && visibleNotif(s, n)).length, sound: s.settings.sound ?? true, missionsActive: s.missions.filter((m) => m.status === "active").length, unreadMsgs: s.messages.filter((m) => !m.read).length,
+    notifications: s.notifications.filter((n) => visibleNotif(s, n)).slice(0, 6),
     activeMeetingId: s.activeMeetingId ?? null, pendingMeeting: pend ? { template: pend.template, title: pend.title, info: meetingInfo(s, pend.template, (pend as { params?: Record<string, string> }).params ?? {}) } : null,
     nextAgenda: nextAgenda ? { t: nextAgenda.t, title: nextAgenda.title } : null,
     tutorial: s.mode === "carriere" && !s.tutorial.done ? tutorialChecklist(s) : null,
@@ -227,6 +232,17 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
       const sum = (f: (m: string) => boolean, sign: 1 | -1) => entries.filter((e) => f(e.memo) && (sign === 1 ? e.debit === "perso:cash" : e.credit === "perso:cash")).reduce((a, e) => a + toEur(s, e.amount / 100, e.cur), 0);
       return { perso: accountSummary(s, "perso"), persoEq, company, total: persoEq + company, lifestyle: (s.flags["lifestyle"] as number) ?? 1, livingExpenses: s.settings.livingExpenses, lifeOn: !!s.life && s.mode === "carriere", housing: housingEquity(s), income: { salaires: sum((m) => m.startsWith("Salaire") || m.startsWith("Bonus"), 1), dividendes: sum((m) => m.startsWith("Dividende") || m.startsWith("Coupon") || m.startsWith("Intérêts"), 1), depenses: sum((m) => m.startsWith("Dépenses") || m.startsWith("Agios") || m.startsWith("Facture") || m.startsWith("Loisirs") || m.startsWith("Impôt") || m.startsWith("Déménagement") || m.startsWith("Achat —"), -1) }, history: s.accounts.perso.equityHistory, peak: s.stats.peakWealth, maxDrawdown: s.stats.maxDrawdown };
     }
+    case "progress": {
+      const pr = s.progress ?? { chapters: [], objectives: [], achievements: [] };
+      const cur = currentChapter(s);
+      return {
+        mode: s.mode,
+        chapters: CHAPTERS.map((c) => ({ id: c.id, title: c.title, intro: c.intro, reward: c.reward.text, done: pr.chapters.includes(c.id), current: cur?.id === c.id, objectives: c.objectives.map((o) => ({ id: o.id, label: o.label, hint: o.hint, link: o.link, done: pr.objectives.includes(o.id) || pr.chapters.includes(c.id) })) })),
+        achievements: ACHIEVEMENTS.map((a) => ({ id: a.id, title: a.title, desc: a.desc, icon: a.icon, secret: !!a.secret, done: pr.achievements.includes(a.id) })),
+        score: careerScore(s), endings: endingAvailable(s).map((id) => ({ id, ...ENDINGS[id] })), ended: s.ended ? { ...s.ended, ...ENDINGS[s.ended.id] } : null,
+        age: Math.floor(s.profile.age + s.stats.daysPlayed / 365), wealth: wealthOf(s),
+      };
+    }
     case "realestate": {
       if (!s.life) return { enabled: false };
       const city = p.city && CITY_BY_ID[p.city] ? p.city : "lyon";
@@ -254,7 +270,7 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
         transport: l.transport, transports: Object.entries(TRANSPORT).map(([id, x]) => ({ id, ...x, cost: Math.round(x.cost * k) })),
         subs: l.subs, subsList: Object.entries(SUBS).map(([id, x]) => ({ id, ...x, cost: Math.round(x.cost * k) })),
         activities: ACTIVITIES.map((a) => ({ ...a, cost: a.id === "sport" && l.subs.sport ? 0 : Math.round(a.cost * k) })), free: fh, weekend: isWeekend(s.t),
-        perks: l.perks, log: l.log.slice(0, 25), budget: l.budget.slice(0, 12), salary: s.career.salaryAnnual / 100,
+        perks: l.perks, partner: l.partner ?? null, children: l.children ?? 0, log: l.log.slice(0, 25), budget: l.budget.slice(0, 12), salary: s.career.salaryAnnual / 100,
         raiseAt: l.lastRaiseAskT !== undefined ? l.lastRaiseAskT + 180 * MIN_PER_DAY : null, employed: s.career.employed, vacationLeft: 25 + l.perks.extraLeave - ((s.flags["vacationDaysYear"] as number) ?? 0),
       };
     }

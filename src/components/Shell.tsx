@@ -11,6 +11,7 @@ import { MeetingLauncher } from "./MeetingRoom";
 import { MissionHelpPanel } from "./MissionHelp";
 import { Badge, Disclaimer } from "./ui";
 import type { Snapshot } from "@/server/views";
+import { sfx, startMusic, stopMusic, setSoundEnabled } from "@/lib/sound";
 import { CATEGORIES, categoryOf, itemOf, type NavCategory } from "./nav";
 
 
@@ -28,8 +29,8 @@ function TopBar({ snap, onMenu }: { snap: Snapshot; onMenu: () => void }) {
         <div className="flex items-center gap-2">
           <div className="text-right"><div className="num text-lg font-semibold leading-none text-white">{fmtTime(snap.t)}</div><div className="text-[11px] capitalize text-ink-300">{fmtDate(snap.t)}</div></div>
           <div className="flex items-center gap-1" data-testid="speed-controls">
-            <button data-testid="play-pause" onClick={() => act({ type: "pause", paused: !snap.paused }, { silent: true })} className={`rounded-md px-2.5 py-1.5 text-sm font-semibold ${snap.paused ? "bg-green-600 text-white" : "bg-amber-500 text-black"}`} title={snap.paused ? "Reprendre" : "Pause"}>{snap.paused ? "▶" : "❚❚"}</button>
-            {SPEEDS.map((x) => <button key={x} data-testid={`speed-${x}`} onClick={() => act({ type: "speed", speed: x }, { silent: true })} className={`num rounded px-1.5 py-1 text-[11px] ${[1, 10, 100].includes(x) ? "" : "hidden sm:inline-block "}${snap.speed === x && !snap.paused ? "bg-accent text-white" : snap.speed === x ? "bg-ink-600 text-white" : "bg-ink-800 text-ink-300 hover:text-white"}`}>x{x}</button>)}
+            <button data-testid="play-pause" aria-label={snap.paused ? "Reprendre le temps" : "Mettre en pause"} onClick={() => act({ type: "pause", paused: !snap.paused }, { silent: true })} className={`rounded-md px-2.5 py-1.5 text-sm font-semibold ${snap.paused ? "bg-green-600 text-white" : "bg-amber-500 text-black"}`} title={snap.paused ? "Reprendre" : "Pause"}>{snap.paused ? "▶" : "❚❚"}</button>
+            {SPEEDS.map((x) => <button key={x} data-testid={`speed-${x}`} aria-label={`Vitesse ${x}`} aria-pressed={snap.speed === x} onClick={() => act({ type: "speed", speed: x }, { silent: true })} className={`num rounded px-1.5 py-1 text-[11px] ${[1, 10, 100].includes(x) ? "" : "hidden sm:inline-block "}${snap.speed === x && !snap.paused ? "bg-accent text-white" : snap.speed === x ? "bg-ink-600 text-white" : "bg-ink-800 text-ink-300 hover:text-white"}`}>x{x}</button>)}
             <div className="relative">
               <button onClick={() => setSkip(!skip)} className="rounded bg-ink-800 px-2 py-1 text-[11px] text-ink-200 hover:text-white">⏭</button>
               {skip && <div className="absolute left-0 top-full z-50 mt-1 w-56 rounded-md border border-ink-600 bg-ink-850 p-1 shadow-xl">{[["next_event", "Jusqu'au prochain rendez-vous"], ["next_hour", "Avancer d'une heure"], ["market_open", "Jusqu'à l'ouverture (9 h)"], ["next_morning", "Jusqu'à demain 7 h 30"]].map(([k, l]) => <button key={k} onClick={() => { setSkip(false); act({ type: "skip", to: k }); }} className="block w-full rounded px-2 py-1.5 text-left text-xs hover:bg-ink-700">{l}</button>)}</div>}
@@ -43,9 +44,9 @@ function TopBar({ snap, onMenu }: { snap: Snapshot; onMenu: () => void }) {
           {snap.life && <Link href="/play/vie" data-testid="life-chip" title={`Santé mentale ${snap.life.mental} · Forme ${snap.life.physique} · Vie sociale ${snap.life.social} · Épanouissement ${snap.life.fun}`} className="hidden items-center gap-1.5 rounded-md bg-ink-800 px-2 py-1 text-[11px] hover:bg-ink-700 sm:flex">{([["🧠", snap.life.mental], ["💪", snap.life.physique], ["🫂", snap.life.social], ["🎉", snap.life.fun]] as [string, number][]).map(([e, v]) => <span key={e} className={`num ${v >= 60 ? "text-gain" : v >= 35 ? "text-amber-300" : "text-loss"}`}>{e}{v}</span>)}</Link>}
           <div className="text-right"><div className="text-[10px] uppercase tracking-wider text-ink-400">Patrimoine</div><div className="num text-sm font-semibold">{fmtEur(snap.wealth)}</div></div>
           {snap.desk !== null && <div className="hidden text-right sm:block"><div className="text-[10px] uppercase tracking-wider text-ink-400">P&L desk semaine</div><div className={`num text-sm font-semibold ${clsChange(snap.deskPnlWeek ?? 0)}`}>{fmtEur(snap.deskPnlWeek)}</div></div>}
-          <Link href="/play/messagerie" className="relative text-lg" title="Messagerie">✉️{snap.unreadMsgs > 0 && <span className="absolute -right-2 -top-1 rounded-full bg-accent px-1 text-[10px] text-white">{snap.unreadMsgs}</span>}</Link>
+          <Link href="/play/messagerie" className="relative text-lg" title="Messagerie" aria-label={`Messagerie, ${snap.unreadMsgs} message(s) non lu(s)`}>✉️{snap.unreadMsgs > 0 && <span className="absolute -right-2 -top-1 rounded-full bg-accent px-1 text-[10px] text-white">{snap.unreadMsgs}</span>}</Link>
           <div className="relative">
-            <button onClick={() => { setBell(!bell); if (!bell) act({ type: "read", what: "notifications" }, { silent: true }); }} className="relative text-lg" title="Notifications">🔔{snap.unread > 0 && <span className="absolute -right-2 -top-1 rounded-full bg-loss px-1 text-[10px] text-white">{snap.unread}</span>}</button>
+            <button onClick={() => { setBell(!bell); if (!bell) act({ type: "read", what: "notifications" }, { silent: true }); }} className="relative text-lg" title="Notifications" aria-label={`Notifications, ${snap.unread} non lue(s)`} aria-expanded={bell}>🔔{snap.unread > 0 && <span className="absolute -right-2 -top-1 rounded-full bg-loss px-1 text-[10px] text-white">{snap.unread}</span>}</button>
             {bell && <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-lg border border-ink-600 bg-ink-850 p-2 shadow-2xl">{snap.notifications.length === 0 ? <div className="p-3 text-xs text-ink-400">Aucune notification</div> : snap.notifications.map((n) => <Link key={n.id} href={n.link ?? "/play"} onClick={() => setBell(false)} className="block rounded px-2 py-1.5 hover:bg-ink-700"><div className={`text-xs font-medium ${n.level === "critique" ? "text-loss" : n.level === "alerte" ? "text-amber-300" : n.level === "succes" ? "text-gain" : "text-ink-100"}`}>{n.title}</div>{n.body && <div className="line-clamp-2 text-[11px] text-ink-400">{n.body}</div>}<div className="num text-[10px] text-ink-500">{fmtTime(n.t)}</div></Link>)}</div>}
           </div>
         </div>
@@ -133,6 +134,31 @@ function SideNav({ snap, path }: { snap: Snapshot; path: string }) {
   </div>; })}</>;
 }
 
+/** Ambiance : musique après le premier geste du joueur, effet sonore à chaque nouvelle notification */
+function SoundDirector({ snap }: { snap: Snapshot }) {
+  const seen = useRef<string | null>(null);
+  useEffect(() => {
+    const on = snap.sound !== false;
+    setSoundEnabled(on);
+    if (!on) return;
+    const start = () => { startMusic(); };
+    window.addEventListener("pointerdown", start, { once: true });
+    return () => window.removeEventListener("pointerdown", start);
+  }, [snap.sound]);
+  useEffect(() => () => stopMusic(), []);
+  useEffect(() => {
+    const top = snap.notifications[0];
+    if (!top) return;
+    const key = `${top.id}|${top.count ?? 1}`;
+    if (seen.current === null) { seen.current = key; return; }
+    if (seen.current === key) return;
+    seen.current = key;
+    if (/Salaire|Loyer perçu|Dividende|vous confie|versement|Vendu|Nouveau client/i.test(top.title)) sfx("cash");
+    else sfx(top.level === "critique" ? "critique" : top.level === "alerte" ? "alerte" : top.level === "succes" ? "succes" : "info");
+  }, [snap.notifications]);
+  return null;
+}
+
 export function Shell({ children }: { children: ReactNode }) {
   const { gameId, snap, setGame, setSnap, toasts, dismiss } = useGame();
   const router = useRouter();
@@ -168,6 +194,7 @@ export function Shell({ children }: { children: ReactNode }) {
   if (!snap) return <div className="flex min-h-screen items-center justify-center text-sm text-ink-400">Ouverture de la session de simulation…</div>;
   return (
     <div className="min-h-screen">
+      <a href="#contenu" className="sr-only z-[200] rounded bg-gold px-3 py-2 text-black focus:not-sr-only focus:fixed focus:left-2 focus:top-2">Aller au contenu</a>
       <TopBar snap={snap} onMenu={() => setMenu(!menu)} />
       <div className="hidden md:block"><Ticker snap={snap} /></div>
       <div className="flex">
@@ -176,7 +203,8 @@ export function Shell({ children }: { children: ReactNode }) {
           <SideNav snap={snap} path={path} />
         </nav>
         {menu && <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setMenu(false)} />}
-        <main className="min-w-0 flex-1 p-3 pb-28 md:p-5 md:pb-28">
+        <main id="contenu" tabIndex={-1} className="min-w-0 flex-1 p-3 pb-28 md:p-5 md:pb-28">
+          {snap.ended && <div data-testid="ended-banner" className="mb-4 rounded-xl border border-gold/60 bg-yellow-500/10 p-4 text-center"><div className="text-lg font-semibold text-gold">🏁 Partie terminée — score final {snap.ended.score}</div><div className="mt-1 text-sm text-ink-300">Vous pouvez consulter toutes les pages. Votre score est inscrit au tableau d'honneur du menu principal.</div></div>}
           <BackBar path={path} />
           <Tutorial snap={snap} />
           {children}
@@ -184,6 +212,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </main>
       </div>
       <BottomNav snap={snap} path={path} />
+      <SoundDirector snap={snap} />
       <MissionHelpPanel />
       <MeetingLauncher />
       <div className="fixed right-4 top-24 z-[60] space-y-2">{toasts.map((t) => <div key={t.id} onClick={() => dismiss(t.id)} className={`fade-in max-w-sm cursor-pointer rounded-lg border px-3 py-2 text-sm shadow-xl ${t.kind === "err" ? "border-red-500/40 bg-red-950/90 text-red-100" : t.kind === "ok" ? "border-green-500/40 bg-green-950/90 text-green-100" : "border-ink-600 bg-ink-850 text-ink-100"}`}>{t.text}</div>)}</div>

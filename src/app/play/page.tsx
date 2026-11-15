@@ -10,6 +10,7 @@ import { People, useJoinMeeting } from "@/components/MeetingRoom";
 import { HelpButton } from "@/components/MissionHelp";
 import { Button } from "@/components/ui";
 import { CategoryHub } from "@/components/CategoryHub";
+import { Portrait } from "@/components/Portrait";
 
 export default function Bureau() {
   const { data } = useView<any>("dashboard");
@@ -22,13 +23,18 @@ export default function Bureau() {
   return <>
     <PageTitle env="Bureau personnel" title={`Bonjour ${snap.player.name.split(" ")[0]}`} subtitle={data.career ? `${data.career.title} — ${data.career.bank.name}` : snap.mode === "defi" ? "Mode défi" : "Investisseur indépendant"} right={<div className="flex gap-2"><Link href="/play/terminal" className="rounded-md bg-accent px-3 py-2 text-sm font-medium">Ouvrir le terminal</Link><Link href="/play/agenda" className="rounded-md bg-ink-700 px-3 py-2 text-sm">Agenda</Link></div>} />
     <CategoryHub id="bureau" compact />
+    {snap.chapter && <Link href="/play/parcours" data-testid="chapter-card" className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-gold/40 bg-gradient-to-r from-yellow-900/20 to-transparent p-3 hover:border-gold">
+      <span className="text-2xl">🧭</span>
+      <span className="min-w-0 flex-1"><span className="block text-[11px] uppercase tracking-wider text-gold">Chapitre en cours — {snap.chapter.title} ({snap.chapter.done}/{snap.chapter.total})</span>{snap.chapter.next && <span className="block text-sm text-white">Prochain objectif : {snap.chapter.next.label}<span className="block text-xs text-ink-400">{snap.chapter.next.hint}</span></span>}</span>
+      <span className="text-sm text-gold">Parcours →</span>
+    </Link>}
     {data.challenge && <Card title={`Défi : ${data.challenge.def?.name}`} className="mb-4"><div className="flex flex-wrap gap-6"><Stat label="Performance" value={fmtPct(data.challenge.perf * 100)} tone={data.challenge.perf >= 0 ? "gain" : "loss"} /><Stat label="Objectif" value={fmtPct(data.challenge.target * 100)} /><Stat label="Échéance" value={fmtShortDate(data.challenge.deadlineT)} /><Stat label="Statut" value={data.challenge.status} /></div><p className="mt-2 text-xs text-ink-400">{data.challenge.def?.description}</p></Card>}
     <div className="mb-4 grid gap-4 xl:grid-cols-3">
       <Card title="À faire maintenant" className="xl:col-span-2 border-gold/40">
         {data.nextSteps.length === 0 ? <Empty>Rien d'urgent. Explorez le terminal ou laissez le temps avancer.</Empty> : <ul className="space-y-2">{data.nextSteps.map((n: any, i: number) => <li key={i} className={`flex items-start gap-3 rounded-lg px-3 py-2 ${n.urgent ? "bg-yellow-500/10" : "bg-ink-900"}`}><span className="text-lg">{n.icon}</span><span className="flex-1 text-sm text-ink-100">{n.text}</span>{n.action === "join" && <Button size="sm" onClick={join}>Rejoindre</Button>}{n.action === "meeting" && snap.activeMeetingId && <Button size="sm" onClick={() => setOpen(snap.activeMeetingId)}>Y retourner</Button>}{n.mission ? <HelpButton missionId={n.mission} size="sm" /> : n.link && <Link href={n.link} className="shrink-0 rounded-md bg-ink-700 px-2.5 py-1 text-xs hover:bg-ink-600">Y aller →</Link>}</li>)}</ul>}
       </Card>
       {data.team.length > 0 ? <Card title="Votre équipe" right={<Link href="/play/reseau" className="text-accent">parler à quelqu'un</Link>}>
-        <ul className="space-y-2">{data.team.map((p: any) => <li key={p.id} className="flex items-center gap-3"><span className="text-2xl">{p.avatar}</span><div className="min-w-0 flex-1"><div className="truncate text-sm font-medium text-white">{p.name}</div><div className="truncate text-[11px] text-ink-400">{p.role}</div></div><span title={p.status?.effect ?? "Pas d'effet particulier pour l'instant"} className={`rounded px-1.5 py-0.5 text-[10px] ${p.status?.tier === "allie" ? "bg-green-500/15 text-green-300" : p.status?.tier === "defavorable" ? "bg-red-500/15 text-red-300" : p.status?.tier === "reserve" ? "bg-amber-500/15 text-amber-300" : "bg-ink-700 text-ink-300"}`}>{p.status?.label ?? ""} · {p.trust}</span></li>)}</ul>
+        <ul className="space-y-2">{data.team.map((p: any) => <li key={p.id} className="flex items-center gap-3"><Portrait id={p.id} size={40} title={p.name} /><div className="min-w-0 flex-1"><div className="truncate text-sm font-medium text-white">{p.name}</div><div className="truncate text-[11px] text-ink-400">{p.role}</div></div><span title={p.status?.effect ?? "Pas d'effet particulier pour l'instant"} className={`rounded px-1.5 py-0.5 text-[10px] ${p.status?.tier === "allie" ? "bg-green-500/15 text-green-300" : p.status?.tier === "defavorable" ? "bg-red-500/15 text-red-300" : p.status?.tier === "reserve" ? "bg-amber-500/15 text-amber-300" : "bg-ink-700 text-ink-300"}`}>{p.status?.label ?? ""} · {p.trust}</span></li>)}</ul>
         <p className="mt-3 text-[11px] text-ink-500">Chaque collègue se fait un avis sur vous. Allié (confiance ≥ 70) : avantage concret. Défavorable (≤ 25) : inconvénient. Détails dans Relations.</p>
       </Card> : <div />}
     </div>

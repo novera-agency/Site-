@@ -73,6 +73,11 @@ export default function Vie() {
       </Card>
     </div>
 
+    <Card title="❤️ Vie sentimentale et famille" className="mt-4" data-testid="love">
+      {data.partner ? <div className="text-sm"><div className="flex flex-wrap items-center gap-3"><span className="font-semibold text-white">En couple avec {data.partner.name}{data.partner.married ? " (marié·e)" : ""}</span><span className="text-xs text-ink-400">depuis le {fmtDate(data.partner.since, false)}</span></div><div className="mt-2 flex items-center gap-2 text-xs"><span className="w-24 text-ink-400">Complicité</span><div className="flex-1"><Bar value={data.partner.bond} tone={tone(data.partner.bond)} /></div><span className="num w-8 text-right">{Math.round(data.partner.bond)}</span></div><p className="mt-2 text-[11px] text-ink-500">La complicité s'use si vous ne passez pas de temps ensemble (soirées en amoureux, sorties, week-ends). Trop basse : rupture.</p></div> : <p className="text-sm text-ink-400">Célibataire. Une vie sociale active multiplie les occasions de rencontre.</p>}
+      {data.children > 0 && <p className="mt-2 text-sm">👶 {data.children} enfant{data.children > 1 ? "s" : ""} : de la joie au quotidien, mais moins de temps libre et des dépenses de garde.</p>}
+    </Card>
+
     <Card title="🎟️ Que faire de votre temps libre ?" className="mt-4" right={<span className="text-xs text-ink-400">{data.weekend ? "Week-end : 14 h de temps libre" : "Soirée : le temps libre est limité en semaine"}</span>}>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" data-testid="activities">
         {data.activities.map((a: any) => <button key={a.id} data-testid={`act-${a.id}`} disabled={a.hours > data.free.left || (a.weekend && !data.weekend)} onClick={() => act({ type: "life_activity", id: a.id })} className="rounded-lg border border-ink-700 bg-ink-850 p-3 text-left transition enabled:hover:border-gold disabled:opacity-40">

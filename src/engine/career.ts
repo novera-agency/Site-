@@ -142,6 +142,10 @@ export function quarterlyReview(s: GameState) {
   if (!repOk) reasons.push(`réputation insuffisante (moyenne ${Math.round(avgRep(s))}, ${40 + c.rank * 5} requis)`);
   if (daysInRank < minDays) reasons.push(`ancienneté au poste insuffisante (${Math.round(daysInRank)}/${Math.round(minDays)} jours)`);
   if (c.rank >= 8) reasons.push("vous occupez déjà le poste le plus élevé");
+  const recent = s.missions.filter((m) => m.status !== "active" && m.startT > s.t - 91 * MIN_PER_DAY);
+  const okRate = recent.length ? recent.filter((m) => m.status === "reussie").length / recent.length : 1;
+  if (recent.length >= 5 && okRate < 0.5) reasons.push(`trop de missions échouées ce trimestre (${Math.round(okRate * 100)} % de réussite, 50 % requis)`);
+  if ((s.npcs.boss?.trust ?? 50) < 45) reasons.push(`votre responsable ne vous soutient pas (confiance ${Math.round(s.npcs.boss?.trust ?? 0)}/100, 45 requis)`);
   if (c.rank >= 3 && (s.npcs.director?.trust ?? 50) < 45) reasons.push(`pas de soutien du Managing Director (${s.npcs.director?.name}) pour passer au-delà du rang Associate`);
   if (reasons.length === 0) {
     promoted = true;
@@ -249,13 +253,21 @@ export function dailyWellbeing(s: GameState, weekend: boolean) {
   else c.stress = clamp(c.stress + 1.2 + meetings * 1.3 + crises * 3 + c.warnings * 0.5 - lifestyle * 0.5 + (BANK_BY_ID[c.bankId].bonusMult > 1.5 ? 1 : 0), 0, 100);
   c.energy = clamp(100 - c.stress * 0.8, 5, 100);
   if (c.stress >= 92 && !s.flags["burnoutUntil"]) {
-    s.flags["burnoutUntil"] = s.t + 10 * MIN_PER_DAY;
+    const prev = ((s.flags["burnouts"] as string) ?? "").split(",").filter(Boolean).map(Number).filter((t) => s.t - t < 365 * MIN_PER_DAY);
+    prev.push(s.t); s.flags["burnouts"] = prev.join(",");
+    const long = prev.length >= 3;
+    s.flags["burnoutUntil"] = s.t + (long ? 30 : 10) * MIN_PER_DAY;
+    if (prev.length >= 2) { c.warnings++; changeTrust(s, "boss", -8, "Arrêts maladie répétés"); notify(s, "critique", long ? "Arrêt de longue durée" : "Deuxième épuisement en un an", long ? "Troisième burn-out en un an : un mois d'arrêt, et la direction s'interroge sur votre avenir." : "La direction s'inquiète : un avertissement est inscrit à votre dossier. Prenez soin de vous.", "/play/vie"); }
     notify(s, "critique", "Burnout", "Votre médecin vous arrête 10 jours. Vos réunions sont annulées et vos résultats en pâtissent.", "/play/carriere");
     changeRep(s, "fiabilite", -6); changeTrust(s, "boss", -5, "Arrêt maladie pour épuisement");
     careerLog(s, "Arrêt pour épuisement professionnel");
     for (const a of s.agenda) if (a.status === "prevu" && a.t < s.t + 10 * MIN_PER_DAY) a.status = "annule";
   }
-  if (s.flags["burnoutUntil"] && s.t >= (s.flags["burnoutUntil"] as number)) { delete s.flags["burnoutUntil"]; c.stress = 35; notify(s, "info", "Retour au bureau", "Vous reprenez le travail, reposé."); }
+  if (s.flags["burnoutUntil"] && s.t >= (s.flags["burnoutUntil"] as number)) {
+    delete s.flags["burnoutUntil"]; c.stress = 35;
+    if (s.life) { s.life.mental = Math.max(s.life.mental, 45); s.life.physique = Math.max(s.life.physique, 45); }
+    notify(s, "info", "Retour au bureau", "Vous reprenez le travail, reposé. Pensez à garder du temps pour vous.");
+  }
 }
 
 /** Congés : le temps avance, le stress diminue, aucune pénalité d'absence */

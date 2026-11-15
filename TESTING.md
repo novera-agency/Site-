@@ -41,3 +41,4 @@ Pour tester l'édition navigateur : `BASE_PATH=/Site- npm run build:static`, ser
 | `tests/prospection.test.ts` | Prospects confiés par le N+1 le lundi avec un message ; bon démarchage → nouveau client et versement ; démarchage agressif → refus. |
 | `tests/voice.test.ts` (complété) | Classement des voix : naturelles, puis premium, puis Google, voix fantaisie en dernier. |
 | `e2e/voix.spec.ts` | Appareil simulé avec 5 voix : les voix naturelles sont en tête et utilisées pour deux personnages différents ; choix manuel d'une voix, conservé après rechargement. |
+| `tests/progression.test.ts` | Chapitre 1 validé et succès débloqués ; fin « retraite » qui fige la partie ; notifications regroupées « Mission échouée (×3) » ; rencontre, mariage et enfant ; événements mondiaux marqués « simulé ». |

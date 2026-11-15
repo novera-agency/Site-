@@ -227,7 +227,7 @@ export function createMission(s: GameState, templateId: string, params: Record<s
   s.missions.unshift(m);
   if (s.missions.length > 150) s.missions = s.missions.filter((x, i) => i < 120 || x.status === "active");
   const g = giver ? s.npcs[giver] : undefined;
-  notify(s, "info", g ? `${g.name} vous confie une mission` : `Nouvelle mission : ${m.title}`, g ? `« ${m.title} » — ${g.role}` : m.description, "/play/missions");
+  if (!opts.quiet) notify(s, "info", g ? `${g.name} vous confie une mission` : `Nouvelle mission : ${m.title}`, g ? `« ${m.title} » — ${g.role}` : m.description, "/play/missions");
   if (g && g.relation !== "client" && !opts.quiet) {
     s.messages.unshift({ id: nextId(s, "msg"), t: s.t, from: `${g.name} — ${g.role}`, subject: `Mission : ${m.title}`, body: `${s.profile.firstName},\n\n${m.description}\n\nÉchéance : ${fmtShortDate(m.deadlineT)}.\n\n${g.name}\n\n(Besoin d'aide ? Dans l'onglet Missions, cliquez « 💡 Activer l'aide » sur cette mission.)`, read: false });
   }
