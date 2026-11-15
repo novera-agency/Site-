@@ -22,7 +22,7 @@ export default function Parcours() {
     </div>
 
     <Card title="🧭 Parcours" className="mb-4">
-      <ol className="space-y-3" data-testid="chapters">{data.chapters.map((c: any, i: number) => <li key={c.id} className={`rounded-lg border p-3 ${c.current ? "border-gold/60 bg-yellow-500/5" : c.done ? "border-ink-700 bg-ink-900 opacity-80" : "border-ink-800 bg-ink-950 opacity-60"}`}>
+      <ol className="space-y-3" data-testid="chapters">{data.chapters.map((c: any, i: number) => <li key={c.id} className={`rounded-lg border p-3 ${c.current ? "border-gold/60 bg-yellow-500/5" : c.done ? "border-ink-700 bg-ink-900 opacity-80" : "border-ink-800 bg-ink-950 opacity-75"}`}>
         <div className="flex items-center justify-between gap-2"><div className="font-semibold text-white">Chapitre {i + 1} — {c.title}</div>{c.done ? <Badge tone="gain">terminé</Badge> : c.current ? <Badge tone="gold">en cours</Badge> : <Badge>à venir</Badge>}</div>
         {(c.current || c.done) && <p className="mt-1 text-xs text-ink-400">{c.intro}</p>}
         {c.current && <ul className="mt-2 space-y-1.5">{c.objectives.map((o: any) => <li key={o.id} className="flex items-start gap-2 text-sm"><span className={o.done ? "text-gain" : "text-ink-500"}>{o.done ? "✔" : "○"}</span><span className="min-w-0 flex-1"><span className={o.done ? "text-ink-400 line-through" : "text-white"}>{o.label}</span>{!o.done && <span className="block text-[11px] text-ink-400">{o.hint} <Link href={o.link} className="text-accent">Y aller →</Link></span>}</span></li>)}</ul>}
@@ -31,7 +31,7 @@ export default function Parcours() {
     </Card>
 
     <Card title="🏆 Succès" className="mb-4">
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3" data-testid="achievements">{data.achievements.map((a: any) => <div key={a.id} className={`flex items-center gap-3 rounded-lg border p-2.5 ${a.done ? "border-gold/50 bg-yellow-500/5" : "border-ink-800 bg-ink-900 opacity-60"}`}>
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3" data-testid="achievements">{data.achievements.map((a: any) => <div key={a.id} className={`flex items-center gap-3 rounded-lg border p-2.5 ${a.done ? "border-gold/50 bg-yellow-500/5" : "border-ink-800 bg-ink-900 opacity-75"}`}>
         <span className={`text-2xl ${a.done ? "" : "grayscale"}`}>{a.done || !a.secret ? a.icon : "❔"}</span>
         <span className="min-w-0"><span className="block text-sm font-medium text-white">{a.done || !a.secret ? a.title : "Succès secret"}</span><span className="block text-[11px] text-ink-400">{a.done || !a.secret ? a.desc : "À découvrir…"}</span></span>
       </div>)}</div>

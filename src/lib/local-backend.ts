@@ -4,7 +4,7 @@
  * les mêmes validations (Zod) et les mêmes vues. Persistance dans IndexedDB.
  * Limite assumée : sans serveur, l'état réside dans le navigateur du joueur (pas d'autorité serveur).
  */
-import { createGame, advance } from "@/engine/engine";
+import { createGame, advanceBudget } from "@/engine/engine";
 import { serialize, deserialize } from "@/engine/serialize";
 import { STEP_MIN } from "@/engine/time";
 import { BANK_BY_ID } from "@/engine/data/banks";
@@ -94,8 +94,12 @@ export async function localApi(url: string, body?: any): Promise<unknown> {
       if (!s.paused && s.speed > 0) {
         rt.accMinutes += (elapsed / 1000) * s.speed * s.settings.minutesPerSecond;
         const steps = Math.min(600, Math.floor(rt.accMinutes / STEP_MIN));
-        if (steps > 0) { advance(s, steps * STEP_MIN); rt.accMinutes -= steps * STEP_MIN; rt.dirty = true; }
+        let lag = false;
+        // Calcul limité à ~150 ms par seconde : sur un téléphone lent, le temps ralentit au lieu de figer l'écran
+        if (steps > 0) { const done = advanceBudget(s, steps * STEP_MIN, 150); rt.accMinutes -= done * STEP_MIN; rt.dirty = true; lag = done < steps && !s.paused; rt.accMinutes = Math.min(rt.accMinutes, 36 * STEP_MIN); }
         if (s.paused) rt.accMinutes = 0;
+        if (rt.dirty && Date.now() - rt.lastSaved > 4000) await save(rt);
+        return { ...snapshot(s, false), lag };
       } else rt.accMinutes = 0;
       if (rt.dirty && Date.now() - rt.lastSaved > 4000) await save(rt);
       return snapshot(s, false);

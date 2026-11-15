@@ -13,7 +13,7 @@ export default function Risques() {
   const v = data.var;
   const pct = data.limit ? (v.var / data.limit) * 100 : 0;
   return <>
-    <PageTitle env="Salle de gestion des risques" title="Gestion des risques" subtitle="VaR historique, stress tests, concentration, risque de crédit des émetteurs et santé du système bancaire." right={<div className="flex gap-2"><select value={account ?? data.account?.id} onChange={(e) => setAccount(e.target.value)} className={inputCls + " w-60"}>{data.accounts.map((a: any) => <option key={a.id} value={a.id}>{a.label}</option>)}</select><Button variant="ghost" onClick={() => act({ type: "start_meeting", template: "comite_risques" })}>Convoquer le comité</Button></div>} />
+    <PageTitle env="Salle de gestion des risques" title="Gestion des risques" subtitle="VaR historique, stress tests, concentration, risque de crédit des émetteurs et santé du système bancaire." right={<div className="flex gap-2"><select aria-label="Compte" value={account ?? data.account?.id} onChange={(e) => setAccount(e.target.value)} className={inputCls + " w-60"}>{data.accounts.map((a: any) => <option key={a.id} value={a.id}>{a.label}</option>)}</select><Button variant="ghost" onClick={() => act({ type: "start_meeting", template: "comite_risques" })}>Convoquer le comité</Button></div>} />
     <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-6">
       <Card><Stat label={<Term id="var">VaR 99 % 1 j</Term>} value={fmtEur(v.var)} sub={`${v.scenarios} scénarios`} /></Card>
       <Card><Stat label="Expected shortfall" value={fmtEur(v.es)} /></Card>

@@ -42,3 +42,5 @@ Pour tester l'édition navigateur : `BASE_PATH=/Site- npm run build:static`, ser
 | `tests/voice.test.ts` (complété) | Classement des voix : naturelles, puis premium, puis Google, voix fantaisie en dernier. |
 | `e2e/voix.spec.ts` | Appareil simulé avec 5 voix : les voix naturelles sont en tête et utilisées pour deux personnages différents ; choix manuel d'une voix, conservé après rechargement. |
 | `tests/progression.test.ts` | Chapitre 1 validé et succès débloqués ; fin « retraite » qui fige la partie ; notifications regroupées « Mission échouée (×3) » ; rencontre, mariage et enfant ; événements mondiaux marqués « simulé ». |
+| `tests/contenu.test.ts` | 25 demandes clients uniques avec une bonne réponse ; nouvelles missions du jour justes ; événements de vie équilibrés en comptabilité ; 26 événements mondiaux sans répétition rapprochée ; calcul plafonné dans le temps ; avertissement puis message de fin des données historiques. |
+| `e2e/accessibilite.spec.ts` | Interface en anglais puis retour au français ; visite guidée complète et fermeture par Échap ; texte agrandi conservé après rechargement ; audit axe WCAG A/AA sans erreur sur trois écrans. |

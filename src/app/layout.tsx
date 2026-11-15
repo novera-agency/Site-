@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { PREFS_BOOT } from "@/lib/prefs-boot";
 
 export const metadata: Metadata = {
   title: "FINANCIAL EMPIRE — Simulateur de carrière en finance de marché",
@@ -9,7 +10,8 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, them
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr">
+    <html lang="fr" suppressHydrationWarning>
+      <head><script dangerouslySetInnerHTML={{ __html: PREFS_BOOT }} /></head>
       <body className="min-h-screen">{children}</body>
     </html>
   );

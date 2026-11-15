@@ -1,4 +1,5 @@
 /** Modèles de lecture envoyés au navigateur (le client n'a jamais accès à l'état complet ni au grand livre brut entier). */
+import { histActive } from "@/engine/historical";
 import type { GameState } from "@/engine/types";
 import { REGIMES } from "@/engine/regimes";
 import { accountEquity, positionViews, exposures, valueAtRisk, performance, marginRequirement, cashEur, lockedMarginEur, structuredValueEur } from "@/engine/portfolio";
@@ -81,7 +82,7 @@ export function snapshot(s: GameState, aiAvailable = false) {
     chapter: (() => { if (s.mode !== "carriere") return null; const c = currentChapter(s); if (!c) return null; const done = s.progress?.objectives ?? []; const next = c.objectives.find((o) => !done.includes(o.id)); return { title: c.title, done: c.objectives.filter((o) => done.includes(o.id)).length, total: c.objectives.length, next: next ? { label: next.label, hint: next.hint, link: next.link } : null }; })(),
     ended: s.ended ?? null,
     life: s.life && s.mode === "carriere" ? { mental: Math.round(s.life.mental), physique: Math.round(s.life.physique), social: Math.round(s.life.social), fun: Math.round(s.life.fun) } : null,
-    id: s.id, t: s.t, epochYear: s.epochYear ?? 2027, historical: !!s.historical, speed: s.speed, paused: s.paused, pauseReason: s.pauseReason, mode: s.mode, difficulty: s.difficulty, regime: s.macro.regime, regimeLabel: REGIMES[s.macro.regime].label,
+    id: s.id, t: s.t, epochYear: s.epochYear ?? 2027, historical: !!s.historical, histLive: !!s.historical && histActive(s), speed: s.speed, paused: s.paused, pauseReason: s.pauseReason, mode: s.mode, difficulty: s.difficulty, regime: s.macro.regime, regimeLabel: REGIMES[s.macro.regime].label,
     minutesPerSecond: s.settings.minutesPerSecond,
     quotes, sessions: marketStatus(s),
     wealth: r2(wealth(s)), perso: r2(accountEquity(s, "perso")), persoCash: r2(cashEur(s, "perso")), desk: s.accounts.desk && s.career.employed ? r2(accountEquity(s, "desk")) : null,
@@ -96,7 +97,7 @@ export function snapshot(s: GameState, aiAvailable = false) {
     explanations: s.settings.explanations, aiAvailable,
   };
 }
-export type Snapshot = ReturnType<typeof snapshot>;
+export type Snapshot = ReturnType<typeof snapshot> & { lag?: boolean };
 
 function accountSummary(s: GameState, id: string) {
   const a = s.accounts[id];

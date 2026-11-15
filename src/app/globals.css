@@ -7,9 +7,9 @@
   --color-ink-800: #121926;
   --color-ink-700: #1a2333;
   --color-ink-600: #243046;
-  --color-ink-500: #34425c;
-  --color-ink-400: #5a6a85;
-  --color-ink-300: #8b9ab3;
+  --color-ink-500: #7787a1;
+  --color-ink-400: #8392ab;
+  --color-ink-300: #a2afc4;
   --color-ink-200: #b9c4d6;
   --color-ink-100: #e3e9f2;
   --color-gain: #22c55e;
@@ -51,3 +51,13 @@ input, select, textarea { color-scheme: dark; }
 /* Accessibilité : contour visible à la navigation au clavier */
 :focus-visible { outline: 2px solid #d4a94f; outline-offset: 2px; border-radius: 4px; }
 button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
+
+/* Accessibilité (Options → Paramètres) */
+html.a11y-big { font-size: 112.5%; }
+html.a11y-contrast { --color-ink-500: #7a8aa6; --color-ink-400: #a3b1c7; --color-ink-300: #c9d3e2; --color-ink-200: #dfe6f0; --color-ink-100: #f5f8fc; --color-ink-700: #2a3650; --color-ink-600: #3a4866; }
+html.a11y-contrast a:focus-visible, html.a11y-contrast button:focus-visible { outline: 3px solid #ffd166; outline-offset: 2px; }
+html.a11y-still *, html.a11y-still *::before, html.a11y-still *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+:focus-visible { outline: 2px solid var(--color-gold); outline-offset: 2px; }
+/* Boutons bleus : texte blanc lisible (contraste ≥ 4,5:1) */
+.bg-accent { background-color: #1d4ed8; }
+.bg-green-600 { background-color: #15803d; }

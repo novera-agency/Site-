@@ -382,6 +382,21 @@ export function advance(s: GameState, minutes: number) {
   s.updatedAt = new Date().toISOString();
   return n;
 }
+/** Avance d'au plus `minutes` sans dépasser `budgetMs` de calcul : sur un appareil lent, le jeu ralentit au lieu de geler l'écran. */
+export function advanceBudget(s: GameState, minutes: number, budgetMs = 120) {
+  useEpoch(s);
+  const steps = Math.floor(minutes / STEP_MIN);
+  const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
+  const t0 = now();
+  let n = 0;
+  for (; n < steps; n++) {
+    if (s.paused) break;
+    if (n > 0 && now() - t0 > budgetMs) break;
+    step(s);
+  }
+  s.updatedAt = new Date().toISOString();
+  return n;
+}
 /** Avance jusqu'à une heure donnée (ex. « passer au lendemain 7 h 30 ») en respectant les pauses */
 export function advanceTo(s: GameState, targetT: number, maxSteps = 4000) {
   useEpoch(s);

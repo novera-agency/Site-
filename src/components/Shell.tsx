@@ -9,6 +9,8 @@ import { fmtDate, fmtTime } from "@/engine/time";
 import { fmtEur, fmtPct, clsChange } from "@/lib/format";
 import { MeetingLauncher } from "./MeetingRoom";
 import { MissionHelpPanel } from "./MissionHelp";
+import { Tour } from "./Tour";
+import { tr } from "@/lib/i18n";
 import { Badge, Disclaimer } from "./ui";
 import type { Snapshot } from "@/server/views";
 import { sfx, startMusic, stopMusic, setSoundEnabled } from "@/lib/sound";
@@ -39,15 +41,17 @@ function TopBar({ snap, onMenu }: { snap: Snapshot; onMenu: () => void }) {
         </div>
         <div className="hidden items-center gap-1.5 md:flex">{snap.sessions.filter((x) => ["EU", "US", "ASIA", "CRYPTO"].includes(x.id)).map((x) => <span key={x.id} title={x.label} className="flex items-center gap-1 text-[11px] text-ink-300"><span className={`h-1.5 w-1.5 rounded-full ${x.open ? "bg-gain" : "bg-ink-500"}`} />{x.id}</span>)}</div>
         <span className="hidden sm:inline"><Badge tone={snap.crisisActive ? "loss" : "info"}>{snap.regimeLabel}</Badge></span>
+        {snap.historical && <span data-testid="hist-badge" title={snap.histLive ? "Les marchés suivent les grandes tendances réelles et les événements historiques jusqu'au 31 décembre 2025." : "Après 2025, il n'y a plus de données réelles : les marchés évoluent selon le modèle et des événements mondiaux simulés peuvent survenir."} className={`hidden rounded px-1.5 py-0.5 text-[10px] sm:inline ${snap.histLive ? "bg-blue-500/15 text-blue-200" : "bg-purple-500/15 text-purple-200"}`}>{tr(snap.histLive ? "📜 Histoire réelle" : "🎲 Simulation libre")}</span>}
+        {snap.lag && <span data-testid="lag-badge" title="Votre appareil ne peut pas calculer aussi vite : le temps avance moins vite que la vitesse choisie, sans rien perdre." className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-200">{tr("🐢 Appareil limité")}</span>}
         <span className="hidden text-[11px] text-ink-300 md:inline">Volatilité <span className="num text-ink-100">{snap.vix}</span></span>
         <div className="ml-auto flex items-center gap-4">
           {snap.life && <Link href="/play/vie" data-testid="life-chip" title={`Santé mentale ${snap.life.mental} · Forme ${snap.life.physique} · Vie sociale ${snap.life.social} · Épanouissement ${snap.life.fun}`} className="hidden items-center gap-1.5 rounded-md bg-ink-800 px-2 py-1 text-[11px] hover:bg-ink-700 sm:flex">{([["🧠", snap.life.mental], ["💪", snap.life.physique], ["🫂", snap.life.social], ["🎉", snap.life.fun]] as [string, number][]).map(([e, v]) => <span key={e} className={`num ${v >= 60 ? "text-gain" : v >= 35 ? "text-amber-300" : "text-loss"}`}>{e}{v}</span>)}</Link>}
-          <div className="text-right"><div className="text-[10px] uppercase tracking-wider text-ink-400">Patrimoine</div><div className="num text-sm font-semibold">{fmtEur(snap.wealth)}</div></div>
-          {snap.desk !== null && <div className="hidden text-right sm:block"><div className="text-[10px] uppercase tracking-wider text-ink-400">P&L desk semaine</div><div className={`num text-sm font-semibold ${clsChange(snap.deskPnlWeek ?? 0)}`}>{fmtEur(snap.deskPnlWeek)}</div></div>}
+          <div className="text-right" data-tour="wealth"><div className="text-[10px] uppercase tracking-wider text-ink-400">{tr("Patrimoine")}</div><div className="num text-sm font-semibold">{fmtEur(snap.wealth)}</div></div>
+          {snap.desk !== null && <div className="hidden text-right sm:block"><div className="text-[10px] uppercase tracking-wider text-ink-400">{tr("P&L desk semaine")}</div><div className={`num text-sm font-semibold ${clsChange(snap.deskPnlWeek ?? 0)}`}>{fmtEur(snap.deskPnlWeek)}</div></div>}
           <Link href="/play/messagerie" className="relative text-lg" title="Messagerie" aria-label={`Messagerie, ${snap.unreadMsgs} message(s) non lu(s)`}>✉️{snap.unreadMsgs > 0 && <span className="absolute -right-2 -top-1 rounded-full bg-accent px-1 text-[10px] text-white">{snap.unreadMsgs}</span>}</Link>
-          <div className="relative">
+          <div className="relative" data-tour="bell">
             <button onClick={() => { setBell(!bell); if (!bell) act({ type: "read", what: "notifications" }, { silent: true }); }} className="relative text-lg" title="Notifications" aria-label={`Notifications, ${snap.unread} non lue(s)`} aria-expanded={bell}>🔔{snap.unread > 0 && <span className="absolute -right-2 -top-1 rounded-full bg-loss px-1 text-[10px] text-white">{snap.unread}</span>}</button>
-            {bell && <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-lg border border-ink-600 bg-ink-850 p-2 shadow-2xl">{snap.notifications.length === 0 ? <div className="p-3 text-xs text-ink-400">Aucune notification</div> : snap.notifications.map((n) => <Link key={n.id} href={n.link ?? "/play"} onClick={() => setBell(false)} className="block rounded px-2 py-1.5 hover:bg-ink-700"><div className={`text-xs font-medium ${n.level === "critique" ? "text-loss" : n.level === "alerte" ? "text-amber-300" : n.level === "succes" ? "text-gain" : "text-ink-100"}`}>{n.title}</div>{n.body && <div className="line-clamp-2 text-[11px] text-ink-400">{n.body}</div>}<div className="num text-[10px] text-ink-500">{fmtTime(n.t)}</div></Link>)}</div>}
+            {bell && <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-lg border border-ink-600 bg-ink-850 p-2 shadow-2xl">{snap.notifications.length === 0 ? <div className="p-3 text-xs text-ink-400">{tr("Aucune notification")}</div> : snap.notifications.map((n) => <Link key={n.id} href={n.link ?? "/play"} onClick={() => setBell(false)} className="block rounded px-2 py-1.5 hover:bg-ink-700"><div className={`text-xs font-medium ${n.level === "critique" ? "text-loss" : n.level === "alerte" ? "text-amber-300" : n.level === "succes" ? "text-gain" : "text-ink-100"}`}>{n.title}</div>{n.body && <div className="line-clamp-2 text-[11px] text-ink-400">{n.body}</div>}<div className="num text-[10px] text-ink-500">{fmtTime(n.t)}</div></Link>)}</div>}
           </div>
         </div>
       </div>
@@ -82,9 +86,9 @@ function Tutorial({ snap }: { snap: Snapshot }) {
   const done = snap.tutorial.filter((x) => x.done).length;
   const cur = snap.tutorial.find((x) => !x.done);
   const tip = cur ? TUTO[cur.id] : null;
-  return <div className="mb-4 rounded-lg border border-gold/40 bg-gradient-to-r from-yellow-900/20 to-transparent p-3">
-    <div className="mb-2 flex items-center justify-between"><div className="text-xs font-semibold uppercase tracking-wider text-gold">Première journée — {done}/12 étapes</div><button onClick={() => setHide(true)} className="text-xs text-ink-400">masquer</button></div>
-    {cur && tip && <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md bg-ink-900/80 px-3 py-2 text-sm"><span className="font-semibold text-gold">Étape {cur.id} — {cur.label} :</span><span className="text-ink-100">{tip.hint}</span>{tip.link && <Link href={tip.link} className="rounded bg-accent px-2 py-0.5 text-xs text-white">Y aller →</Link>}</div>}
+  return <div data-tour="tutorial" className="mb-4 rounded-lg border border-gold/40 bg-gradient-to-r from-yellow-900/20 to-transparent p-3">
+    <div className="mb-2 flex items-center justify-between"><div className="text-xs font-semibold uppercase tracking-wider text-gold">{tr("Première journée")} — {done}/12 {tr("étapes")}</div><button onClick={() => setHide(true)} className="text-xs text-ink-400">{tr("masquer")}</button></div>
+    {cur && tip && <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md bg-ink-900/80 px-3 py-2 text-sm"><span className="font-semibold text-gold">Étape {cur.id} — {cur.label} :</span><span className="text-ink-100">{tip.hint}</span>{tip.link && <Link href={tip.link} className="rounded bg-accent px-2 py-0.5 text-xs text-white">{tr("Y aller →")}</Link>}</div>}
     <div className="hidden flex-wrap gap-1.5 md:flex">{snap.tutorial.map((s) => { const t = TUTO[s.id]; const cls = `rounded px-2 py-0.5 text-[11px] ${s.done ? "bg-green-600/20 text-green-300 line-through" : s.id === cur?.id ? "bg-gold/20 text-gold" : "bg-ink-800 text-ink-200"}`; return t?.link && !s.done ? <Link key={s.id} href={t.link} title={t.hint} className={cls + " hover:bg-ink-700"}>{s.id}. {s.label}</Link> : <span key={s.id} title={t?.hint} className={cls}>{s.id}. {s.label}</span>; })}</div>
   </div>;
 }
@@ -100,10 +104,10 @@ function BackBar({ path }: { path: string }) {
   const isHub = CATEGORIES.some((c) => c.hub === p);
   const item = itemOf(p);
   const target = isHub ? "/play" : cat.hub;
-  const here = isHub ? null : item?.label ?? (p.startsWith("/play/actif") ? "Fiche de l'instrument" : null);
+  const here = isHub ? null : item ? tr(item.label) : p.startsWith("/play/actif") ? tr("Fiche de l'instrument") : null;
   return <div className="mb-3 flex items-center justify-between gap-3" data-testid="back-bar">
-    <nav className="min-w-0 truncate text-xs text-ink-400"><Link href="/play" className="hover:text-white">🏢 Bureau</Link>{cat.id !== "bureau" ? <> › <Link href={cat.hub} className="hover:text-white">{cat.icon} {cat.label}</Link></> : null}{here && <> › <span className="text-ink-200">{here}</span></>}</nav>
-    <Link href={target} data-testid="back-x" aria-label={`Fermer et revenir à ${isHub ? "Bureau" : cat.label}`} title={`Revenir à ${isHub ? "Bureau" : cat.label}`} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-ink-600 bg-ink-850 text-lg text-ink-200 hover:border-gold hover:text-white">✕</Link>
+    <nav className="min-w-0 truncate text-xs text-ink-400"><Link href="/play" className="hover:text-white">🏢 {tr("Bureau")}</Link>{cat.id !== "bureau" ? <> › <Link href={cat.hub} className="hover:text-white">{cat.icon} {tr(cat.label)}</Link></> : null}{here && <> › <span className="text-ink-200">{here}</span></>}</nav>
+    <Link href={target} data-testid="back-x" aria-label={`${tr("Fermer et revenir à")} ${tr(isHub ? "Bureau" : cat.label)}`} title={`${tr("Revenir à")} ${tr(isHub ? "Bureau" : cat.label)}`} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-ink-600 bg-ink-850 text-lg text-ink-200 hover:border-gold hover:text-white">✕</Link>
   </div>;
 }
 
@@ -116,7 +120,7 @@ function BottomNav({ snap, path }: { snap: Snapshot; path: string }) {
     <div className="mx-auto grid max-w-3xl grid-cols-5">
       {CATEGORIES.map((c) => { const on = current === c.id; const b = catBadge(c); return <Link key={c.id} href={c.hub} data-testid={`cat-${c.id}`} aria-current={on ? "page" : undefined} className={`relative flex flex-col items-center gap-0.5 py-2 text-[10px] transition ${on ? "text-white" : "text-ink-400 hover:text-white"}`}>
         {on && <span className="absolute inset-x-3 top-0 h-0.5 rounded bg-gold" />}
-        <span className="text-xl leading-none">{c.icon}</span><span className="truncate font-medium">{c.short}</span>
+        <span className="text-xl leading-none">{c.icon}</span><span className="truncate font-medium">{tr(c.short)}</span>
         {b ? <span className="absolute right-[24%] top-1 min-w-4 rounded-full bg-gold px-1 text-center text-[9px] font-bold text-black">{b}</span> : null}
       </Link>; })}
     </div>
@@ -129,8 +133,8 @@ function SideNav({ snap, path }: { snap: Snapshot; path: string }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const badge = useBadge(snap);
   return <>{CATEGORIES.map((c) => { const isOpen = open[c.id] ?? c.id === current; return <div key={c.id} className="mb-1.5">
-    <div className="flex items-center"><Link href={c.hub} className={`flex flex-1 items-center gap-2 rounded-md px-2 py-2 text-sm font-semibold ${c.id === current ? "text-white" : "text-ink-300 hover:text-white"}`}><span className="w-5 text-center">{c.icon}</span>{c.label}</Link><button onClick={() => setOpen({ ...open, [c.id]: !isOpen })} aria-label={isOpen ? "Replier" : "Déplier"} className="px-2 py-2 text-[10px] text-ink-500 hover:text-white">{isOpen ? "▾" : "▸"}</button></div>
-    {isOpen && <div className="mb-1 ml-3 border-l border-ink-800 pl-2">{c.sections.map((sec, i) => <div key={i}>{sec.title && <div className="mt-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-500">{sec.title}</div>}{sec.items.map((it) => { const b = badge(it.badge); const on = path === it.href || path === it.href + "/"; return <Link key={it.href} href={it.href} title={it.desc} className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] ${on ? "bg-ink-700 text-white" : "text-ink-300 hover:bg-ink-800 hover:text-white"}`}><span className="w-5 text-center">{it.icon}</span>{it.label}{b ? <span className="ml-auto rounded-full bg-gold px-1.5 text-[10px] font-bold text-black">{b}</span> : null}</Link>; })}</div>)}</div>}
+    <div className="flex items-center"><Link href={c.hub} className={`flex flex-1 items-center gap-2 rounded-md px-2 py-2 text-sm font-semibold ${c.id === current ? "text-white" : "text-ink-300 hover:text-white"}`}><span className="w-5 text-center">{c.icon}</span>{tr(c.label)}</Link><button onClick={() => setOpen({ ...open, [c.id]: !isOpen })} aria-label={isOpen ? "Replier" : "Déplier"} className="px-2 py-2 text-[10px] text-ink-500 hover:text-white">{isOpen ? "▾" : "▸"}</button></div>
+    {isOpen && <div className="mb-1 ml-3 border-l border-ink-800 pl-2">{c.sections.map((sec, i) => <div key={i}>{sec.title && <div className="mt-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-500">{tr(sec.title)}</div>}{sec.items.map((it) => { const b = badge(it.badge); const on = path === it.href || path === it.href + "/"; return <Link key={it.href} href={it.href} title={tr(it.desc)} className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] ${on ? "bg-ink-700 text-white" : "text-ink-300 hover:bg-ink-800 hover:text-white"}`}><span className="w-5 text-center">{it.icon}</span>{tr(it.label)}{b ? <span className="ml-auto rounded-full bg-gold px-1.5 text-[10px] font-bold text-black">{b}</span> : null}</Link>; })}</div>)}</div>}
   </div>; })}</>;
 }
 
@@ -194,7 +198,7 @@ export function Shell({ children }: { children: ReactNode }) {
   if (!snap) return <div className="flex min-h-screen items-center justify-center text-sm text-ink-400">Ouverture de la session de simulation…</div>;
   return (
     <div className="min-h-screen">
-      <a href="#contenu" className="sr-only z-[200] rounded bg-gold px-3 py-2 text-black focus:not-sr-only focus:fixed focus:left-2 focus:top-2">Aller au contenu</a>
+      <a href="#contenu" className="sr-only z-[200] rounded bg-gold px-3 py-2 text-black focus:not-sr-only focus:fixed focus:left-2 focus:top-2">{tr("Aller au contenu")}</a>
       <TopBar snap={snap} onMenu={() => setMenu(!menu)} />
       <div className="hidden md:block"><Ticker snap={snap} /></div>
       <div className="flex">
@@ -215,6 +219,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <SoundDirector snap={snap} />
       <MissionHelpPanel />
       <MeetingLauncher />
+      <Tour />
       <div className="fixed right-4 top-24 z-[60] space-y-2">{toasts.map((t) => <div key={t.id} onClick={() => dismiss(t.id)} className={`fade-in max-w-sm cursor-pointer rounded-lg border px-3 py-2 text-sm shadow-xl ${t.kind === "err" ? "border-red-500/40 bg-red-950/90 text-red-100" : t.kind === "ok" ? "border-green-500/40 bg-green-950/90 text-green-100" : "border-ink-600 bg-ink-850 text-ink-100"}`}>{t.text}</div>)}</div>
     </div>
   );

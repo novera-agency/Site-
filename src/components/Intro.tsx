@@ -46,7 +46,7 @@ export function Intro() {
         <div className="mt-8 min-h-[4.5rem] space-y-1 font-mono text-xs text-ink-400 sm:text-sm">{LINES.slice(0, step).map((l) => <div key={l} className="intro-fade">{l}</div>)}</div>
         <button data-testid="intro-enter" onClick={(e) => { e.stopPropagation(); close(); }} className="intro-fade mt-6 rounded-full border border-gold/60 bg-gold/10 px-8 py-2.5 text-sm font-semibold text-gold transition hover:bg-gold hover:text-black" style={{ animationDelay: "1.4s" }}>Entrer dans la banque →</button>
         <div className="mx-auto mt-6 h-0.5 w-48 overflow-hidden rounded bg-ink-800"><div className="intro-bar h-full bg-gold" style={{ animationDuration: `${DURATION}ms` }} /></div>
-        <div className="mt-2 text-[10px] text-ink-600">Touchez l'écran ou appuyez sur Entrée pour passer</div>
+        <div className="mt-2 text-[10px] text-ink-500">Touchez l'écran ou appuyez sur Entrée pour passer</div>
       </div>
     </div>
   );

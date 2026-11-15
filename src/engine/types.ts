@@ -284,6 +284,7 @@ export interface LifeState {
   /** Vie sentimentale et familiale */
   partner?: { name: string; since: number; bond: number; married?: boolean };
   children?: number;
+  pets?: number;
   /** Investissements locatifs */
   properties?: Property[];
   reBought?: string[];

@@ -8,6 +8,7 @@ import { fmtDateFor } from "@/engine/time";
 import { Button, inputCls } from "@/components/ui";
 import { Intro } from "@/components/Intro";
 import { hallOfFame, type HallEntry } from "@/lib/hall";
+import { useT, setLang, getLang } from "@/lib/i18n";
 
 interface Meta { gameId: string; name: string; mode: string; bank: string; t: number; updatedAt: string; rank?: string; difficulty: string; epochYear?: number; }
 type Item = "continuer" | "nouvelle" | "charger" | "libre" | "defis" | "honneur" | "options";
@@ -62,6 +63,9 @@ function Ticker() {
 }
 
 export default function Home() {
+  const T = useT();
+  const [lang, setLangState] = useState<"fr" | "en">("fr");
+  useEffect(() => { setLangState(getLang()); }, []);
   const router = useRouter();
   const [session, setSession] = useState<{ name: string; guest: boolean } | null | undefined>(undefined);
   const [saves, setSaves] = useState<Meta[] | null>(null);
@@ -145,8 +149,8 @@ export default function Home() {
       <Button className="mt-6" onClick={() => open(last.gameId)} data-testid="continue-last">Reprendre la partie</Button>
     </>,
     nouvelle: <>
-      <h2 className="text-2xl font-semibold text-white">Votre première journée</h2>
-      <p className="mt-2 text-ink-300">Lundi matin, 7 h. Vous arrivez dans une banque avec 10 000 € d'économies. Votre responsable vous attend pour vous présenter l'équipe.</p>
+      <h2 className="text-2xl font-semibold text-white">{T("Votre première journée")}</h2>
+      <p className="mt-2 text-ink-300">{T("Lundi matin, 7 h. Vous arrivez dans une banque avec 10 000 € d'économies. Votre responsable vous attend pour vous présenter l'équipe.")}</p>
       <ol className="mt-5 space-y-3 text-sm">
         {[["Créez votre personnage", "Nom, formation, niveau en finance."], ["Choisissez un métier et une banque", "Trader, gérant, analyste… Les banques prestigieuses recrutent les profils solides."], ["Laissez-vous guider", "La première journée sert de tutoriel : réunions, premier ordre, premier client."]].map(([a, b], i) => (
           <li key={a} className="flex gap-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gold text-xs font-bold text-black">{i + 1}</span><span><b className="text-white">{a}</b><span className="block text-ink-400">{b}</span></span></li>
@@ -210,29 +214,30 @@ export default function Home() {
         <header className="flex items-center gap-3">
           <span className="flex h-9 w-9 items-center justify-center rounded-md border border-gold/60 text-sm font-black text-gold">FE</span>
           <span className="text-sm font-semibold tracking-[0.25em] text-ink-200">FINANCIAL EMPIRE</span>
+          <span className="ml-auto flex gap-1 text-[11px]" role="group" aria-label="Langue / Language">{(["fr", "en"] as const).map((l) => <button key={l} data-testid={`lang-${l}`} aria-pressed={lang === l} onClick={() => lang !== l && setLang(l)} className={`rounded px-2 py-1 font-semibold uppercase ${lang === l ? "bg-gold text-black" : "bg-ink-800 text-ink-300 hover:text-white"}`}>{l}</button>)}</span>
         </header>
 
         <div className="mt-10 grid flex-1 items-start gap-8 md:mt-16 md:grid-cols-[minmax(0,320px)_minmax(0,1fr)] md:gap-14">
           <div>
-            <h1 className="text-4xl font-black leading-[1.05] text-white md:text-5xl">De stagiaire<br />à patron<br />de banque.</h1>
+            <h1 className="text-4xl font-black leading-[1.05] text-white md:text-5xl">{T("De stagiaire")}<br />{T("à patron")}<br />{T("de banque.")}</h1>
             <nav className="mt-8 space-y-1" aria-label="Menu principal">
               {saves === null ? <div className="h-40" /> : visible.map((it) => (
                 <button key={it.id} data-testid={it.id === "nouvelle" ? "new-career" : `menu-${it.id}`} onMouseEnter={() => setSel(it.id)} onFocus={() => setSel(it.id)} onClick={() => activate(it.id)}
                   className={`group relative block w-full rounded-md py-2.5 pl-5 pr-3 text-left transition ${sel === it.id ? "bg-white/[0.06]" : "hover:bg-white/[0.03]"}`}>
                   <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-full transition ${sel === it.id ? "bg-gold" : "bg-transparent"}`} />
-                  <span className={`block text-lg font-semibold ${sel === it.id ? "text-white" : "text-ink-300"}`}>{it.label}</span>
-                  <span className="block truncate text-xs text-ink-500">{it.hint}</span>
+                  <span className={`block text-lg font-semibold ${sel === it.id ? "text-white" : "text-ink-300"}`}>{T(it.label)}</span>
+                  <span className="block truncate text-xs text-ink-400">{T(it.hint)}</span>
                 </button>
               ))}
             </nav>
             {saves !== null && !saves.length && <p className="mt-6 max-w-xs text-sm text-ink-400">Première fois ? Choisissez <b className="text-ink-200">Nouvelle carrière</b> : la première journée vous apprend tout.</p>}
-            <p className="mt-6 hidden text-[11px] text-ink-600 md:block">↑ ↓ pour naviguer · Entrée pour valider</p>
+            <p className="mt-6 hidden text-[11px] text-ink-500 md:block">{T("↑ ↓ pour naviguer · Entrée pour valider")}</p>
           </div>
 
           <section ref={panelRef} key={sel} className="fade-in scroll-mt-4 rounded-xl border border-ink-700/80 bg-ink-900/85 p-6 backdrop-blur md:p-8">{panels[sel]}</section>
         </div>
 
-        <footer className="relative mt-10 w-fit rounded bg-[#070a12]/80 px-2 py-1 text-[11px] text-ink-400">Jeu de simulation : argent virtuel, marchés et entreprises fictifs, aucune transaction réelle. <Link href="/a-propos" className="underline">À propos</Link></footer>
+        <footer className="relative mt-10 w-fit rounded bg-[#070a12]/80 px-2 py-1 text-[11px] text-ink-400">{T("Jeu de simulation : argent virtuel, marchés et entreprises fictifs, aucune transaction réelle.")} <Link href="/a-propos" className="underline">{T("À propos")}</Link>{lang === "en" && <span className="ml-2 text-ink-500">{T("Les textes du jeu (dialogues, missions, actualités) restent en français.")}</span>}</footer>
       </div>
       <Ticker />
 

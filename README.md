@@ -81,5 +81,10 @@ Le workflow `.github/workflows/pages.yml` vérifie le code (TypeScript, 37 tests
 - Investissement immobilier dans 13 villes françaises, prospection confiée par le N+1, au moins deux missions générées par jour.
 - Événements mondiaux simulés (parties fictives), notifications regroupées avec trois niveaux, musique et bruitages synthétisés, portraits générés.
 - Sauvegarde complète exportable en fichier et réimportable depuis l'accueil.
+- Visite guidée de l'interface au premier lancement (relançable dans Options → Paramètres).
+- Accessibilité : texte agrandi, contraste renforcé, animations réduites, navigation au clavier ; audit automatique WCAG A/AA sans erreur.
+- Interface en anglais (menus, navigation, visite guidée, accueil) ; les dialogues et missions restent en français.
+- Contenu enrichi : 25 demandes clients, 26 événements mondiaux simulés, 20 événements de vie, 15 types de missions du jour.
+- Sur les appareils lents, le calcul est limité à chaque seconde : le temps ralentit au lieu de figer l'écran.
 
 Voir `ARCHITECTURE.md`, `FINANCIAL_MODELS.md`, `TESTING.md` et l'état exact dans `PROGRESS.md`.

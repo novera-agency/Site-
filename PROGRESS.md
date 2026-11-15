@@ -73,8 +73,8 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 
 ## Vérifications (dernière exécution)
 - `npm run lint` : OK
-- `npm test` : 87/87
-- `npm run e2e` : 18/18 (dont parcours 20 étapes, appel client, immobilier, vie privée, voix)
+- `npm test` : 93/93
+- `npm run e2e` : 19/19 (dont parcours 20 étapes, appel client, immobilier, vie privée, voix)
 - Affichage émulé iPhone 13, Pixel 7 et iPad : aucune page ne déborde horizontalement (38 écrans)
 - `npm run build` : OK
 
@@ -89,6 +89,14 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 - ✅ Notifications regroupées (×n) et filtrées (toutes / importantes / critiques), son et musique désactivables, portraits.
 - ✅ Export / import de toutes les sauvegardes en un fichier.
 - ✅ Équilibrage vérifié par simulation de 3 ans : un joueur passif n'est plus promu (confiance du N+1 ≥ 45 et 50 % de missions réussies requises), plus de burn-out en boucle (récupération à 45, avertissement puis congé forcé au troisième).
-- ❌ Version anglaise : non faite (tous les textes sont écrits en français dans le code).
+- ⚠️ Version anglaise : menus, navigation, visite guidée et accueil traduits ; dialogues, missions et actualités en français.
 - ❌ Synchronisation dans le cloud : impossible sur un hébergement statique ; remplacée par l'export de fichier.
 - ⚠️ Classement : local à l'appareil uniquement. Tests mobiles : émulés, pas sur de vrais téléphones.
+
+## Lot suivant (visite guidée, accessibilité, contenu)
+- ✅ Visite guidée de l'interface (lancement automatique la première fois, relançable).
+- ✅ Accessibilité : réglages texte agrandi / contraste / animations ; contrastes corrigés partout ; champs étiquetés ; audit axe WCAG A/AA : 0 erreur sur 16 écrans.
+- ✅ Mode historique : avertissement un mois avant la fin des données réelles, message à l'entrée en 2026, badge « Histoire réelle / Simulation libre ».
+- ✅ Performances : calcul plafonné par seconde (150 ms dans le navigateur), badge « Appareil limité ».
+- ✅ Contenu : +12 demandes clients, +12 événements mondiaux, +8 événements de vie (animal de compagnie), +4 missions du jour.
+- ❌ Sauvegarde dans le cloud, classement mondial, voix humaines de synthèse : nécessitent un service externe (compte, clé, serveur).

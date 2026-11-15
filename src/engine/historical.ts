@@ -8,7 +8,7 @@
 import type { Currency, GameState, InstrumentDef, RegimeId, ZoneId } from "./types";
 import { EPOCH_UTC, MIN_PER_DAY, dayIndex, nextBusinessDay, dayOfDate, fmtDate } from "./time";
 import { SERIES_SRC, POLICY_SRC, MACRO_YEARLY, REGIME_TIMELINE, HIST_EVENTS, HIST_END, CB_REAL_NAMES, HIST_EPOCH } from "./data/history2000";
-import { notify, pushNews, pause } from "./core";
+import { notify, pushNews, pause, nextId } from "./core";
 
 export { HIST_EPOCH };
 
@@ -307,9 +307,14 @@ export function histDaily(s: GameState, setRegime: (s: GameState, r: RegimeId, c
   if (!histActive(s)) {
     if (!s.flags["histEnded"]) {
       s.flags["histEnded"] = true;
-      notify(s, "info", "Fin des repères historiques", "Depuis le 1er janvier 2026, les marchés évoluent librement selon le modèle de simulation.", "/play/actualites");
+      notify(s, "alerte", "Fin des repères historiques", "Depuis le 1er janvier 2026, les marchés évoluent librement selon le modèle de simulation.", "/play/messagerie");
+      s.messages.unshift({ id: nextId(s, "msg"), t: s.t, from: "Financial Empire", subject: "📜 → 🎲 Vous entrez dans le futur", body: "Jusqu'au 31 décembre 2025, les marchés suivaient les grandes tendances réelles : krachs, élections, guerres, décisions des banques centrales.\n\nÀ partir d'aujourd'hui, il n'existe plus de données réelles. Les cours évoluent selon le modèle de simulation, et des événements mondiaux simulés (crises, chocs pétroliers, élections…) peuvent survenir à tout moment. Ils sont marqués « simulé » dans les actualités.\n\nVos positions, votre carrière et votre vie continuent normalement.", read: false });
     }
     return;
+  }
+  if (!s.flags["histEndWarn"] && absOf(s.t) >= HIST_END_ABS - 30) {
+    s.flags["histEndWarn"] = true;
+    notify(s, "info", "Dans un mois : fin des données réelles", "Le 1er janvier 2026, les marchés quitteront l'histoire réelle pour une simulation libre avec des événements simulés.", "/play/actualites");
   }
   // Économie : rappel vers les moyennes annuelles réelles
   const dt = 1 / 252;

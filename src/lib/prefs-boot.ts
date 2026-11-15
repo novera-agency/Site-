@@ -1,0 +1,2 @@
+/** Script exécuté avant l'affichage pour appliquer les préférences sans clignotement */
+export const PREFS_BOOT = `try{var a=JSON.parse(localStorage.getItem("fe_a11y")||"{}");var c=document.documentElement.classList;if(a.big)c.add("a11y-big");if(a.contrast)c.add("a11y-contrast");if(a.still)c.add("a11y-still");if(localStorage.getItem("fe_lang")==="en")document.documentElement.lang="en";}catch(e){}`;
