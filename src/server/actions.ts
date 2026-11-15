@@ -17,6 +17,7 @@ import { takeVacation } from "@/engine/career";
 import { completeLesson, advanceTo } from "@/engine/engine";
 import { nextId, logDecision } from "@/engine/core";
 import { toCents } from "@/engine/money";
+import { answerTraining, closeTraining } from "@/engine/training";
 import { setPlan, sleepCheck, finishSleep, doOvertime, workWindow, isWorkDay, hhmm, sleepLabel } from "@/engine/schedule";
 import { answerQuiz } from "@/engine/quiz";
 
@@ -64,7 +65,9 @@ export const ActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("tutorial_visit"), page: z.string().max(40) }),
   z.object({ type: z.literal("set_plan"), start: z.number().int(), end: z.number().int(), wake: z.number().int() }),
   z.object({ type: z.literal("sleep") }),
-  z.object({ type: z.literal("overtime"), hours: z.number().int().min(1).max(4), focus: z.enum(["avance", "dossiers", "formation"]) }),
+  z.object({ type: z.literal("overtime"), hours: z.number().int().min(1).max(4), focus: z.enum(["avance", "dossiers", "formation"]), subject: z.enum(["auto", "marches", "analyse", "maths", "macro", "risque"]).optional() }),
+  z.object({ type: z.literal("training_answer"), index: z.number().int().min(0).max(40), choice: z.number().int().min(0).max(5).optional(), value: z.number().optional() }),
+  z.object({ type: z.literal("training_close") }),
   z.object({ type: z.literal("quiz_answer"), id: z.string().max(40), choice: z.number().int().min(0).max(5) }),
   z.object({ type: z.literal("leave_meeting") }),
 ]);
@@ -232,10 +235,12 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
       if (a.name) s.name = a.name;
       return { ok: true, message: "Paramètres enregistrés." };
     }
+    case "training_answer": { const r = answerTraining(s, a.index, { choice: a.choice, value: a.value }); return r.ok ? { ok: true, data: r.data } : { ok: false, error: r.error }; }
+    case "training_close": { const r = closeTraining(s); return r.ok ? { ok: true } : { ok: false, error: r.error }; }
     case "set_plan": { const r = setPlan(s, { start: a.start, end: a.end, wake: a.wake }); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error }; }
     case "sleep": return doSleep(s);
     case "overtime": {
-      const r = doOvertime(s, a.hours, a.focus);
+      const r = doOvertime(s, a.hours, a.focus, a.subject ?? "auto");
       if (!r.ok) return { ok: false, error: r.error };
       const t0 = s.t;
       runClock(s, t0 + a.hours * 60);

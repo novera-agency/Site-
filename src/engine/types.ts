@@ -296,6 +296,11 @@ export interface LifeState {
   ahead?: number;
   /** Départ anticipé du jour grâce à l'avance */
   early?: { day: number; hours: number };
+  /** Séance de formation issue des heures supplémentaires « me former » */
+  training?: { id: string; startT: number; hours: number; subject: SkillBranch; items: { k: "lesson" | "def" | "calc" | "quiz"; id: string; seed?: number }[]; answers: { ok: boolean; value?: number }[]; done?: { correct: number; total: number; bonusXp: number; trust: number } };
+  /** Carnet de formation : notions ratées à retravailler */
+  notebook?: { t: number; kind: string; title: string; text: string }[];
+  trainStats?: { sessions: number; perfect: number; correct: number; total: number };
   /** Heures supplémentaires de la semaine */
   ot?: { week: number; hours: number; today: { day: number; hours: number } };
 }

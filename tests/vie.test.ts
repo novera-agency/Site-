@@ -9,6 +9,8 @@ import { answerMeeting } from "@/engine/meetingEngine";
 import { createGame } from "@/engine/engine";
 import { getPlan, setPlan, workWindow, sleepCheck, plannedNetHours, DEFAULT_PLAN, hhmm } from "@/engine/schedule";
 import { planDay } from "@/engine/agenda";
+import { buildQuestion, answerTraining, startTraining, closeTraining, trainingView, notebookView } from "@/engine/training";
+import { checkProgress } from "@/engine/progression";
 import { Rng } from "@/engine/rng";
 import { profile } from "./helpers";
 import { dailyLife } from "@/engine/life";
@@ -220,10 +222,9 @@ describe("Planning, sommeil et heures supplémentaires", () => {
     const before = active.map((m) => m.deadlineT);
     expect(act(s, { type: "overtime", hours: 2, focus: "dossiers" }).ok).toBe(true);
     active.forEach((m, i) => expect(m.deadlineT).toBe(before[i] + 12 * 60));
-    const xp = Object.values(s.skills).reduce((a, b) => a + b, 0);
     s.t = tOfDay(dayIndex(s.t), 18, 0);
     expect(act(s, { type: "overtime", hours: 1, focus: "formation" }).ok).toBe(true);
-    expect(Object.values(s.skills).reduce((a, b) => a + b, 0)).toBeGreaterThan(xp);
+    expect(s.life!.training?.items.length).toBe(3); // la formation donne une séance de questions, pas de l'XP gratuite
     s.life!.ahead = 4; s.t = tOfDay(dayIndex(s.t), 18, 0);
     expect(act(s, { type: "overtime", hours: 1, focus: "avance" }).message).toMatch(/réserve pleine/);
     expect(s.life!.ahead).toBe(4);
@@ -256,5 +257,98 @@ describe("Planning, sommeil et heures supplémentaires", () => {
     const bilan = today.find((a) => a.title.startsWith("Bilan"))!;
     expect(bilan.t % 1440).toBe(17 * 60);
     expect(new Set(work.map((a) => a.t)).size).toBe(work.length);
+  });
+});
+
+describe("Séances de formation (heures supplémentaires « me former »)", () => {
+  const evening = (seed: string) => { const s = game("carriere", seed); s.t = tOfDay(nextBusinessDay(dayIndex(s.t) + 1), 18, 0); s.agenda = []; s.paused = true; return s; };
+  const right = (it: { k: "lesson" | "def" | "calc" | "quiz"; id: string; seed?: number }) => { const q = buildQuestion(it)!; return q.kind === "qcm" ? { choice: q.answer } : { value: q.answer }; };
+  it("une séance de 2 h = 6 questions variées (fiche, définition, calcul), sans bonne réponse dans la vue", () => {
+    const s = evening("fm-1");
+    const r = act(s, { type: "overtime", hours: 2, focus: "formation" });
+    expect(r.ok).toBe(true);
+    const tr = s.life!.training!;
+    expect(tr.items.length).toBe(6);
+    expect(tr.items.map((i) => i.k)).toEqual(expect.arrayContaining(["lesson", "def", "calc"]));
+    const v = trainingView(s)!;
+    expect(v.items.length).toBe(6);
+    expect(v.items.every((i) => i.result === null)).toBe(true);
+    expect(JSON.stringify(v)).not.toContain('"answer"');
+    expect(v.items.find((i) => i.label === "Fiche et exercice")?.card?.definition.length).toBeGreaterThan(20);
+    // l'horloge a avancé de 2 h
+    expect(minuteOfDay(s.t)).toBe(20 * 60);
+  });
+  it("répondre : XP et validation des leçons, correction pour chaque réponse, bonus de réussite et succès ; ordre imposé", () => {
+    const s = evening("fm-2");
+    act(s, { type: "overtime", hours: 1, focus: "formation", subject: "marches" });
+    const tr = s.life!.training!;
+    expect(tr.subject).toBe("marches");
+    expect(answerTraining(s, 2, { choice: 0 }).ok).toBe(false); // pas dans l'ordre
+    const xp0 = Object.values(s.skills).reduce((a, b) => a + b, 0);
+    const trust0 = s.npcs.boss.trust;
+    let last: any;
+    for (let i = 0; i < tr.items.length; i++) { last = answerTraining(s, i, right(tr.items[i])); expect(last.ok).toBe(true); expect(last.data.ok).toBe(true); expect(last.data.explain.length).toBeGreaterThan(20); }
+    expect(last.data.finished).toEqual(expect.objectContaining({ correct: 3, total: 3 }));
+    expect(Object.values(s.skills).reduce((a, b) => a + b, 0)).toBeGreaterThan(xp0 + 20);
+    expect(s.npcs.boss.trust).toBeGreaterThan(trust0);
+    const lessonItem = tr.items.find((i) => i.k === "lesson");
+    if (lessonItem) expect(s.learning.completed).toContain(lessonItem.id);
+    expect(s.life!.trainStats).toEqual({ sessions: 1, perfect: 1, correct: 3, total: 3 });
+    expect(s.notifications.some((n) => n.title.includes("Séance de formation réussie"))).toBe(true);
+    checkProgress(s);
+    expect(s.progress!.achievements).toEqual(expect.arrayContaining(["study1", "studyperfect"]));
+  });
+  it("erreurs : aucune XP, correction et carnet de formation ; pas de bonus sous 80 % ; une séance en cours bloque la suivante, fermeture possible", () => {
+    const s = evening("fm-3");
+    act(s, { type: "overtime", hours: 1, focus: "formation" });
+    // une nouvelle séance est refusée tant que la première n'est pas finie
+    s.t = tOfDay(dayIndex(s.t), 18, 0);
+    expect(act(s, { type: "overtime", hours: 1, focus: "formation" }).ok).toBe(false);
+    const tr = s.life!.training!;
+    const trust0 = s.npcs.boss.trust;
+    for (let i = 0; i < tr.items.length; i++) {
+      const q = buildQuestion(tr.items[i])!;
+      const r = answerTraining(s, i, q.kind === "qcm" ? { choice: (q.answer + 1) % q.options!.length } : { value: q.answer + 9999 });
+      expect(r.ok && r.data.ok).toBe(false);
+    }
+    expect(s.npcs.boss.trust).toBe(trust0);
+    const nb = notebookView(s);
+    expect(nb.notes.length).toBe(3);
+    expect(nb.notes[0].text.length).toBeGreaterThan(20);
+    expect(s.life!.trainStats!.perfect).toBe(0);
+    expect(closeTraining(s).ok).toBe(true);
+    s.t = tOfDay(dayIndex(s.t), 18, 0);
+    expect(act(s, { type: "overtime", hours: 1, focus: "formation" }).ok).toBe(true); // nouvelle séance possible
+  });
+  it("les leçons passent par ordre de niveau, jamais deux fois la même dans une séance ; une leçon validée n'est plus proposée en priorité", () => {
+    const s = evening("fm-4");
+    act(s, { type: "overtime", hours: 4, focus: "formation", subject: "risque" });
+    const lessons = s.life!.training!.items.filter((i) => i.k === "lesson").map((i) => i.id);
+    expect(new Set(lessons).size).toBe(lessons.length);
+    // Toutes les questions se construisent, avec 4 options distinctes pour les QCM
+    for (const it of s.life!.training!.items) {
+      const q = buildQuestion(it)!;
+      expect(q).toBeTruthy();
+      if (q.kind === "qcm") { expect(new Set(q.options).size).toBe(q.options!.length); expect(q.answer).toBeGreaterThanOrEqual(0); expect(q.answer).toBeLessThan(q.options!.length); }
+    }
+    for (let i = 0; i < 12; i++) answerTraining(s, i, right(s.life!.training!.items[i]));
+    const done = new Set(s.learning.completed);
+    closeTraining(s);
+    s.t = tOfDay(dayIndex(s.t) + 1, 18, 0); s.life!.ot = undefined;
+    startTraining(s, 1, "risque");
+    const again = s.life!.training!.items.find((i) => i.k === "lesson");
+    if (again) expect(done.has(again.id)).toBe(false);
+  });
+  it("sujet « auto » = compétence la plus faible ; toutes les matières proposent des séances complètes", () => {
+    const s = evening("fm-5");
+    s.skills.marches = 500; s.skills.analyse = 500; s.skills.maths = 500; s.skills.risque = 500; s.skills.macro = 0;
+    act(s, { type: "overtime", hours: 1, focus: "formation" });
+    expect(s.life!.training!.subject).toBe("macro");
+    for (const sub of ["marches", "analyse", "maths", "macro", "risque"] as const) {
+      closeTraining(s);
+      expect(startTraining(s, 4, sub).ok).toBe(true);
+      expect(s.life!.training!.items.length).toBe(12);
+      for (const it of s.life!.training!.items) expect(buildQuestion(it), `${sub} ${it.k} ${it.id}`).toBeTruthy();
+    }
   });
 });

@@ -53,3 +53,5 @@ Pour tester l'édition navigateur : `BASE_PATH=/Site- npm run build:static`, ser
 | `tests/vie.test.ts` (complété) | Activités refusées avant 18 h, saut à 18 h pile, l'horloge avance exactement de la durée, refus si l'activité finirait après minuit, week-end possible dès le matin, pause conservée. |
 | `tests/vie.test.ts` (planning) | Validation des horaires, activités et horaires de départ, sommeil (réveil exact, effets, refus), nuit courte, heures supplémentaires (3 objectifs, avance du lendemain, plafonds), effets d'une journée longue ou courte, agenda replacé dans les horaires. |
 | `e2e/planning.spec.ts` | Page planning : horaires, réveil refusé trop tard, sommeil et heures supplémentaires verrouillés pendant le travail, activités selon l'horaire. |
+| `tests/vie.test.ts` (formation) | Séance de 2 h = 6 questions variées sans bonne réponse dans la vue ; XP, validation des leçons, bonus et succès ; erreurs au carnet sans bonus ; blocage d'une 2e séance ; leçons non répétées ; matières. |
+| `e2e/formation.spec.ts` | Parcours de l'écran de séance (fiche, QCM, numérique, corrections, bilan, fermeture) sur séance injectée, avec audit d'accessibilité. |

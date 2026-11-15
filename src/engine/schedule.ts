@@ -8,6 +8,7 @@
 import type { GameState, SkillBranch } from "./types";
 import { clamp, notify, changeTrust, changeRep, gainXp } from "./core";
 import { dayIndex, isWeekend, MIN_PER_DAY, minuteOfDay, weekday } from "./time";
+import { startTraining } from "./training";
 
 export const DEFAULT_PLAN = { start: 7 * 60 + 30, end: 18 * 60, wake: 6 * 60 + 30 };
 export const LUNCH_MIN = 60;
@@ -96,7 +97,7 @@ export type OvertimeFocus = "avance" | "dossiers" | "formation";
 export const OVERTIME_FOCUS: Record<OvertimeFocus, { label: string; desc: string }> = {
   avance: { label: "Prendre de l'avance sur demain", desc: "Chaque heure faite ce soir vous permet de partir une heure plus tôt demain (jusqu'à 2 h d'avance par jour, 4 h en réserve)." },
   dossiers: { label: "Traiter des dossiers en retard", desc: "Vos missions en cours gagnent du temps : leur échéance est repoussée de 6 h par heure faite (maximum 24 h), et votre responsable apprécie." },
-  formation: { label: "Me former en dehors des heures", desc: "Vous progressez dans votre compétence la plus faible : de l'expérience supplémentaire pour chaque heure." },
+  formation: { label: "Me former en dehors des heures", desc: "Une séance de questions pour apprendre pour de vrai : fiches de cours, définitions, exercices de calcul et culture financière, corrigés un par un (3 questions par heure). Chaque bonne réponse développe vos compétences, et une séance réussie à 80 % renforce la confiance de votre responsable." },
 };
 export function overtimeCheck(s: GameState, hours: number) {
   if (!on(s) || !s.career.employed) return { ok: false as const, error: "Les heures supplémentaires concernent les salariés en mode carrière." };
@@ -109,11 +110,12 @@ export function overtimeCheck(s: GameState, hours: number) {
   if (m + hours * 60 > 23 * 60 + 30) return { ok: false as const, error: `Trop tard : ${hours} h de plus vous mèneraient après 23 h 30. Choisissez moins d'heures ou dormez.` };
   return { ok: true as const };
 }
-export function doOvertime(s: GameState, hours: number, focus: OvertimeFocus) {
+export function doOvertime(s: GameState, hours: number, focus: OvertimeFocus, subject: SkillBranch | "auto" = "auto") {
   const chk = overtimeCheck(s, hours);
   if (!chk.ok) return chk;
   if (!OVERTIME_FOCUS[focus]) return { ok: false as const, error: "Choix inconnu." };
   const l = s.life!;
+  if (focus === "formation" && l.training && !l.training.done) return { ok: false as const, error: "Terminez d'abord votre séance de formation en cours (ou fermez-la) avant d'en commencer une autre." };
   const day = dayIndex(s.t);
   const week = day - ((weekday(s.t) + 6) % 7); // lundi de la semaine en cours
   const ot = l.ot && l.ot.week === week ? l.ot : { week, hours: 0, today: { day, hours: 0 } };
@@ -143,11 +145,9 @@ export function doOvertime(s: GameState, hours: number, focus: OvertimeFocus) {
     changeRep(s, "fiabilite", 0.5 * hours);
     msg = n ? `${n} mission${n > 1 ? "s" : ""} en cours gagne${n > 1 ? "nt" : ""} du temps (+${Math.min(24, 6 * hours)} h d'échéance).` : "Aucune mission en retard à traiter : votre responsable apprécie votre zèle.";
   } else {
-    const entries = Object.entries(s.skills) as [SkillBranch, number][];
-    entries.sort((a, b) => a[1] - b[1]);
-    const branch = entries[0][0];
-    gainXp(s, branch, 8 * hours, "Soirées de travail personnel");
-    msg = `Vous progressez en « ${branch} » (+${8 * hours} XP environ).`;
+    const r = startTraining(s, hours, subject);
+    if (!r.ok) return r;
+    msg = `Votre séance de formation (${r.count} questions sur « ${r.branch} ») vous attend sur cette page.`;
   }
   if (ot.hours > 12) notify(s, "alerte", "Trop d'heures supplémentaires", `Vous cumulez ${ot.hours} h supplémentaires cette semaine : le risque d'épuisement augmente.`, "/play/planning");
   return { ok: true as const, hours, weekend, message: `⏱️ ${hours} h supplémentaire${hours > 1 ? "s" : ""}. ${msg}` };

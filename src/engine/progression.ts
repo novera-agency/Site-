@@ -71,6 +71,9 @@ export const CHAPTERS: Chapter[] = [
 // ───────────── Succès ─────────────
 export interface Achievement { id: string; title: string; desc: string; icon: string; secret?: boolean; check: (s: GameState) => boolean; }
 export const ACHIEVEMENTS: Achievement[] = [
+  { id: "study1", title: "Étudiant du soir", desc: "Terminer une séance de formation en heures supplémentaires.", icon: "🌙", check: (s) => (s.life?.trainStats?.sessions ?? 0) >= 1 },
+  { id: "study5", title: "Autodidacte", desc: "Terminer 5 séances de formation.", icon: "🎓", check: (s) => (s.life?.trainStats?.sessions ?? 0) >= 5 },
+  { id: "studyperfect", title: "Studieux", desc: "Réussir une séance de formation sans aucune erreur.", icon: "💯", check: (s) => (s.life?.trainStats?.perfect ?? 0) >= 1 },
   { id: "eco10", title: "Curieux", desc: "Réussir 10 questions du quiz d'économie.", icon: "💡", check: (s) => quizCorrectCount(s) >= 10 },
   { id: "eco30", title: "Esprit éclairé", desc: "Réussir 30 questions du quiz d'économie.", icon: "🎓", check: (s) => quizCorrectCount(s) >= 30 },
   { id: "eco100", title: "Érudit", desc: "Réussir 100 questions du quiz d'économie.", icon: "📚", check: (s) => quizCorrectCount(s) >= 100 },
