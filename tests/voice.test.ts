@@ -38,3 +38,17 @@ describe("Voix des participants", () => {
     expect(voiceCast(people).get("boss")!.profile.pitch).toBe(cast.get("boss")!.profile.pitch);
   });
 });
+
+import { voiceQuality } from "@/lib/voice";
+describe("Qualité des voix", () => {
+  const v = (name: string, localService = true) => ({ name, lang: "fr-FR", localService, voiceURI: name, default: false }) as SpeechSynthesisVoice;
+  it("les voix naturelles et premium passent devant les voix standard et les voix fantaisie", () => {
+    const list = [v("Eddy (Français (France))"), v("Thomas"), v("Google français", false), v("Audrey (Premium)"), v("Microsoft Denise Online (Natural) - French (France)", false)];
+    const sorted = [...list].sort((a, b) => voiceQuality(b).score - voiceQuality(a).score).map((x) => x.name);
+    expect(sorted[0]).toMatch(/Natural/);
+    expect(sorted[1]).toMatch(/Premium/);
+    expect(sorted[2]).toMatch(/Google/);
+    expect(sorted[sorted.length - 1]).toMatch(/Eddy/);
+    expect(voiceQuality(v("Microsoft Henri Online (Natural)")).label).toBe("naturelle");
+  });
+});

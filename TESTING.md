@@ -39,3 +39,5 @@ Pour tester l'édition navigateur : `BASE_PATH=/Site- npm run build:static`, ser
 | `e2e/immobilier.spec.ts` | Croix de retour (sous-page → catégorie → bureau) ; achat à crédit à Saint-Étienne, mise en location, chances affichées. |
 | `tests/appel.test.ts` (complété) | Demandes variées d'un appel à l'autre ; demande de service sans objectif de vente (satisfaction, frais) ; une recommandation crée un prospect. |
 | `tests/prospection.test.ts` | Prospects confiés par le N+1 le lundi avec un message ; bon démarchage → nouveau client et versement ; démarchage agressif → refus. |
+| `tests/voice.test.ts` (complété) | Classement des voix : naturelles, puis premium, puis Google, voix fantaisie en dernier. |
+| `e2e/voix.spec.ts` | Appareil simulé avec 5 voix : les voix naturelles sont en tête et utilisées pour deux personnages différents ; choix manuel d'une voix, conservé après rechargement. |

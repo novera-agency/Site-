@@ -13,14 +13,32 @@ export function voiceSupport() {
 
 let voices: SpeechSynthesisVoice[] = [];
 let allVoices: SpeechSynthesisVoice[] = [];
-/** Voix françaises ; les voix installées sur l'appareil passent avant les voix « en ligne » (qui échouent souvent sur mobile) */
+const isFr = (v: SpeechSynthesisVoice) => v.lang.toLowerCase().replace("_", "-").startsWith("fr");
+/** Qualité perçue d'une voix : les voix « Natural / Neural » (Edge), « Premium / Améliorée » (Apple) et Google passent devant */
+export function voiceQuality(v: SpeechSynthesisVoice): { score: number; label: "naturelle" | "premium" | "bonne" | "standard" | "basique" } {
+  const n = v.name.toLowerCase();
+  if (/natural|neural|naturelle/.test(n)) return { score: 100, label: "naturelle" };
+  if (/premium|enhanced|améliorée|amelioree|siri/.test(n)) return { score: 85, label: "premium" };
+  if (/google/.test(n)) return { score: 60, label: "bonne" };
+  if (/compact|eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley|jacques|bad news|bells|bubbles|cellos|good news|jester|organ|superstar|trinoids|whisper|wobble|zarvox|albert|fred|junior|kathy|ralph/.test(n)) return { score: 5, label: "basique" };
+  return { score: v.localService ? 40 : 30, label: "standard" };
+}
+const PREF_KEY = "fe_voices";
+/** Voix choisies par le joueur dans les paramètres (identifiants, dans l'ordre) */
+export function preferredVoices(): string[] { try { return JSON.parse(localStorage.getItem(PREF_KEY) ?? "[]"); } catch { return []; } }
+export function setPreferredVoices(uris: string[]) { try { localStorage.setItem(PREF_KEY, JSON.stringify(uris)); } catch { /* */ } loadVoices(); }
+/** Voix françaises classées de la plus naturelle à la plus robotique ; les choix du joueur passent en premier */
 function loadVoices() {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
   allVoices = window.speechSynthesis.getVoices();
-  const fr = allVoices.filter((v) => v.lang.toLowerCase().replace("_", "-").startsWith("fr"));
-  const local = fr.filter((v) => v.localService);
-  voices = local.length ? local : fr;
+  const fr = allVoices.filter(isFr).sort((x, y) => voiceQuality(y).score - voiceQuality(x).score || (x.lang === "fr-FR" ? -1 : 1));
+  const pref = preferredVoices().map((u) => fr.find((v) => v.voiceURI === u)).filter(Boolean) as SpeechSynthesisVoice[];
+  const good = fr.filter((v) => voiceQuality(v).score >= 30);
+  voices = pref.length ? pref : good.length ? good : fr;
 }
+/** Liste des voix françaises disponibles, pour l'écran de choix */
+export function frenchVoices() { loadVoices(); const pref = preferredVoices(); return allVoices.filter(isFr).sort((x, y) => voiceQuality(y).score - voiceQuality(x).score).map((v) => ({ uri: v.voiceURI, name: v.name, lang: v.lang, local: v.localService, quality: voiceQuality(v).label, chosen: pref.includes(v.voiceURI) })); }
+export function voiceByUri(uri: string) { loadVoices(); return allVoices.find((v) => v.voiceURI === uri); }
 /** Journal des événements de synthèse vocale (affiché dans le test du son) */
 export const voiceDiag: string[] = [];
 function diag(t: string) { voiceDiag.push(`${new Date().toLocaleTimeString("fr-FR")} ${t}`); if (voiceDiag.length > 40) voiceDiag.shift(); }
@@ -39,6 +57,7 @@ export function voiceFor(id: string, role = ""): VoiceProfile {
   if (r.includes("responsable du desk")) rate += 0.05;
   if (r.includes("junior")) { pitch += 0.08; rate += 0.04; }
   if (id === "narrateur") { pitch = 1; rate = 1.02; }
+  if (id === "narrateur") return { voice: voices[0], pitch: 1, rate: 1 };
   return { voice: voices.length ? voices[h % voices.length] : undefined, pitch: Math.max(0.5, Math.min(1.6, pitch)), rate: Math.max(0.8, Math.min(1.25, rate)) };
 }
 /** Combinaisons hauteur / débit bien séparées à l'oreille */
@@ -51,25 +70,21 @@ export interface Cast { profile: VoiceProfile; label: string; }
  */
 export function voiceCast(people: { id: string; role?: string }[]): Map<string, Cast> {
   if (!voices.length) loadVoices();
-  const V = Math.max(1, voices.length), slots = V * BANDS.length;
-  const used: number[] = [];
+  const V = voices.length;
   const out = new Map<string, Cast>();
-  for (const p of [...people].sort((a, b) => a.id.localeCompare(b.id))) {
-    const start = hash(p.id) % slots;
-    const ok = (sl: number, strict: boolean) => !used.some((u) => u === sl || (strict && u % V === sl % V && Math.abs(BANDS[Math.floor(u / V)][0] - BANDS[Math.floor(sl / V)][0]) < 0.2));
-    // d'abord une voix bien séparée à l'oreille, sinon au moins un réglage unique
-    let slot = start;
-    for (const strict of [true, false]) {
-      let found = -1;
-      for (let k = 0; k < slots; k++) { const sl = (start + k) % slots; if (ok(sl, strict)) { found = sl; break; } }
-      if (found >= 0) { slot = found; break; }
-    }
-    used.push(slot);
-    const [pitch, rate] = BANDS[Math.floor(slot / V)];
-    const voice = voices.length ? voices[slot % V] : undefined;
-    const tone = pitch < 0.8 ? "grave" : pitch > 1.2 ? "aiguë" : pitch < 0.95 ? "posée" : pitch > 1.05 ? "claire" : "médium";
-    out.set(p.id, { profile: { voice, pitch, rate }, label: `${voice ? voice.name.replace(/^(Microsoft|Google)\s*/, "").split(/[-–(]/)[0].trim() + " · " : ""}${tone}` });
-  }
+  const sorted = [...people].sort((a, b) => a.id.localeCompare(b.id));
+  sorted.forEach((p, i) => {
+    // Une voix différente par personne, des plus naturelles aux moins naturelles ; on ne joue sur la hauteur
+    // et le débit que lorsqu'il faut réutiliser une voix (ou qu'il n'y en a aucune)
+    const voice = V ? voices[i % V] : undefined;
+    const round = V ? Math.floor(i / V) : i;
+    const natural = !!voice && voiceQuality(voice).score >= 60;
+    let [pitch, rate] = BANDS[round % BANDS.length];
+    if (natural) { pitch = 1 + (pitch - 1) * 0.35; rate = 1 + (rate - 1) * 0.5; } // les voix naturelles se déforment vite : variations douces
+    pitch = Math.round(pitch * 100) / 100; rate = Math.round(rate * 100) / 100;
+    const tone = pitch < 0.8 ? "grave" : pitch > 1.2 ? "aiguë" : pitch < 0.95 ? "posée" : pitch > 1.05 ? "claire" : "naturelle";
+    out.set(p.id, { profile: { voice, pitch, rate }, label: `${voice ? voice.name.replace(/^(Microsoft|Google)\s*/, "").replace(/\s*Online.*$/, "").split(/[-–(]/)[0].trim() + " · " : ""}${tone}` });
+  });
   return out;
 }
 
@@ -129,7 +144,8 @@ function speakOne(text: string, p: VoiceProfile, volume: number, gen: number, re
     const ss = window.speechSynthesis;
     const u = new SpeechSynthesisUtterance(text);
     const voice = retry ? undefined : p.voice;
-    u.lang = voice?.lang ?? "fr-FR"; if (voice) u.voice = voice;
+    u.lang = voice?.lang ?? "fr-FR";
+    if (voice) { try { u.voice = voice; } catch { diag("✖ voix refusée par le navigateur, voix par défaut"); } }
     u.pitch = p.pitch; u.rate = p.rate; u.volume = volume;
     let started = false, done = false;
     const finish = (r: SpeakResult) => { if (done) return; done = true; alive.delete(u); clearInterval(keep); clearTimeout(noStart); clearTimeout(cap); resolve(r); };
