@@ -250,7 +250,7 @@ export interface Decision { t: number; kind: string; text: string; }
 export interface GameSettings {
   /** Notifications affichées : toutes, importantes (alertes, succès, critiques) ou critiques seulement */
   notifLevel?: "toutes" | "importantes" | "critiques";
-  /** Musique d'ambiance et effets sonores */
+  /** Ambiance sonore (nature) et petits bruits */
   sound?: boolean;
   minutesPerSecond: number;     // ratio temps réel → simulé à x1
   autoPauseImportant: boolean;
@@ -294,7 +294,7 @@ export interface GameState {
   /** Parcours, succès et fin de partie */
   progress?: { chapters: string[]; objectives: string[]; achievements: string[] };
   /** Quiz de culture économique */
-  quiz?: { done: Record<string, 0 | 1>; streak: number; best: number; answered: number; correct: number };
+  quiz?: { done: Record<string, 0 | 1>; streak: number; best: number; answered: number; correct: number; today?: { day: number; ids: string[]; answered: string[] }; dailyDone?: number; dailyStreak?: number; dailyBest?: number; lastDaily?: number };
   ended?: { id: "retraite" | "faillite" | "fortune"; t: number; score: number };
   /** Prospects à démarcher (donnés par le N+1 ou recommandés) */
   prospects?: Prospect[];

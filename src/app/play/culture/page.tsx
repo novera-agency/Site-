@@ -5,9 +5,10 @@ import { Card, PageTitle, Loading, Badge, Bar, Button, Tabs } from "@/components
 
 type Res = { correct: boolean; answer: number; explain: string; xp: number; streak: number; first: boolean };
 const LEVEL = ["", "Facile", "Moyen", "Difficile"];
+const CAT: Record<string, [string, "gain" | "info" | "gold" | "warn" | "neutral"]> = { micro: ["Micro", "info"], macro: ["Macro", "gain"], finance: ["Finance", "gold"], histoire: ["Histoire", "warn"], calcul: ["Calcul", "neutral"] };
 
 export default function Culture() {
-  const [cat, setCat] = useState<"mix" | "micro" | "macro">("mix");
+  const [cat, setCat] = useState<"jour" | "mix" | "micro" | "macro" | "finance" | "histoire" | "calcul">("jour");
   const { data } = useView<any>("culture", { cat }, 3000);
   const act = useAction();
   const [queue, setQueue] = useState<any[] | null>(null);
@@ -18,11 +19,10 @@ export default function Culture() {
   // La série (5 questions) est figée au départ ; la vue se rafraîchit en arrière-plan sans la changer
   useEffect(() => { if (data && data.cat === cat && data.mode === "carriere" && queue === null) setQueue(data.batch); }, [data, cat, queue]);
   if (!data || (data.mode === "carriere" && queue === null)) return <Loading />;
-  const sub = "Micro et macroéconomie : une question à la fois, avec l'explication à chaque réponse. Chaque bonne réponse développe vos compétences (analyse pour la micro, macro pour la macro).";
+  const sub = "Deux questions par jour, plus des séries libres en micro, macro, finance, histoire financière et calcul. Chaque bonne réponse développe vos compétences, avec l'explication à chaque fois.";
   if (data.mode !== "carriere") return <><PageTitle env="Carrière" title="Quiz d'économie" subtitle={sub} /><Card><p className="text-sm text-ink-300">Le quiz d'économie est disponible en mode carrière.</p></Card></>;
   const q = queue ? queue[seen.length] : undefined;
-  const total = data.stats.micro.total + data.stats.macro.total;
-  const done = data.stats.micro.done + data.stats.macro.done;
+  const { total, done } = data.stats;
   const pick = async (i: number) => {
     if (res || !q) return;
     setPicked(i);
@@ -34,17 +34,17 @@ export default function Culture() {
   return <>
     <PageTitle env="Carrière" title="Quiz d'économie" subtitle={sub} />
     <div className="mb-4 grid gap-3 md:grid-cols-3" data-testid="quiz-stats">
-      <Card><div className="text-xs text-ink-400">Questions réussies</div><div className="num text-2xl font-semibold text-gold">{done} / {total}</div><div className="mt-2"><Bar value={done} max={total} tone="gold" /></div></Card>
-      <Card><div className="text-xs text-ink-400">Microéconomie</div><div className="num text-xl font-semibold">{data.stats.micro.done} / {data.stats.micro.total}</div><div className="mt-2"><Bar value={data.stats.micro.done} max={data.stats.micro.total} /></div></Card>
-      <Card><div className="text-xs text-ink-400">Macroéconomie</div><div className="num text-xl font-semibold">{data.stats.macro.done} / {data.stats.macro.total}</div><div className="mt-2"><Bar value={data.stats.macro.done} max={data.stats.macro.total} tone="gain" /></div></Card>
+      <Card><div className="text-xs text-ink-400">Questions réussies</div><div className="num text-2xl font-semibold text-gold">{done} / {total}</div><div className="mt-2"><Bar value={done} max={total} tone="gold" /></div><div className="mt-1 text-[11px] text-ink-400">+ exercices de calcul : {data.stats.calcul.done} réussis (renouvelés à l'infini)</div></Card>
+      <Card><div className="text-xs text-ink-400">Questions du jour</div><div className="num text-2xl font-semibold" data-testid="daily-count">{data.daily.answered} / {data.daily.total}</div><div className="mt-1 text-[11px] text-ink-400">Série : <b className="num text-white">{data.daily.streak}</b> jour{data.daily.streak > 1 ? "s" : ""} · record {data.daily.best} · {data.daily.days} jours complets</div></Card>
+      <Card><div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">{(["micro", "macro", "finance", "histoire"] as const).map((c) => <div key={c}><div className="flex justify-between text-ink-300"><span>{CAT[c][0]}</span><span className="num">{data.stats[c].done}/{data.stats[c].total}</span></div><Bar value={data.stats[c].done} max={data.stats[c].total} /></div>)}</div></Card>
     </div>
     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-      <Tabs tabs={[{ id: "mix" as const, label: "Mélange" }, { id: "micro" as const, label: "Micro" }, { id: "macro" as const, label: "Macro" }]} value={cat} onChange={(v) => { setCat(v); restart(); }} />
+      <Tabs tabs={[{ id: "jour" as const, label: "Du jour" }, { id: "mix" as const, label: "Mélange" }, { id: "micro" as const, label: "Micro" }, { id: "macro" as const, label: "Macro" }, { id: "finance" as const, label: "Finance" }, { id: "histoire" as const, label: "Histoire" }, { id: "calcul" as const, label: "Calculs" }]} value={cat} onChange={(v) => { setCat(v); restart(); }} />
       <div className="text-xs text-ink-400">Série en cours : <b className="num text-white" data-testid="quiz-streak">{data.stats.streak}</b> · meilleure : <span className="num">{data.stats.best}</span></div>
     </div>
-    {!q ? <Card title="Série terminée 🎉"><p className="text-sm text-ink-200" data-testid="quiz-end">{round.n > 0 ? `Vous avez réussi ${round.ok} question${round.ok > 1 ? "s" : ""} sur ${round.n}.` : "Vous avez répondu à toutes les questions disponibles dans cette catégorie !"} {queue && queue.length === 0 ? "Plus aucune question à découvrir ici : changez de catégorie." : ""}</p><div className="mt-3">{queue && queue.length > 0 && <Button onClick={restart}>Nouvelle série</Button>}</div></Card>
+    {!q ? <Card title="Série terminée 🎉"><p className="text-sm text-ink-200" data-testid="quiz-end">{round.n > 0 ? `Vous avez réussi ${round.ok} question${round.ok > 1 ? "s" : ""} sur ${round.n}.` : cat === "jour" ? "Vos deux questions du jour sont faites. Revenez demain, ou continuez avec une autre catégorie." : "Vous avez répondu à toutes les questions disponibles dans cette catégorie !"} {queue && queue.length === 0 ? "Plus aucune question à découvrir ici : changez de catégorie." : ""}</p><div className="mt-3">{queue && queue.length > 0 && cat !== "jour" && <Button onClick={restart}>Nouvelle série</Button>}{cat === "jour" && <Button variant="ghost" onClick={() => { setCat("mix"); restart(); }}>Continuer avec un mélange</Button>}</div></Card>
       : <Card>
-        <div className="mb-2 flex items-center gap-2"><Badge tone={q.cat === "macro" ? "gain" : "info"}>{q.cat === "macro" ? "Macro" : "Micro"}</Badge><Badge tone="neutral">{LEVEL[q.level]}</Badge><span className="ml-auto text-[11px] text-ink-400">Question {seen.length + 1} / {queue!.length}</span></div>
+        <div className="mb-2 flex items-center gap-2"><Badge tone={CAT[q.cat]?.[1] ?? "neutral"}>{CAT[q.cat]?.[0] ?? q.cat}</Badge><Badge tone="neutral">{LEVEL[q.level]}</Badge><span className="ml-auto text-[11px] text-ink-400">Question {seen.length + 1} / {queue!.length}</span></div>
         <h2 className="mb-3 text-base font-semibold text-white" data-testid="quiz-question">{q.q}</h2>
         <div className="space-y-2" role="group" aria-label="Réponses possibles">{q.options.map((o: string, i: number) => {
           const state = !res ? "" : i === res.answer ? "border-green-500 bg-green-500/10" : i === picked ? "border-red-500 bg-red-500/10" : "opacity-60";

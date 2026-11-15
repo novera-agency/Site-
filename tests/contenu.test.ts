@@ -41,7 +41,7 @@ describe("Contenu supplémentaire", () => {
     expect(s.life!.fun).toBeGreaterThan(before);
     lifeChoice(s, "adoption", "go");
     expect(s.life!.pets).toBe(1);
-    for (const ev of ["concert", "parent_malade", "marathon", "benevolat"]) for (const c of ["go", "no"]) expect(lifeChoice(s, ev, c).length).toBeGreaterThan(0);
+    for (const ev of ["spectacle", "parent_malade", "marathon", "benevolat"]) for (const c of ["go", "no"]) expect(lifeChoice(s, ev, c).length).toBeGreaterThan(0);
     for (const v of Object.values(trialBalance(s))) expect(v).toBe(0);
   });
   it("26 événements mondiaux simulés, sans répétition rapprochée", () => {

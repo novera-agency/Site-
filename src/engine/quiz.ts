@@ -6,12 +6,14 @@
 import type { GameState } from "./types";
 import { gainXp, notify, changeRep } from "./core";
 import { dayIndex } from "./time";
+import { BANK2 } from "./quizBank2";
+import { genQuestion, histQuestion, histIds, GEN_FAMILIES, HIST_COUNT } from "./quizGen";
 
-export type QuizCat = "micro" | "macro";
+export type QuizCat = "micro" | "macro" | "finance" | "histoire" | "calcul";
 export interface QuizQ { id: string; cat: QuizCat; level: 1 | 2 | 3; q: string; options: string[]; correct: number; explain: string }
 const Q = (id: string, cat: QuizCat, level: 1 | 2 | 3, q: string, options: string[], correct: number, explain: string): QuizQ => ({ id, cat, level, q, options, correct, explain });
 
-export const QUIZ_BANK: QuizQ[] = [
+const BANK1: QuizQ[] = [
   // ───────── Microéconomie ─────────
   Q("mi_offre", "micro", 1, "Si la demande d'un bien augmente alors que l'offre reste identique, que se passe-t-il en général pour son prix ?", ["Il baisse", "Il augmente", "Il ne change pas", "Il devient nul"], 1, "Plus d'acheteurs pour la même quantité disponible : les vendeurs peuvent monter leurs prix jusqu'à un nouvel équilibre, plus haut."),
   Q("mi_elast", "micro", 2, "Le prix du sel augmente de 10 %, mais on en achète à peine moins. Que dit-on de la demande de sel ?", ["Elle est inélastique", "Elle est très élastique", "Elle est négative", "Elle est parfaite"], 0, "Une demande est inélastique quand la quantité achetée varie moins que le prix : les besoins de base ou sans substitut en sont l'exemple type."),
@@ -66,28 +68,82 @@ export const QUIZ_BANK: QuizQ[] = [
   Q("ma_ratio", "macro", 3, "Un pays a une dette publique de 3 000 Md€ et un PIB de 2 500 Md€. Son ratio dette/PIB est d'environ…", ["120 %", "83 %", "12 %", "250 %"], 0, "3 000 ÷ 2 500 = 1,2, soit 120 % du PIB. On compare ainsi les pays entre eux (le critère de Maastricht fixe 60 %)."),
 ];
 
+export const QUIZ_BANK: QuizQ[] = [...BANK1, ...BANK2];
 const BY_ID = Object.fromEntries(QUIZ_BANK.map((q) => [q.id, q]));
-export const quizById = (id: string) => BY_ID[id];
+const cache = new Map<string, QuizQ>();
+/** Retrouve une question par identifiant : banque rédigée, exercice de calcul (g:famille:graine) ou événement historique (h:n) */
+export function quizById(id: string): QuizQ | undefined {
+  if (BY_ID[id]) return BY_ID[id];
+  const hit = cache.get(id); if (hit) return hit;
+  let q: QuizQ | undefined;
+  if (id.startsWith("g:")) { const [, f, sd] = id.split(":"); if (Number.isInteger(Number(f)) && Number.isInteger(Number(sd))) q = genQuestion(Number(f), Number(sd)); }
+  else if (id.startsWith("h:")) q = histQuestion(id);
+  if (q) { if (cache.size > 2000) cache.clear(); cache.set(id, q); }
+  return q;
+}
+const BRANCH: Record<QuizCat, "analyse" | "macro" | "marches" | "maths"> = { micro: "analyse", macro: "macro", finance: "marches", histoire: "macro", calcul: "maths" };
+const CAT_LABEL: Record<QuizCat, string> = { micro: "micro", macro: "macro", finance: "finance", histoire: "histoire financière", calcul: "calcul" };
+export const QUIZ_TOTALS = (() => { const t = { micro: 0, macro: 0, finance: 0, histoire: HIST_COUNT, calcul: 0 } as Record<QuizCat, number>; for (const q of QUIZ_BANK) t[q.cat]++; return t; })();
+export const QUIZ_TOTAL = QUIZ_BANK.length + HIST_COUNT;
 
-export interface QuizState { done: Record<string, 0 | 1>; streak: number; best: number; answered: number; correct: number }
+export interface QuizState {
+  done: Record<string, 0 | 1>; streak: number; best: number; answered: number; correct: number;
+  /** Les 2 questions du jour (figées au premier affichage) */
+  today?: { day: number; ids: string[]; answered: string[] };
+  dailyDone?: number; dailyStreak?: number; dailyBest?: number; lastDaily?: number;
+}
 export const quizState = (s: GameState): QuizState => (s.quiz ??= { done: {}, streak: 0, best: 0, answered: 0, correct: 0 });
 export const quizCorrectCount = (s: GameState) => Object.values(s.quiz?.done ?? {}).filter((v) => v === 1).length;
 
-/** Questions proposées : d'abord les jamais vues, puis les ratées ; jamais celles déjà réussies. Ordre mélangé selon la partie et le jour. */
-export function quizBatch(s: GameState, cat: QuizCat | "mix", n = 5): QuizQ[] {
+const h32 = (str: string) => { let x = 2166136261; for (let i = 0; i < str.length; i++) x = Math.imul(x ^ str.charCodeAt(i), 16777619) >>> 0; return x; };
+/** Questions de connaissances (banque rédigée + histoire) dans un ordre propre à la partie */
+const orderCache = new Map<string, string[]>();
+function knowledgeOrder(s: GameState): string[] {
+  let o = orderCache.get(s.seed);
+  if (!o) { if (orderCache.size > 20) orderCache.clear(); o = [...QUIZ_BANK.map((q) => q.id), ...histIds()].sort((a, b) => h32(a + s.seed) - h32(b + s.seed)); orderCache.set(s.seed, o); }
+  return o;
+}
+/** Les 2 questions du jour : une de culture (jamais réussie si possible), une de calcul. Figées pour la journée. */
+export function quizToday(s: GameState) {
   const st = quizState(s);
   const day = dayIndex(s.t);
-  const h = (id: string) => { let x = day * 2654435761; for (let i = 0; i < id.length; i++) x = (x ^ id.charCodeAt(i)) * 16777619 >>> 0; for (let i = 0; i < s.seed.length; i++) x = (x ^ s.seed.charCodeAt(i)) * 16777619 >>> 0; return x; };
-  const pool = QUIZ_BANK.filter((q) => (cat === "mix" || q.cat === cat) && st.done[q.id] !== 1);
+  if (st.today && st.today.day === day) return st.today;
+  const order = knowledgeOrder(s);
+  let know: string | undefined;
+  for (let k = 0; k < order.length; k++) { const id = order[(day + k) % order.length]; if (st.done[id] !== 1 && !(st.today?.ids.includes(id))) { know = id; break; } }
+  const calc = `g:${day % GEN_FAMILIES}:${day}`;
+  const ids = [know ?? `g:${(day + 7) % GEN_FAMILIES}:${day + 100000}`, calc];
+  st.today = { day, ids, answered: [] };
+  return st.today;
+}
+
+/** Série de questions : du jour, ou d'une catégorie (jamais celles déjà réussies ; les ratées en dernier) */
+export function quizBatch(s: GameState, cat: QuizCat | "mix" | "jour", n = 5): QuizQ[] {
+  const st = quizState(s);
+  if (cat === "jour") return quizToday(s).ids.filter((id) => !st.today!.answered.includes(id)).map((id) => quizById(id)!).filter(Boolean);
+  if (cat === "calcul") {
+    const out: QuizQ[] = [];
+    let k = 0; const base = 1000 + st.answered * 3;
+    while (out.length < n && k < 200) { const q = genQuestion((base + k) % GEN_FAMILIES, base + k); k++; if (st.done[q.id] === undefined) out.push(q); }
+    return out;
+  }
+  const day = dayIndex(s.t);
+  const h = (id: string) => h32(id + s.seed + day);
+  let ids = QUIZ_BANK.map((q) => q.id);
+  if (cat === "histoire") ids = [...QUIZ_BANK.filter((q) => q.cat === "histoire").map((q) => q.id), ...histIds()];
+  else if (cat === "mix") ids = [...ids, ...histIds()];
+  else ids = QUIZ_BANK.filter((q) => q.cat === cat).map((q) => q.id);
+  const pool = ids.filter((id) => st.done[id] !== 1).map((id) => quizById(id)!).filter(Boolean);
   pool.sort((a, b) => (st.done[a.id] === 0 ? 1 : 0) - (st.done[b.id] === 0 ? 1 : 0) || a.level - b.level || h(a.id) - h(b.id));
-  // Mélange léger : les 3 premiers niveaux restent progressifs, mais pas toujours les mêmes questions
-  const head = pool.slice(0, Math.max(n * 2, n));
-  head.sort((a, b) => h(a.id) - h(b.id));
-  return head.slice(0, n);
+  const head = pool.slice(0, Math.max(n * 3, n));
+  head.sort((a, b) => (st.done[a.id] === 0 ? 1 : 0) - (st.done[b.id] === 0 ? 1 : 0) || h(a.id) - h(b.id));
+  const out = head.slice(0, n);
+  if (out.length < n && cat === "mix") for (const q of quizBatch(s, "calcul", n - out.length)) out.push(q);
+  return out;
 }
 
 export function answerQuiz(s: GameState, id: string, choice: number) {
-  const q = BY_ID[id];
+  const q = quizById(id);
   if (!q) return { ok: false as const, error: "Question inconnue." };
   if (!Number.isInteger(choice) || choice < 0 || choice >= q.options.length) return { ok: false as const, error: "Réponse invalide." };
   const st = quizState(s);
@@ -100,10 +156,25 @@ export function answerQuiz(s: GameState, id: string, choice: number) {
     if (first) {
       st.done[id] = 1;
       xp = 4 * q.level + (st.streak >= 3 ? 2 : 0);
-      gainXp(s, q.cat === "macro" ? "macro" : "analyse", xp, `Quiz d'économie : ${q.cat === "macro" ? "macro" : "micro"}`);
+      gainXp(s, BRANCH[q.cat], xp, `Quiz d'économie : ${CAT_LABEL[q.cat]}`);
       const total = quizCorrectCount(s);
-      if (total % 10 === 0) { changeRep(s, "professionnelle", 1, "Solide culture économique"); notify(s, "succes", `Culture économique : ${total} questions réussies`, "Votre responsable remarque votre curiosité intellectuelle.", "/play/culture"); }
+      if (total % 25 === 0) { changeRep(s, "professionnelle", 1, "Solide culture économique"); notify(s, "succes", `Culture économique : ${total} questions réussies`, "Votre responsable remarque votre curiosité intellectuelle.", "/play/culture"); }
     }
   } else { st.streak = 0; if (st.done[id] === undefined) st.done[id] = 0; }
-  return { ok: true as const, data: { correct: right, answer: q.correct, explain: q.explain, xp, streak: st.streak, first } };
+  // Questions du jour : bonus quand les deux sont traitées
+  const day = dayIndex(s.t);
+  let daily: { done: boolean; streak: number } | undefined;
+  if (st.today && st.today.day === day && st.today.ids.includes(id) && !st.today.answered.includes(id)) {
+    st.today.answered.push(id);
+    if (st.today.answered.length >= st.today.ids.length) {
+      st.dailyDone = (st.dailyDone ?? 0) + 1;
+      st.dailyStreak = st.lastDaily !== undefined && day - st.lastDaily <= 3 && day > st.lastDaily ? (st.dailyStreak ?? 0) + 1 : 1;
+      st.dailyBest = Math.max(st.dailyBest ?? 0, st.dailyStreak);
+      st.lastDaily = day;
+      gainXp(s, "macro", 6, "Questions du jour terminées");
+      notify(s, "succes", "Questions du jour terminées ✔", `Série de ${st.dailyStreak} jour${st.dailyStreak > 1 ? "s" : ""}. À demain pour les deux suivantes.`, "/play/culture");
+      daily = { done: true, streak: st.dailyStreak };
+    }
+  }
+  return { ok: true as const, data: { correct: right, answer: q.correct, explain: q.explain, xp, streak: st.streak, first, daily } };
 }

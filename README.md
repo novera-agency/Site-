@@ -79,13 +79,13 @@ Le workflow `.github/workflows/pages.yml` vérifie le code (TypeScript, 37 tests
 - **Parcours** : 8 chapitres avec objectifs, 27 succès, score de carrière ; trois fins (retraite, faillite, fortune) et tableau d'honneur local.
 - **Vie privée complète** : salaire précis, factures, logement, jauges (santé mentale, forme, vie sociale, plaisir), rencontres, couple, mariage, enfants, histoires de collègues.
 - Investissement immobilier dans 13 villes françaises, prospection confiée par le N+1, au moins deux missions générées par jour.
-- Événements mondiaux simulés (parties fictives), notifications regroupées avec trois niveaux, musique et bruitages synthétisés, portraits générés.
+- Événements mondiaux simulés (parties fictives), notifications regroupées avec trois niveaux, ambiance de nature (pluie, vent) et petits bruits synthétisés, sans musique ni instrument, portraits générés.
 - Sauvegarde complète exportable en fichier et réimportable depuis l'accueil.
 - Visite guidée de l'interface au premier lancement (relançable dans Options → Paramètres).
 - Accessibilité : texte agrandi, contraste renforcé, animations réduites, navigation au clavier ; audit automatique WCAG A/AA sans erreur.
 - Interface en anglais (menus, navigation, visite guidée, accueil) ; les dialogues et missions restent en français.
 - **Histoire réelle de 2000 au 13 novembre 2026** (guerre contre l'Iran, choc pétrolier, remontée des taux, krach de l'IA…), puis simulation libre. Les parties créées avec une ancienne version sont recommencées une fois au 3 janvier 2000.
-- **Quiz d'économie** : 50 questions de micro et macroéconomie avec explications, séries de 5, progression, succès et expérience en compétences ; une question de culture générale fait aussi partie des missions du jour.
+- **Quiz d'économie** : 2 questions par jour de jeu (soit environ 14 600 sur les 20 ans) tirées de trois sources : 140 questions rédigées (micro, macro, finance, histoire financière), une cinquantaine de questions tirées des vrais événements de l'histoire du jeu, et 20 familles d'exercices de calcul à chiffres générés (illimités). Séries libres par catégorie, explication à chaque réponse, séries quotidiennes, succès et expérience en compétences.
 - Contenu enrichi : 25 demandes clients, 26 événements mondiaux simulés, 20 événements de vie, 15 types de missions du jour.
 - Sur les appareils lents, le calcul est limité à chaque seconde : le temps ralentit au lieu de figer l'écran.
 

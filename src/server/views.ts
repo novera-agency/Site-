@@ -26,7 +26,7 @@ import { appreciation } from "@/engine/missions";
 import { canCall } from "@/engine/prospects";
 import { CHAPTERS, ACHIEVEMENTS, currentChapter, careerScore, endingAvailable, ENDINGS } from "@/engine/progression";
 import { wealthOf } from "@/engine/wealth";
-import { quizState, quizBatch, QUIZ_BANK } from "@/engine/quiz";
+import { quizState, quizBatch, quizToday, quizById, quizCorrectCount, QUIZ_TOTALS, QUIZ_TOTAL, type QuizCat } from "@/engine/quiz";
 import { CITIES, CITY_BY_ID, TYPE_NAME, COND_NAME, marketValue, marketRent, rentCap, rentProbability, saleProbability, cityPrice, cityRent, listings, propertiesEquity, loanBurden } from "@/engine/realestate";
 import { payslip, monthlyBills, freeHours, priceLevel, HOUSING, HOUSING_BY_ID, rentOf, priceOf, housingEquity, mortgageRate, TRANSPORT, SUBS, ACTIVITIES } from "@/engine/life";
 
@@ -247,9 +247,17 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
     }
     case "culture": {
       const st = quizState(s);
-      const cat = p.cat === "micro" || p.cat === "macro" ? p.cat : "mix";
-      const by = (c: "micro" | "macro") => { const all = QUIZ_BANK.filter((q) => q.cat === c); return { total: all.length, done: all.filter((q) => st.done[q.id] === 1).length }; };
-      return { mode: s.mode, cat, stats: { micro: by("micro"), macro: by("macro"), streak: st.streak, best: st.best, answered: st.answered, right: st.correct }, batch: quizBatch(s, cat, 5).map((q) => ({ id: q.id, cat: q.cat, level: q.level, q: q.q, options: q.options })) };
+      const CATS = ["jour", "mix", "micro", "macro", "finance", "histoire", "calcul"];
+      const cat = CATS.includes(String(p.cat)) ? String(p.cat) as "jour" | "mix" | "micro" | "macro" | "finance" | "histoire" | "calcul" : "jour";
+      const today = quizToday(s);
+      const countDone = (pred: (id: string) => boolean) => Object.entries(st.done).filter(([id, v]) => v === 1 && pred(id)).length;
+      const byCat = (c: QuizCat) => ({ total: c === "calcul" ? null : QUIZ_TOTALS[c], done: c === "calcul" ? countDone((id) => id.startsWith("g:")) : countDone((id) => (id.startsWith("h:") ? c === "histoire" : quizById(id)?.cat === c)) });
+      return {
+        mode: s.mode, cat,
+        stats: { micro: byCat("micro"), macro: byCat("macro"), finance: byCat("finance"), histoire: byCat("histoire"), calcul: byCat("calcul"), total: QUIZ_TOTAL, done: quizCorrectCount(s), streak: st.streak, best: st.best, answered: st.answered, right: st.correct },
+        daily: { total: today.ids.length, answered: today.answered.length, streak: st.dailyStreak ?? 0, best: st.dailyBest ?? 0, days: st.dailyDone ?? 0 },
+        batch: quizBatch(s, cat, 5).map((q) => ({ id: q.id, cat: q.cat, level: q.level, q: q.q, options: q.options })),
+      };
     }
     case "realestate": {
       if (!s.life) return { enabled: false };

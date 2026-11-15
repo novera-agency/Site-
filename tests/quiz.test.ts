@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { game, profile } from "./helpers";
-import { QUIZ_BANK, quizBatch, answerQuiz, quizState } from "@/engine/quiz";
+import { QUIZ_BANK, quizBatch, answerQuiz, quizState, quizToday, quizById } from "@/engine/quiz";
+import { genQuestion, GEN_FAMILIES, histIds, histQuestion } from "@/engine/quizGen";
 import { createMission, answerMission } from "@/engine/missions";
 import { applyAction } from "@/server/actions";
 import { buildView } from "@/server/views";
@@ -11,10 +12,9 @@ import { EPOCH_UTC, useEpoch } from "@/engine/time";
 
 describe("Quiz de culture économique", () => {
   it("banque équilibrée : micro et macro, bonnes réponses variées, explications présentes", () => {
-    expect(QUIZ_BANK.length).toBeGreaterThanOrEqual(48);
+    expect(QUIZ_BANK.length).toBeGreaterThanOrEqual(140);
     expect(new Set(QUIZ_BANK.map((q) => q.id)).size).toBe(QUIZ_BANK.length);
-    expect(QUIZ_BANK.filter((q) => q.cat === "micro").length).toBeGreaterThanOrEqual(24);
-    expect(QUIZ_BANK.filter((q) => q.cat === "macro").length).toBeGreaterThanOrEqual(24);
+    for (const c of ["micro", "macro", "finance", "histoire"]) expect(QUIZ_BANK.filter((q) => q.cat === c).length, c).toBeGreaterThanOrEqual(c === "histoire" ? 10 : 40);
     for (const q of QUIZ_BANK) {
       expect(q.options.length).toBe(4);
       expect(new Set(q.options).size).toBe(4);
@@ -39,8 +39,8 @@ describe("Quiz de culture économique", () => {
     const wrong = answerQuiz(s, b.id, (b.correct + 1) % 4);
     expect(wrong.ok && !wrong.data.correct && wrong.data.explain.length > 0).toBe(true);
     expect(quizState(s).streak).toBe(0);
-    expect(quizBatch(s, "macro", 30).some((q) => q.id === a.id)).toBe(false);
-    expect(quizBatch(s, "macro", 30).some((q) => q.id === b.id)).toBe(true);
+    expect(quizBatch(s, "macro", 100).some((q) => q.id === a.id)).toBe(false);
+    expect(quizBatch(s, "macro", 100).some((q) => q.id === b.id)).toBe(true);
     expect(answerQuiz(s, "inconnue", 0).ok).toBe(false);
     expect(answerQuiz(s, b.id, 9).ok).toBe(false);
   });
@@ -52,7 +52,7 @@ describe("Quiz de culture économique", () => {
     expect(v.batch.every((q: any) => q.cat === "micro")).toBe(true);
     for (let i = 0; i < 12; i++) {
       const q = (buildView(s, "culture", { cat: "mix" }) as any).batch[0];
-      const full = QUIZ_BANK.find((x) => x.id === q.id)!;
+      const full = quizById(q.id)!;
       const r = applyAction(s, { type: "quiz_answer", id: q.id, choice: full.correct } as never);
       expect(r.ok).toBe(true);
     }
@@ -63,10 +63,74 @@ describe("Quiz de culture économique", () => {
     const s = game("carriere", "quiz-3");
     const m = createMission(s, "d_culture", {}, undefined, { daily: true, quiet: true });
     expect(m).toBeTruthy();
-    const full = QUIZ_BANK.find((x) => x.id === m!.params.q)!;
+    const full = quizById(String(m!.params.q))!;
     const r = answerMission(s, m!.id, { choice: full.correct });
     expect(r.ok && r.message.startsWith("✔")).toBe(true);
   });
+});
+
+describe("Quiz à grande échelle : 2 questions par jour sur 20 ans", () => {
+  it("exercices de calcul : 20 familles, toujours 4 réponses distinctes dont la bonne, reproductibles", () => {
+    expect(GEN_FAMILIES).toBe(20);
+    for (let f = 0; f < GEN_FAMILIES; f++) for (let seed = 1; seed <= 60; seed++) {
+      const q = genQuestion(f, seed);
+      expect(q.options.length, q.id).toBe(4);
+      expect(new Set(q.options).size, `${q.id} ${q.options.join(" | ")}`).toBe(4);
+      expect(q.correct).toBeGreaterThanOrEqual(0); expect(q.correct).toBeLessThan(4);
+      expect(q.explain.length).toBeGreaterThan(20);
+      expect(JSON.stringify(genQuestion(f, seed))).toBe(JSON.stringify(q));
+      expect(quizById(q.id)?.q).toBe(q.q);
+    }
+    // les chiffres changent d'une graine à l'autre
+    expect(new Set(Array.from({ length: 30 }, (_, i) => genQuestion(0, i + 1).q)).size).toBeGreaterThanOrEqual(15);
+  });
+  it("questions tirées de l'histoire du jeu : l'année bonne figure parmi 4 années distinctes, explication datée", () => {
+    const ids = histIds();
+    expect(ids.length).toBeGreaterThan(80);
+    for (const id of ids) {
+      const q = histQuestion(id)!;
+      expect(new Set(q.options).size, id).toBe(4);
+      expect(q.options[q.correct]).toMatch(/^(19|20)\d\d$/);
+      expect(q.explain).toMatch(/\d{4}\./);
+    }
+  });
+  it("deux questions du jour, figées pour la journée, différentes d'un jour à l'autre ; bonus et série quand les deux sont faites", () => {
+    const s = game("carriere", "quiz-6");
+    const a = quizToday(s);
+    expect(a.ids.length).toBe(2);
+    expect(quizToday(s)).toBe(a);
+    const batch = quizBatch(s, "jour");
+    expect(batch.map((q) => q.id)).toEqual(a.ids);
+    answerQuiz(s, a.ids[0], quizById(a.ids[0])!.correct);
+    expect(quizBatch(s, "jour").length).toBe(1);
+    const r = answerQuiz(s, a.ids[1], quizById(a.ids[1])!.correct);
+    expect(r.ok && r.data.daily?.done).toBe(true);
+    expect(quizState(s).dailyStreak).toBe(1);
+    expect(s.notifications.some((n) => n.title.includes("Questions du jour"))).toBe(true);
+    s.t += 1440;
+    const b = quizToday(s);
+    expect(b.ids).not.toEqual(a.ids);
+    for (const id of b.ids) answerQuiz(s, id, quizById(id)!.correct);
+    expect(quizState(s).dailyStreak).toBe(2);
+    s.t += 5 * 1440; // trois jours sautés : la série repart de 1
+    for (const id of quizToday(s).ids) answerQuiz(s, id, quizById(id)!.correct);
+    expect(quizState(s).dailyStreak).toBe(1);
+  });
+  it("sur 20 ans (7 300 jours) : toujours 2 questions valides par jour, sans répétition d'une question de culture réussie", () => {
+    const s = game("carriere", "quiz-7");
+    const seen = new Set<string>();
+    let repeats = 0;
+    for (let d = 0; d < 7300; d++) {
+      const t = quizToday(s);
+      expect(t.ids.length).toBe(2);
+      for (const id of t.ids) { const q = quizById(id); expect(q, id).toBeTruthy(); expect(q!.options.length).toBe(4); }
+      for (const id of t.ids) { if (seen.has(id)) repeats++; seen.add(id); answerQuiz(s, id, quizById(id)!.correct); }
+      s.t += 1440;
+    }
+    expect(seen.size).toBeGreaterThan(7000);
+    expect(repeats).toBeLessThan(50);
+    expect(quizState(s).dailyDone).toBe(7300);
+  }, 120000);
 });
 
 describe("Histoire réelle jusqu'en novembre 2026 et partie recommencée", () => {

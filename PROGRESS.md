@@ -73,7 +73,7 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 
 ## Vérifications (dernière exécution)
 - `npm run lint` : OK
-- `npm test` : 100/100
+- `npm test` : 104/104
 - `npm run e2e` : 20/20 (dont parcours 20 étapes, appel client, immobilier, vie privée, voix)
 - Affichage émulé iPhone 13, Pixel 7 et iPad : aucune page ne déborde horizontalement (38 écrans)
 - `npm run build` : OK
@@ -106,3 +106,9 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 - ✅ Parties créées avant cette version : recommencées une fois au 3 janvier 2000 (même personnage, banque, nom, capital).
 - ✅ Quiz d'économie : 50 questions (25 micro, 25 macro), explications, séries, 3 succès, mission du jour « culture ».
 - ⚠️ Les valeurs 2026 viennent de recherches web aux chiffres parfois divergents : approximations, pas des cours officiels.
+
+## Quiz à grande échelle, ambiance sans musique
+- ✅ 2 questions du jour (une de culture, une de calcul), figées pour la journée ; 7 300 jours simulés sans répétition notable ni erreur.
+- ✅ 140 questions rédigées + questions tirées de la chronologie historique + 20 familles de calculs à chiffres générés.
+- ✅ Musique retirée : ambiance de nature (pluie douce, vent) synthétisée et simples tapotements pour les alertes ; plus aucune mélodie ni instrument. Les activités « concert » sont devenues « spectacle ».
+- ⚠️ Les 14 600 questions ne sont pas toutes rédigées : le renouvellement vient des exercices générés et des événements historiques ; la banque rédigée est parcourue une fois, puis les calculs prennent le relais.

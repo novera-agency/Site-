@@ -52,7 +52,7 @@ export const SUBS: Record<keyof LifeState["subs"], { name: string; cost: number;
   mutuelle: { name: "Mutuelle santé", cost: 55, desc: "Sans elle, les frais médicaux sont mal remboursés." },
   assurance: { name: "Assurance habitation", cost: 22, desc: "Couvre dégâts des eaux, incendie, vol." },
   sport: { name: "Salle de sport", cost: 45, desc: "Séances de sport gratuites et forme entretenue." },
-  streaming: { name: "Abonnements vidéo et musique", cost: 25, desc: "Petits plaisirs du quotidien." },
+  streaming: { name: "Abonnements vidéo et lecture", cost: 25, desc: "Petits plaisirs du quotidien." },
 };
 
 // ───────────── Loisirs ─────────────
@@ -66,7 +66,7 @@ export const ACTIVITIES: Activity[] = [
   { id: "jeux", name: "Jeux vidéo", cost: 0, hours: 2, m: 1, p: -1, so: -1, f: 5, desc: "Seul devant l'écran.", emoji: "🎮" },
   { id: "lecture", name: "Lecture, méditation", cost: 0, hours: 1, m: 4, p: 0, so: 0, f: 2, desc: "Un moment calme pour soi.", emoji: "📖" },
   { id: "famille", name: "Voir sa famille", cost: 60, hours: 6, m: 6, p: 0, so: 8, f: 3, desc: "Garder le lien avec ses proches.", emoji: "👨‍👩‍👧" },
-  { id: "concert", name: "Concert ou spectacle", cost: 75, hours: 3, m: 3, p: 0, so: 5, f: 9, desc: "Une soirée qui marque.", emoji: "🎤" },
+  { id: "spectacle", name: "Spectacle ou sortie culturelle", cost: 75, hours: 3, m: 3, p: 0, so: 5, f: 9, desc: "Une soirée qui marque.", emoji: "🎤" },
   { id: "club", name: "Sortie en club", cost: 90, hours: 5, m: 1, p: -7, so: 9, f: 11, desc: "On se couche tard… et le lendemain pique.", emoji: "🪩" },
   { id: "shopping", name: "Shopping", cost: 250, hours: 2, m: 1, p: 0, so: 1, f: 7, desc: "Se faire plaisir (mais l'effet s'estompe vite).", emoji: "🛍️" },
   { id: "psy", name: "Séance chez un psychologue", cost: 70, hours: 1, m: 11, p: 0, so: 0, f: 0, desc: "Parler à un professionnel aide vraiment.", emoji: "🛋️" },
@@ -122,7 +122,7 @@ export function doActivity(s: GameState, id: string) {
   s.flags[key] = s.t;
   if (cost > 0) post(s, EXT_LIVING, cashAcc("perso"), toCents(cost), "EUR", `Loisirs : ${a.name}`);
   apply(s, a.m * tired, a.p * (a.p > 0 ? tired : 1), a.so * tired, a.f * tired);
-  if (l.partner) l.partner.bond = bar(l.partner.bond + (a.id === "amour" ? 14 : ["weekend", "resto", "concert", "cine", "famille", "enfants"].includes(a.id) ? 4 : 0) * tired);
+  if (l.partner) l.partner.bond = bar(l.partner.bond + (a.id === "amour" ? 14 : ["weekend", "resto", "spectacle", "cine", "famille", "enfants"].includes(a.id) ? 4 : 0) * tired);
   if (a.id === "club") s.career.stress = clamp(s.career.stress + 2, 0, 100);
   else s.career.stress = clamp(s.career.stress - Math.max(0, a.m) * 0.6 * tired, 0, 100);
   lg(s, `${a.emoji} ${a.name}${cost ? ` (−${cost} €)` : ""}`);
@@ -284,7 +284,7 @@ const LIFE_EVENTS: { id: string; w: (s: GameState) => number; fire: (s: GameStat
   { id: "anniv", w: () => 0.8, fire: (s) => choice(s, "anniv", "Anniversaire de votre mère", "Votre mère fête ses 60 ans ce week-end. Toute la famille sera là.", [["Y aller (une journée, ~80 €)", "go"], ["Appeler seulement", "no"]]) },
   { id: "weekend_amis", w: () => 0.7, fire: (s) => choice(s, "weekend_amis", "Week-end entre amis", "Vos amis louent une maison pour le week-end prochain. Part de chacun : environ 420 €.", [["Je viens !", "go"], ["Pas cette fois", "no"]]) },
   { id: "demenagement_ami", w: () => 0.5, fire: (s) => choice(s, "demenagement_ami", "Un ami déménage", "Un ami vous demande un coup de main samedi pour porter des cartons.", [["Aider (une journée)", "go"], ["Refuser", "no"]]) },
-  { id: "concert", w: () => 0.7, fire: (s) => choice(s, "concert", "Places de concert", "Un ami a deux places pour le concert de votre groupe préféré vendredi soir (90 € la place). Mais vous avez une présentation importante samedi matin.", [["Y aller", "go"], ["Rester préparer la présentation", "no"]]) },
+  { id: "spectacle", w: () => 0.7, fire: (s) => choice(s, "spectacle", "Places de spectacle", "Un ami a deux places pour un spectacle d'humoristes vendredi soir (90 € la place). Mais vous avez une présentation importante samedi matin.", [["Y aller", "go"], ["Rester préparer la présentation", "no"]]) },
   { id: "adoption", w: (s) => (s.life!.pets ? 0 : 0.35), fire: (s) => choice(s, "adoption", "Un chaton cherche une famille", "Une voisine cherche quelqu'un pour adopter un chaton. Vétérinaire et nourriture : environ 40 € par mois.", [["L'adopter", "go"], ["Refuser", "no"]]) },
   { id: "parent_malade", w: () => 0.3, fire: (s) => choice(s, "parent_malade", "Votre père est hospitalisé", "Votre père a fait un malaise et passe quelques jours à l'hôpital, à 300 km. Il aimerait vous voir.", [["Prendre deux jours pour aller le voir", "go"], ["Appeler tous les soirs", "no"]]) },
   { id: "marathon", w: (s) => (s.life!.physique >= 55 ? 0.4 : 0), fire: (s) => choice(s, "marathon", "Un semi-marathon caritatif", "Des collègues montent une équipe pour un semi-marathon au profit d'une association (inscription 45 €). Il faudra s'entraîner deux soirs par semaine.", [["S'inscrire", "go"], ["Les encourager depuis le bord", "no"]]) },
@@ -340,7 +340,7 @@ export function lifeChoice(s: GameState, ev: string, c: string): string {
     case "collegue_bebe": { const id = String(s.flags["storyNpc"] ?? "colleague"); if (go) { pay(30, "Cagnotte naissance d'un collègue"); changeTrust(s, id, 4, "Cadeau de naissance"); apply(s, 1, 0, 2, 1); return "Votre geste fait chaud au cœur."; } changeTrust(s, id, -1); return "Vous ne participez pas."; }
     case "collegue_burnout": { const id = String(s.flags["storyNpc"] ?? "colleague"); if (go) { s.career.stress = clamp(s.career.stress + 8, 0, 100); changeTrust(s, id, 12, "A repris ses dossiers pendant son arrêt"); changeTrust(s, "boss", 3, "Esprit d'équipe"); return "Semaine chargée, mais l'équipe vous en est reconnaissante."; } changeTrust(s, "boss", -2, "Manque d'esprit d'équipe"); return "Le responsable répartit les dossiers autrement."; }
     case "collegue_pot": { const id = String(s.flags["storyNpc"] ?? "colleague"); if (go) { apply(s, 2, -1, 6, 4); changeTrust(s, id, 3, "Présent à son pot"); s.career.stress = clamp(s.career.stress - 2, 0, 100); return "Bonne ambiance : vous apprenez au passage deux ou trois choses sur la banque."; } return "Vous rentrez directement."; }
-    case "concert": if (go) { pay(90, "Concert"); apply(s, 7, -1, 6, 14); s.career.stress = clamp(s.career.stress + 3, 0, 100); lg(s, "🎸 Concert"); return "Une soirée géniale… et une présentation préparée un peu vite."; } apply(s, -1, 0, -3, -4); gainXp(s, "client", 8, "Présentation bien préparée"); return "Votre présentation sera impeccable."; 
+    case "spectacle": if (go) { pay(90, "Spectacle"); apply(s, 7, -1, 6, 14); s.career.stress = clamp(s.career.stress + 3, 0, 100); lg(s, "🎭 Spectacle"); return "Une soirée géniale… et une présentation préparée un peu vite."; } apply(s, -1, 0, -3, -4); gainXp(s, "client", 8, "Présentation bien préparée"); return "Votre présentation sera impeccable."; 
     case "adoption": if (go) { s.life.pets = (s.life.pets ?? 0) + 1; apply(s, 8, 1, 2, 8); lg(s, "🐱 Adoption d'un chaton"); return "Un nouveau compagnon à la maison : il vous accueille chaque soir."; } return "La voisine trouvera quelqu'un d'autre.";
     case "parent_malade": if (go) { pay(120, "Voyage pour voir votre père"); apply(s, 4, -2, 10, 0); changeTrust(s, "boss", -1, "Absence imprévue"); lg(s, "🏥 Visite à votre père"); return "Votre père est rassuré de vous voir. Il se remet bien."; } apply(s, -6, 0, -4, -2); return "Il comprend, mais vous culpabilisez un peu.";
     case "marathon": if (go) { pay(45, "Inscription semi-marathon"); apply(s, 5, 10, 8, 6); s.flags["fitBoost"] = s.t; changeTrust(s, "colleague", 3, "Équipe du semi-marathon"); lg(s, "🏃 Semi-marathon caritatif"); return "21 km bouclés avec vos collègues. Fierté et courbatures."; } return "Vous les applaudissez à l'arrivée.";

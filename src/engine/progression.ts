@@ -73,6 +73,9 @@ export interface Achievement { id: string; title: string; desc: string; icon: st
 export const ACHIEVEMENTS: Achievement[] = [
   { id: "eco10", title: "Curieux", desc: "Réussir 10 questions du quiz d'économie.", icon: "💡", check: (s) => quizCorrectCount(s) >= 10 },
   { id: "eco30", title: "Esprit éclairé", desc: "Réussir 30 questions du quiz d'économie.", icon: "🎓", check: (s) => quizCorrectCount(s) >= 30 },
+  { id: "eco100", title: "Érudit", desc: "Réussir 100 questions du quiz d'économie.", icon: "📚", check: (s) => quizCorrectCount(s) >= 100 },
+  { id: "eco_jours7", title: "Rendez-vous quotidien", desc: "Répondre aux deux questions du jour 7 fois d'affilée.", icon: "📅", check: (s) => (s.quiz?.dailyBest ?? 0) >= 7 },
+  { id: "eco_jours30", title: "Rituel", desc: "Répondre aux deux questions du jour 30 fois d'affilée.", icon: "🗓️", check: (s) => (s.quiz?.dailyBest ?? 0) >= 30 },
   { id: "eco_serie", title: "Sans faute", desc: "Enchaîner 8 bonnes réponses d'affilée au quiz d'économie.", icon: "🔥", check: (s) => (s.quiz?.best ?? 0) >= 8 },
   { id: "first_trade", title: "Baptême du feu", desc: "Passer son premier ordre.", icon: "🎯", check: (s) => fills(s) > 0 },
   { id: "missions10", title: "Fiable", desc: "Réussir 10 missions.", icon: "✅", check: (s) => s.career.missionsDone >= 10 },

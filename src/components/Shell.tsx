@@ -139,7 +139,7 @@ function SideNav({ snap, path }: { snap: Snapshot; path: string }) {
   </div>; })}</>;
 }
 
-/** Ambiance : musique après le premier geste du joueur, effet sonore à chaque nouvelle notification */
+/** Ambiance : sons de nature après le premier geste du joueur, effet sonore à chaque nouvelle notification */
 function SoundDirector({ snap }: { snap: Snapshot }) {
   const seen = useRef<string | null>(null);
   useEffect(() => {

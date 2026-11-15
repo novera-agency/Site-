@@ -47,3 +47,4 @@ Pour tester l'édition navigateur : `BASE_PATH=/Site- npm run build:static`, ser
 | `tests/quiz.test.ts` | Banque de 50 questions équilibrée ; XP une seule fois, série remise à zéro, question ratée reproposée ; la vue ne révèle pas les réponses ; succès ; mission du jour de culture ; repères 2026 ; partie ancienne recommencée en 2000 une seule fois. |
 | `tests/hist2026.test.ts` | Simulation en mars-avril 2026 proche des repères, bascule en simulation libre le 14 novembre 2026 sans valeur aberrante, comptabilité équilibrée. |
 | `e2e/culture.spec.ts` | Quiz accessible depuis Vie professionnelle ; réponse, explication, question suivante ; catégories ; fin de série. |
+| `tests/quiz.test.ts` (complété) | 20 familles de calculs : 4 réponses distinctes, reproductibles ; questions d'histoire datées ; 2 questions du jour figées, bonus et série ; 7 300 jours simulés. |
