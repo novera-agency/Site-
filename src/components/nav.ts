@@ -64,7 +64,7 @@ export const CATEGORIES: NavCategory[] = [
   {
     id: "options", hub: "/play/reglages", label: "Options", short: "Options", icon: "⚙️", intro: "Réglages de la partie.",
     sections: [{ items: [
-      { href: "/play/parametres", label: "Paramètres", icon: "⚙️", desc: "Vitesse, difficulté, aides" },
+      { href: "/play/parametres", label: "Paramètres et son", icon: "⚙️", desc: "Vitesse, aides, test des voix" },
       { href: "/play/sauvegardes", label: "Sauvegardes", icon: "💾", desc: "Sauvegarder, charger, exporter" },
       { href: "/", label: "Menu principal", icon: "🚪", desc: "Quitter la partie (elle est sauvegardée)" },
     ] }],

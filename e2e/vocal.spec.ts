@@ -80,7 +80,7 @@ test("mode écrit : historique avec les noms ; micro refusé → message clair",
   await room.locator(".grid.gap-2 > button").first().click();
   await expect(room.getByTestId("meeting-log").getByText("Quelles sont exactement mes limites de risque ?")).toBeVisible();
   // Rien n'est prononcé en mode écrit
-  expect(await page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken.filter((t) => t.trim()).length)).toBe(0);
+  expect(await page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken.filter((t) => t.trim().length > 1).length)).toBe(0);
 });
 
 test("mode oral : « Qu'est-ce que la VaR ? » expliqué par celui qui l'a dit ; trois hors-sujet = réunion ratée", async ({ page }) => {
@@ -91,7 +91,7 @@ test("mode oral : « Qu'est-ce que la VaR ? » expliqué par celui qui l'a dit ;
   await expect(room.getByTestId("voice-listening")).toBeVisible({ timeout: 15000 });
   await say(page, "Quelles sont mes limites de risque");
   await expect(room.getByTestId("voice-listening")).toBeVisible({ timeout: 15000 });
-  const n = await page.evaluate(() => (window as unknown as W).__spoken.filter((t) => t.trim()).length);
+  const n = await page.evaluate(() => (window as unknown as W).__spoken.filter((t) => t.trim().length > 1).length);
   await say(page, "Qu'est-ce que la VaR ?");
   const spoken = await page.evaluate((k) => (window as unknown as W).__spoken.slice(k).join(" "), n);
   expect(spoken).toMatch(/99 %/);
@@ -189,8 +189,8 @@ test("son bloqué par le navigateur : message clair et bouton pour réactiver, p
   expect((await page.evaluate(() => (window as unknown as W).__spoken)).some((t) => t.includes("Bienvenue"))).toBe(true);
   // mode écrit : les voix peuvent être activées
   await room.getByTestId("switch-ecrit").click();
-  const n = await page.evaluate(() => (window as unknown as W).__spoken.filter((t) => t.trim()).length);
+  const n = await page.evaluate(() => (window as unknown as W).__spoken.filter((t) => t.trim().length > 1).length);
   await room.getByTestId("read-aloud").click();
-  await page.waitForFunction((b) => (window as unknown as W).__spoken.filter((t) => t.trim()).length > b, n, { timeout: 10000 });
+  await page.waitForFunction((b) => (window as unknown as W).__spoken.filter((t) => t.trim().length > 1).length > b, n, { timeout: 10000 });
   await expect(room.getByTestId("meeting-log")).toBeVisible();
 });

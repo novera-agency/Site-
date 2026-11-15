@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useView, useAction } from "@/lib/hooks";
 import { useGame } from "@/lib/store";
 import { Button, Badge, inputCls } from "./ui";
+import { SoundTest } from "./SoundTest";
 import { voiceSupport, voiceFor, voiceCast, ringTone, speak, stopSpeaking, listen, unlockAudio, type Listener } from "@/lib/voice";
 import { matchChoice, parseFrenchNumber } from "@/lib/voice-match";
 import { isTermQuestion } from "@/engine/glossary";
@@ -212,6 +213,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
               </button>
             </div>
             {micError && <div className="max-w-2xl rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200" data-testid="mic-error">{micError}</div>}
+            <details className="w-full max-w-2xl text-left"><summary className="cursor-pointer text-center text-xs text-ink-400 underline">Vous n'entendez pas les voix ? Testez le son ici</summary><div className="mt-2 rounded-lg border border-ink-700 bg-ink-900/80 p-3"><SoundTest /></div></details>
           </div>
         ) : (
           <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">

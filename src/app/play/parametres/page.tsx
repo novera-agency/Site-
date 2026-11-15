@@ -1,4 +1,5 @@
 "use client";
+import { SoundTest } from "@/components/SoundTest";
 import { useView, useAction } from "@/lib/hooks";
 import { Card, PageTitle, Loading, Field, inputCls, Badge } from "@/components/ui";
 
@@ -15,6 +16,7 @@ export default function Parametres() {
       <Card title="Temps simulé"><Field label="Minutes simulées par seconde réelle à x1" hint="x1 = 1 min/s par défaut. Les vitesses x2…x100 multiplient ce ratio. Le moteur avance par pas fixes de 5 minutes : la vitesse ne change jamais le résultat économique."><input type="number" min={0.25} max={60} step={0.25} defaultValue={s.minutesPerSecond} onBlur={(e) => set({ minutesPerSecond: Number(e.target.value) })} className={inputCls} /></Field><div className="mt-3"><Toggle k="autoPauseImportant" label="Pause automatique sur événement important" hint="Décisions surprises des banques centrales, crises, appels de marge, réunions." /></div></Card>
       <Card title="Jeu"><div className="space-y-2"><Toggle k="explanations" label="Explications pédagogiques" hint="Affiche des conseils avant les opérations complexes et des indices en réunion." /><Toggle k="livingExpenses" label="Dépenses de vie fictives" hint="Loyer, transport et alimentation prélevés chaque mois (mode carrière)." disabled={data.mode !== "carriere"} /><Toggle k="allowShort" label="Vente à découvert sur le compte personnel" hint="Soumise à marge initiale (50 %) et de maintenance. Indisponible en difficulté Débutant." disabled={data.difficulty === "debutant"} /><Toggle k="aiEnabled" label="Dialogues IA des personnages" hint="Utilisés seulement si une clé API est configurée sur le serveur ; sinon dialogues scénarisés." /></div></Card>
       <Card title="Informations"><div className="space-y-1 text-sm"><div>Personnage : {data.profile.firstName} {data.profile.lastName} ({data.profile.nationality}, {data.profile.age} ans)</div><div>Formation : {data.profile.education}</div><div>Graine de simulation : <Badge>{data.seed}</Badge></div><div>Créée le {new Date(data.created).toLocaleString("fr-FR")} · date de jeu : {data.date}</div></div><Field label="Nom de la partie"><input defaultValue={data.name} onBlur={(e) => e.target.value && set({ name: e.target.value })} className={inputCls} /></Field></Card>
+      <Card title="🔊 Son et voix des réunions"><SoundTest /></Card>
       <Card title="Avertissement"><p className="text-sm text-ink-300">FINANCIAL EMPIRE est une simulation pédagogique. Monnaie virtuelle, cotations fictives, aucune transaction réelle, aucun moyen de paiement. Le jeu n'est pas une plateforme de courtage et ne fournit aucun conseil en investissement.</p></Card>
     </div>
   </>;

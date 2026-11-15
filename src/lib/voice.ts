@@ -12,7 +12,19 @@ export function voiceSupport() {
 }
 
 let voices: SpeechSynthesisVoice[] = [];
-function loadVoices() { if (typeof window === "undefined" || !("speechSynthesis" in window)) return; voices = window.speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith("fr")); }
+let allVoices: SpeechSynthesisVoice[] = [];
+/** Voix françaises ; les voix installées sur l'appareil passent avant les voix « en ligne » (qui échouent souvent sur mobile) */
+function loadVoices() {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  allVoices = window.speechSynthesis.getVoices();
+  const fr = allVoices.filter((v) => v.lang.toLowerCase().replace("_", "-").startsWith("fr"));
+  const local = fr.filter((v) => v.localService);
+  voices = local.length ? local : fr;
+}
+/** Journal des événements de synthèse vocale (affiché dans le test du son) */
+export const voiceDiag: string[] = [];
+function diag(t: string) { voiceDiag.push(`${new Date().toLocaleTimeString("fr-FR")} ${t}`); if (voiceDiag.length > 40) voiceDiag.shift(); }
+export function voiceInventory() { loadVoices(); return { total: allVoices.length, fr: allVoices.filter((v) => v.lang.toLowerCase().startsWith("fr")).map((v) => `${v.name} (${v.lang}${v.localService ? ", installée" : ", en ligne"})`), used: voices.map((v) => v.name) }; }
 if (typeof window !== "undefined" && "speechSynthesis" in window) { loadVoices(); window.speechSynthesis.onvoiceschanged = loadVoices; }
 
 const hash = (s: string) => { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return Math.abs(h); };
@@ -85,7 +97,7 @@ export function unlockAudio() {
   if (typeof window === "undefined") return;
   try {
     const ss = window.speechSynthesis;
-    if (ss) { ss.resume(); const u = new SpeechSynthesisUtterance(" "); u.volume = 0; u.lang = "fr-FR"; ss.speak(u); }
+    if (ss) { ss.resume(); const u = new SpeechSynthesisUtterance("."); u.volume = 0.01; u.rate = 2; u.lang = "fr-FR"; ss.speak(u); }
     const AC = (window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext }).AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (AC) { audioCtx = audioCtx ?? new AC(); void audioCtx.resume(); }
     unlocked = true;
@@ -111,26 +123,42 @@ function chunks(text: string): string[] {
 /** Signalé quand le navigateur refuse de parler (son bloqué) */
 export type SpeakResult = "ok" | "blocked" | "cancelled";
 let cancelGen = 0;
-function speakOne(text: string, p: VoiceProfile, volume: number, gen: number): Promise<SpeakResult> {
+let lastCancel = 0;
+function speakOne(text: string, p: VoiceProfile, volume: number, gen: number, retry = false): Promise<SpeakResult> {
   return new Promise((resolve) => {
     const ss = window.speechSynthesis;
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = p.voice?.lang ?? "fr-FR"; if (p.voice) u.voice = p.voice;
+    const voice = retry ? undefined : p.voice;
+    u.lang = voice?.lang ?? "fr-FR"; if (voice) u.voice = voice;
     u.pitch = p.pitch; u.rate = p.rate; u.volume = volume;
     let started = false, done = false;
     const finish = (r: SpeakResult) => { if (done) return; done = true; alive.delete(u); clearInterval(keep); clearTimeout(noStart); clearTimeout(cap); resolve(r); };
-    u.onstart = () => { started = true; };
-    u.onend = () => finish(gen === cancelGen ? "ok" : "cancelled");
-    u.onerror = (e) => finish((e as SpeechSynthesisErrorEvent).error === "not-allowed" ? "blocked" : gen === cancelGen ? "ok" : "cancelled");
+    u.onstart = () => { started = true; diag(`▶ lecture (${voice?.name ?? "voix par défaut"})`); };
+    u.onend = () => { diag("■ fin"); finish(gen === cancelGen ? "ok" : "cancelled"); };
+    u.onerror = (e) => {
+      const code = (e as SpeechSynthesisErrorEvent).error;
+      diag(`✖ erreur « ${code} » (${voice?.name ?? "voix par défaut"})`);
+      if (code === "not-allowed") return finish("blocked");
+      if (code === "interrupted" || code === "canceled" || gen !== cancelGen) return finish("cancelled");
+      // Voix indisponible (souvent une voix « en ligne ») : on réessaie avec la voix par défaut du système
+      if (!retry && voice) { done = true; alive.delete(u); clearInterval(keep); clearTimeout(noStart); clearTimeout(cap); speakOne(text, p, volume, gen, true).then(resolve); return; }
+      finish("ok");
+    };
     // la lecture n'a jamais commencé → son bloqué par le navigateur
-    const noStart = setTimeout(() => { if (!started && !done) { ss.cancel(); finish(gen === cancelGen ? "blocked" : "cancelled"); } }, 5000);
+    const noStart = setTimeout(() => {
+      if (started || done) return;
+      if (!retry && voice) { diag("… pas de démarrage : nouvel essai avec la voix par défaut"); ss.cancel(); done = true; alive.delete(u); clearInterval(keep); clearTimeout(cap); speakOne(text, p, volume, gen, true).then(resolve); return; }
+      diag("✖ la lecture n'a jamais démarré (son bloqué ?)"); ss.cancel(); finish(gen === cancelGen ? "blocked" : "cancelled");
+    }, 8000);
     // filet de sécurité si « onend » n'arrive jamais
-    const cap = setTimeout(() => finish("ok"), 6000 + text.length * 110 / p.rate);
+    const cap = setTimeout(() => finish("ok"), 10000 + text.length * 110 / p.rate);
     // Chrome se met parfois en pause tout seul
     const keep = setInterval(() => { if (ss.paused) ss.resume(); }, 1000);
     alive.add(u);
-    ss.resume();
-    ss.speak(u);
+    const go = () => { ss.resume(); ss.speak(u); diag(`… demande de lecture : « ${text.slice(0, 40)}${text.length > 40 ? "…" : ""} »`); };
+    // Chrome ignore parfois une lecture demandée juste après une annulation
+    const since = Date.now() - lastCancel;
+    if (since < 150) setTimeout(go, 150 - since); else go();
   });
 }
 /** Prononce un texte ; la promesse se résout à la fin, à l'annulation ou si le son est bloqué */
@@ -147,7 +175,7 @@ export async function speak(text: string, p: VoiceProfile, volume = 1): Promise<
   }
   return "ok";
 }
-export function stopSpeaking() { cancelGen++; if (voiceSupport().tts) window.speechSynthesis.cancel(); }
+export function stopSpeaking() { cancelGen++; lastCancel = Date.now(); if (voiceSupport().tts) window.speechSynthesis.cancel(); }
 
 export interface Listener { stop(): void; }
 /** Écoute le micro en français. onText reçoit le texte provisoire puis final ; relance automatiquement jusqu'à stop(). */
