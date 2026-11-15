@@ -11,17 +11,9 @@ import { MeetingLauncher } from "./MeetingRoom";
 import { MissionHelpPanel } from "./MissionHelp";
 import { Badge, Disclaimer } from "./ui";
 import type { Snapshot } from "@/server/views";
+import { CATEGORIES, categoryOf, type NavCategory } from "./nav";
 
-const NAV: { group: string; items: [string, string, string][] }[] = [
-  { group: "Bureau", items: [["/play", "Bureau personnel", "🏢"], ["/play/agenda", "Agenda", "🗓️"], ["/play/messagerie", "Messagerie", "✉️"], ["/play/reunions", "Réunions", "🤝"], ["/play/vie", "Vie privée", "🏠"]] },
-  { group: "Marchés", items: [["/play/terminal", "Salle des marchés", "📈"], ["/play/recherche", "Recherche d'instruments", "🔎"], ["/play/ordres", "Passage d'ordres", "🧾"], ["/play/options", "Options", "🎛️"], ["/play/structures", "Produits structurés", "🧩"]] },
-  { group: "Portefeuille", items: [["/play/portefeuille", "Portefeuille", "💼"], ["/play/transactions", "Transactions & grand livre", "📒"], ["/play/risques", "Gestion des risques", "🛡️"], ["/play/patrimoine", "Patrimoine personnel", "🏦"]] },
-  { group: "Informations", items: [["/play/actualites", "Actualités", "📰"], ["/play/calendrier", "Calendrier économique", "📅"], ["/play/macro", "Macroéconomie", "🌍"]] },
-  { group: "Carrière", items: [["/play/carriere", "Tableau de bord carrière", "🏆"], ["/play/clients", "Clients", "👥"], ["/play/missions", "Missions", "🎯"], ["/play/competences", "Compétences", "🧠"], ["/play/reputation", "Réputation & décisions", "⭐"], ["/play/reseau", "Relations professionnelles", "🕸️"], ["/play/rh", "Ressources humaines", "📋"], ["/play/remuneration", "Rémunération", "💶"], ["/play/banques", "Établissements", "🏛️"]] },
-  { group: "Entreprise", items: [["/play/entreprise", "Entrepreneuriat & société", "🚀"]] },
-  { group: "Formation", items: [["/play/formation", "Centre de formation", "🎓"], ["/play/dictionnaire", "Dictionnaire financier", "📖"]] },
-  { group: "Système", items: [["/play/parametres", "Paramètres", "⚙️"], ["/play/sauvegardes", "Sauvegardes", "💾"]] },
-];
+
 const SPEEDS = [1, 2, 5, 10, 25, 50, 100];
 
 function TopBar({ snap, onMenu }: { snap: Snapshot; onMenu: () => void }) {
@@ -31,13 +23,13 @@ function TopBar({ snap, onMenu }: { snap: Snapshot; onMenu: () => void }) {
   return (
     <div className="sticky top-0 z-30 border-b border-ink-700 bg-ink-950/95 backdrop-blur">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2">
-        <button onClick={onMenu} className="rounded-md bg-ink-800 px-2 py-1 text-sm lg:hidden" aria-label="Menu">☰</button>
+        <button onClick={onMenu} className="hidden rounded-md bg-ink-800 px-2 py-1 text-sm md:block lg:hidden" aria-label="Menu">☰</button>
         <Link href="/play" className="hidden text-sm font-bold tracking-[0.18em] text-white sm:block">FINANCIAL<span className="text-gold"> EMPIRE</span></Link>
         <div className="flex items-center gap-2">
           <div className="text-right"><div className="num text-lg font-semibold leading-none text-white">{fmtTime(snap.t)}</div><div className="text-[11px] capitalize text-ink-300">{fmtDate(snap.t)}</div></div>
           <div className="flex items-center gap-1" data-testid="speed-controls">
             <button data-testid="play-pause" onClick={() => act({ type: "pause", paused: !snap.paused }, { silent: true })} className={`rounded-md px-2.5 py-1.5 text-sm font-semibold ${snap.paused ? "bg-green-600 text-white" : "bg-amber-500 text-black"}`} title={snap.paused ? "Reprendre" : "Pause"}>{snap.paused ? "▶" : "❚❚"}</button>
-            {SPEEDS.map((x) => <button key={x} data-testid={`speed-${x}`} onClick={() => act({ type: "speed", speed: x }, { silent: true })} className={`num rounded px-1.5 py-1 text-[11px] ${snap.speed === x && !snap.paused ? "bg-accent text-white" : snap.speed === x ? "bg-ink-600 text-white" : "bg-ink-800 text-ink-300 hover:text-white"}`}>x{x}</button>)}
+            {SPEEDS.map((x) => <button key={x} data-testid={`speed-${x}`} onClick={() => act({ type: "speed", speed: x }, { silent: true })} className={`num rounded px-1.5 py-1 text-[11px] ${[1, 10, 100].includes(x) ? "" : "hidden sm:inline-block "}${snap.speed === x && !snap.paused ? "bg-accent text-white" : snap.speed === x ? "bg-ink-600 text-white" : "bg-ink-800 text-ink-300 hover:text-white"}`}>x{x}</button>)}
             <div className="relative">
               <button onClick={() => setSkip(!skip)} className="rounded bg-ink-800 px-2 py-1 text-[11px] text-ink-200 hover:text-white">⏭</button>
               {skip && <div className="absolute left-0 top-full z-50 mt-1 w-56 rounded-md border border-ink-600 bg-ink-850 p-1 shadow-xl">{[["next_event", "Jusqu'au prochain rendez-vous"], ["next_hour", "Avancer d'une heure"], ["market_open", "Jusqu'à l'ouverture (9 h)"], ["next_morning", "Jusqu'à demain 7 h 30"]].map(([k, l]) => <button key={k} onClick={() => { setSkip(false); act({ type: "skip", to: k }); }} className="block w-full rounded px-2 py-1.5 text-left text-xs hover:bg-ink-700">{l}</button>)}</div>}
@@ -45,10 +37,10 @@ function TopBar({ snap, onMenu }: { snap: Snapshot; onMenu: () => void }) {
           </div>
         </div>
         <div className="hidden items-center gap-1.5 md:flex">{snap.sessions.filter((x) => ["EU", "US", "ASIA", "CRYPTO"].includes(x.id)).map((x) => <span key={x.id} title={x.label} className="flex items-center gap-1 text-[11px] text-ink-300"><span className={`h-1.5 w-1.5 rounded-full ${x.open ? "bg-gain" : "bg-ink-500"}`} />{x.id}</span>)}</div>
-        <Badge tone={snap.crisisActive ? "loss" : "info"}>{snap.regimeLabel}</Badge>
+        <span className="hidden sm:inline"><Badge tone={snap.crisisActive ? "loss" : "info"}>{snap.regimeLabel}</Badge></span>
         <span className="hidden text-[11px] text-ink-300 md:inline">Volatilité <span className="num text-ink-100">{snap.vix}</span></span>
         <div className="ml-auto flex items-center gap-4">
-          {snap.life && <Link href="/play/vie" data-testid="life-chip" title={`Santé mentale ${snap.life.mental} · Forme ${snap.life.physique} · Vie sociale ${snap.life.social} · Épanouissement ${snap.life.fun}`} className="flex items-center gap-1.5 rounded-md bg-ink-800 px-2 py-1 text-[11px] hover:bg-ink-700">{([["🧠", snap.life.mental], ["💪", snap.life.physique], ["🫂", snap.life.social], ["🎉", snap.life.fun]] as [string, number][]).map(([e, v]) => <span key={e} className={`num ${v >= 60 ? "text-gain" : v >= 35 ? "text-amber-300" : "text-loss"}`}>{e}{v}</span>)}</Link>}
+          {snap.life && <Link href="/play/vie" data-testid="life-chip" title={`Santé mentale ${snap.life.mental} · Forme ${snap.life.physique} · Vie sociale ${snap.life.social} · Épanouissement ${snap.life.fun}`} className="hidden items-center gap-1.5 rounded-md bg-ink-800 px-2 py-1 text-[11px] hover:bg-ink-700 sm:flex">{([["🧠", snap.life.mental], ["💪", snap.life.physique], ["🫂", snap.life.social], ["🎉", snap.life.fun]] as [string, number][]).map(([e, v]) => <span key={e} className={`num ${v >= 60 ? "text-gain" : v >= 35 ? "text-amber-300" : "text-loss"}`}>{e}{v}</span>)}</Link>}
           <div className="text-right"><div className="text-[10px] uppercase tracking-wider text-ink-400">Patrimoine</div><div className="num text-sm font-semibold">{fmtEur(snap.wealth)}</div></div>
           {snap.desk !== null && <div className="hidden text-right sm:block"><div className="text-[10px] uppercase tracking-wider text-ink-400">P&L desk semaine</div><div className={`num text-sm font-semibold ${clsChange(snap.deskPnlWeek ?? 0)}`}>{fmtEur(snap.deskPnlWeek)}</div></div>}
           <Link href="/play/messagerie" className="relative text-lg" title="Messagerie">✉️{snap.unreadMsgs > 0 && <span className="absolute -right-2 -top-1 rounded-full bg-accent px-1 text-[10px] text-white">{snap.unreadMsgs}</span>}</Link>
@@ -92,33 +84,59 @@ function Tutorial({ snap }: { snap: Snapshot }) {
   return <div className="mb-4 rounded-lg border border-gold/40 bg-gradient-to-r from-yellow-900/20 to-transparent p-3">
     <div className="mb-2 flex items-center justify-between"><div className="text-xs font-semibold uppercase tracking-wider text-gold">Première journée — {done}/12 étapes</div><button onClick={() => setHide(true)} className="text-xs text-ink-400">masquer</button></div>
     {cur && tip && <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md bg-ink-900/80 px-3 py-2 text-sm"><span className="font-semibold text-gold">Étape {cur.id} — {cur.label} :</span><span className="text-ink-100">{tip.hint}</span>{tip.link && <Link href={tip.link} className="rounded bg-accent px-2 py-0.5 text-xs text-white">Y aller →</Link>}</div>}
-    <div className="flex flex-wrap gap-1.5">{snap.tutorial.map((s) => { const t = TUTO[s.id]; const cls = `rounded px-2 py-0.5 text-[11px] ${s.done ? "bg-green-600/20 text-green-300 line-through" : s.id === cur?.id ? "bg-gold/20 text-gold" : "bg-ink-800 text-ink-200"}`; return t?.link && !s.done ? <Link key={s.id} href={t.link} title={t.hint} className={cls + " hover:bg-ink-700"}>{s.id}. {s.label}</Link> : <span key={s.id} title={t?.hint} className={cls}>{s.id}. {s.label}</span>; })}</div>
+    <div className="hidden flex-wrap gap-1.5 md:flex">{snap.tutorial.map((s) => { const t = TUTO[s.id]; const cls = `rounded px-2 py-0.5 text-[11px] ${s.done ? "bg-green-600/20 text-green-300 line-through" : s.id === cur?.id ? "bg-gold/20 text-gold" : "bg-ink-800 text-ink-200"}`; return t?.link && !s.done ? <Link key={s.id} href={t.link} title={t.hint} className={cls + " hover:bg-ink-700"}>{s.id}. {s.label}</Link> : <span key={s.id} title={t?.hint} className={cls}>{s.id}. {s.label}</span>; })}</div>
   </div>;
 }
 
-const BOTTOM: [string, string, string, string?][] = [["/play", "Bureau", "🏢"], ["/play/terminal", "Marchés", "📈"], ["/play/portefeuille", "Portefeuille", "💼"], ["/play/missions", "Missions", "🎯", "missions"], ["/play/reunions", "Réunions", "🤝", "meeting"], ["/play/messagerie", "Messages", "✉️", "msgs"]];
+function useBadge(snap: Snapshot) {
+  return (k?: string) => k === "msgs" ? snap.unreadMsgs : k === "missions" ? snap.missionsActive : k === "meeting" ? (snap.pendingMeeting || snap.activeMeetingId ? "!" : 0) : 0;
+}
+/** Feuille d'une catégorie : grandes tuiles claires avec une ligne d'explication */
+function CategorySheet({ cat, snap, path, onClose }: { cat: NavCategory; snap: Snapshot; path: string; onClose: () => void }) {
+  const badge = useBadge(snap);
+  return <div className="fixed inset-0 z-40 bg-black/60" onClick={onClose}>
+    <div className="scroll-thin absolute inset-x-0 bottom-16 max-h-[78vh] overflow-y-auto overscroll-contain rounded-t-2xl border-t border-ink-600 bg-ink-900 p-4 pb-6" onClick={(e) => e.stopPropagation()} data-testid="category-sheet">
+      <div className="mb-3 flex items-start justify-between gap-3"><div><div className="text-lg font-semibold text-white">{cat.icon} {cat.label}</div><div className="text-xs text-ink-400">{cat.intro}</div></div><button onClick={onClose} className="rounded-md bg-ink-800 px-2.5 py-1 text-ink-300" aria-label="Fermer">✕</button></div>
+      {cat.sections.map((sec, i) => <div key={i} className="mb-3">
+        {sec.title && <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-gold/80">{sec.title}</div>}
+        <div className="grid gap-1.5 sm:grid-cols-2">{sec.items.map((it) => { const b = badge(it.badge); const on = path === it.href || path === it.href + "/"; return <Link key={it.href} href={it.href} onClick={onClose} className={`relative flex items-center gap-3 rounded-xl px-3 py-2.5 ${on ? "bg-accent/25 ring-1 ring-accent" : "bg-ink-800 hover:bg-ink-700"}`}>
+          <span className="text-2xl">{it.icon}</span><span className="min-w-0"><span className="block text-sm font-medium text-white">{it.label}</span><span className="block text-[11px] leading-snug text-ink-400">{it.desc}</span></span>
+          {b ? <span className="ml-auto rounded-full bg-gold px-1.5 text-[10px] font-bold text-black">{b}</span> : null}
+        </Link>; })}</div>
+      </div>)}
+    </div>
+  </div>;
+}
 function BottomNav({ snap, path }: { snap: Snapshot; path: string }) {
-  const [more, setMore] = useState(false);
-  useEffect(() => { setMore(false); }, [path]);
-  const badge = (k?: string) => k === "msgs" ? snap.unreadMsgs : k === "missions" ? snap.missionsActive : k === "meeting" ? (snap.pendingMeeting || snap.activeMeetingId ? "!" : 0) : 0;
+  const [open, setOpen] = useState<string | null>(null);
+  useEffect(() => { setOpen(null); }, [path]);
+  const badge = useBadge(snap);
+  const current = categoryOf(path);
+  const catBadge = (c: NavCategory) => c.sections.flatMap((x) => x.items).reduce((a, it) => { const b = badge(it.badge); return b === "!" ? "!" : a === "!" ? a : (Number(a) || 0) + (Number(b) || 0); }, 0 as number | string);
+  const cat = CATEGORIES.find((c) => c.id === open);
   return <>
-    {more && <div className="fixed inset-0 z-40 bg-black/60" onClick={() => setMore(false)}>
-      <div className="scroll-thin absolute inset-x-0 bottom-16 max-h-[75vh] overflow-y-auto overscroll-contain rounded-t-2xl border-t border-ink-600 bg-ink-900 p-4 pb-6" onClick={(e) => e.stopPropagation()} data-testid="more-sheet">
-        <div className="mb-3 flex items-center justify-between"><div className="text-sm font-semibold text-white">Tous les onglets</div><button onClick={() => setMore(false)} className="text-ink-400">✕</button></div>
-        {NAV.map((g) => <div key={g.group} className="mb-3"><div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-500">{g.group}</div><div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 md:grid-cols-5">{g.items.map(([href, label, icon]) => <Link key={href} href={href} className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs ${path === href ? "bg-accent text-white" : "bg-ink-800 text-ink-200 hover:bg-ink-700"}`}><span className="text-base">{icon}</span><span className="truncate">{label}</span></Link>)}</div></div>)}
-      </div>
-    </div>}
+    {cat && <CategorySheet cat={cat} snap={snap} path={path} onClose={() => setOpen(null)} />}
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-ink-700 bg-ink-950/95 backdrop-blur" style={{ paddingBottom: "env(safe-area-inset-bottom)" }} data-testid="bottom-nav">
-      <div className="mx-auto grid max-w-3xl grid-cols-7">
-        {BOTTOM.map(([href, label, icon, k]) => { const b = badge(k); const on = path === href; return <Link key={href} href={href} className={`relative flex flex-col items-center gap-0.5 py-2 text-[10px] transition ${on ? "text-white" : "text-ink-400 hover:text-white"}`}>
+      <div className="mx-auto grid max-w-3xl grid-cols-5">
+        {CATEGORIES.map((c) => { const on = open ? open === c.id : current === c.id; const b = catBadge(c); return <button key={c.id} data-testid={`cat-${c.id}`} onClick={() => setOpen(open === c.id ? null : c.id)} className={`relative flex flex-col items-center gap-0.5 py-2 text-[10px] transition ${on ? "text-white" : "text-ink-400 hover:text-white"}`}>
           {on && <span className="absolute inset-x-3 top-0 h-0.5 rounded bg-gold" />}
-          <span className="text-lg leading-none">{icon}</span><span className="truncate">{label}</span>
-          {b ? <span className={`absolute right-[22%] top-1 min-w-4 rounded-full px-1 text-center text-[9px] font-bold text-white ${k === "meeting" ? "bg-gold text-black" : k === "msgs" ? "bg-accent" : "bg-ink-500"}`}>{b}</span> : null}
-        </Link>; })}
-        <button onClick={() => setMore(!more)} className={`flex flex-col items-center gap-0.5 py-2 text-[10px] ${more ? "text-white" : "text-ink-400 hover:text-white"}`} data-testid="more-button"><span className="text-lg leading-none">☰</span><span>Plus</span></button>
+          <span className="text-xl leading-none">{c.icon}</span><span className="truncate font-medium">{c.short}</span>
+          {b ? <span className="absolute right-[24%] top-1 min-w-4 rounded-full bg-gold px-1 text-center text-[9px] font-bold text-black">{b}</span> : null}
+        </button>; })}
       </div>
     </nav>
   </>;
+}
+
+/** Menu latéral (ordinateur) : les 5 mêmes catégories, celle de la page courante ouverte */
+function SideNav({ snap, path }: { snap: Snapshot; path: string }) {
+  const current = categoryOf(path);
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const badge = useBadge(snap);
+  return <>{CATEGORIES.map((c) => { const isOpen = open[c.id] ?? c.id === current; return <div key={c.id} className="mb-1.5">
+    <button onClick={() => setOpen({ ...open, [c.id]: !isOpen })} className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm font-semibold ${c.id === current ? "text-white" : "text-ink-300 hover:text-white"}`}><span className="w-5 text-center">{c.icon}</span>{c.label}<span className="ml-auto text-[10px] text-ink-500">{isOpen ? "▾" : "▸"}</span></button>
+    {isOpen && <div className="mb-1 ml-3 border-l border-ink-800 pl-2">{c.sections.map((sec, i) => <div key={i}>{sec.title && <div className="mt-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-500">{sec.title}</div>}{sec.items.map((it) => { const b = badge(it.badge); const on = path === it.href || path === it.href + "/"; return <Link key={it.href} href={it.href} title={it.desc} className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] ${on ? "bg-ink-700 text-white" : "text-ink-300 hover:bg-ink-800 hover:text-white"}`}><span className="w-5 text-center">{it.icon}</span>{it.label}{b ? <span className="ml-auto rounded-full bg-gold px-1.5 text-[10px] font-bold text-black">{b}</span> : null}</Link>; })}</div>)}</div>}
+  </div>; })}</>;
 }
 
 export function Shell({ children }: { children: ReactNode }) {
@@ -157,12 +175,11 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen">
       <TopBar snap={snap} onMenu={() => setMenu(!menu)} />
-      <Ticker snap={snap} />
+      <div className="hidden md:block"><Ticker snap={snap} /></div>
       <div className="flex">
         <nav className={`${menu ? "block" : "hidden"} scroll-thin fixed inset-y-0 left-0 z-40 w-64 overflow-y-auto overscroll-contain border-r border-ink-700 bg-ink-950 p-3 pb-24 pt-4 lg:pb-3 lg:sticky lg:top-[88px] lg:block lg:h-[calc(100vh-88px-64px)]`}>
           <div className="mb-3 rounded-lg bg-ink-850 p-3"><div className="text-sm font-semibold">{snap.player.name}</div><div className="text-xs text-ink-300">{snap.player.title}</div>{snap.player.bank && <div className="mt-1 text-[11px]" style={{ color: snap.player.bankColor }}>{snap.player.bank}</div>}</div>
-          {NAV.map((g) => <div key={g.group} className="mb-3"><div className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-500">{g.group}</div>{g.items.map(([href, label, icon]) => <Link key={href} href={href} className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] ${path === href ? "bg-ink-700 text-white" : "text-ink-300 hover:bg-ink-800 hover:text-white"}`}><span className="w-5 text-center">{icon}</span>{label}</Link>)}</div>)}
-          <Link href="/" className="mt-2 block px-2 text-xs text-ink-400 hover:text-white">← Menu principal</Link>
+          <SideNav snap={snap} path={path} />
         </nav>
         {menu && <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setMenu(false)} />}
         <main className="min-w-0 flex-1 p-3 pb-28 md:p-5 md:pb-28">

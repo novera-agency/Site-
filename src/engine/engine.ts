@@ -20,7 +20,7 @@ import { planDay, stepAgenda, addAgendaItem } from "./agenda";
 import { createNpcs } from "./people";
 import { newAccount, onboardClient, monthlyClients, seedPosition } from "./clients";
 import { setupDesk, salaryFor, monthlyPayroll, weeklyReview, quarterlyReview, annualReview, dailyWellbeing, checkRiskLimits, generateOffer, performanceScore } from "./career";
-import { assignWeeklyMissions, checkMissions, createMission } from "./missions";
+import { assignWeeklyMissions, assignDailyMissions, checkMissions, createMission } from "./missions";
 import { maybeCareerEvent, initCompetitors, dailyCompetitors } from "./events";
 import { monthlyCompany } from "./company";
 import { simulateHistory } from "./history";
@@ -261,6 +261,7 @@ function newDay(s: GameState, rng: Rng) {
     else maybeTriggerCrises(s, rng);
     if (!s.flags["vacationUntil"] || s.t >= (s.flags["vacationUntil"] as number)) { delete s.flags["vacationUntil"]; maybeCareerEvent(s, rng); planDay(s, rng); }
     if (weekday(s.t) === 1) { assignWeeklyMissions(s, rng); mondayRelations(s); }
+    assignDailyMissions(s, rng);
     checkRelationChanges(s);
   }
   scheduleCalendar(s, day + 30);

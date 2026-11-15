@@ -11,7 +11,7 @@ import type { GameState } from "@/engine/types";
 export function dataDir() { return process.env.SAVE_DIR || path.join(process.cwd(), "data"); }
 const savesDir = (uid: string) => path.join(dataDir(), "saves", uid.replace(/[^a-zA-Z0-9_-]/g, ""));
 
-interface Runtime { state: GameState; lastTickReal: number; accMinutes: number; dirty: boolean; lastSaved: number; }
+interface Runtime { state: GameState; lastTickReal: number; accMinutes: number; dirty: boolean; lastSaved: number; lastAccess?: number; }
 const g = globalThis as unknown as { __fe_games?: Map<string, Runtime> };
 const games: Map<string, Runtime> = g.__fe_games ?? (g.__fe_games = new Map());
 
@@ -27,8 +27,9 @@ function atomicWrite(file: string, content: string) {
 
 export function registerGame(s: GameState) {
   s.id = s.id || randomUUID();
-  games.set(s.id, { state: s, lastTickReal: Date.now(), accMinutes: 0, dirty: true, lastSaved: 0 });
+  games.set(s.id, { state: s, lastTickReal: Date.now(), accMinutes: 0, dirty: true, lastSaved: 0, lastAccess: Date.now() });
   autosave(s.id, true);
+  evictIdle();
   return s.id;
 }
 export function getRuntime(uid: string, gameId: string): Runtime | null {
@@ -36,12 +37,14 @@ export function getRuntime(uid: string, gameId: string): Runtime | null {
   if (!rt) {
     const f = path.join(savesDir(uid), `game_${gameId.replace(/[^a-zA-Z0-9-]/g, "")}.json`);
     if (!fs.existsSync(f)) return null;
-    const s = deserialize(fs.readFileSync(f, "utf8"));
+    let s: GameState;
+    try { s = deserialize(fs.readFileSync(f, "utf8")); } catch (e) { console.error("Sauvegarde illisible", f, e); return null; }
     s.paused = true; s.pauseReason = "Partie reprise";
     rt = { state: s, lastTickReal: Date.now(), accMinutes: 0, dirty: false, lastSaved: Date.now() };
     games.set(gameId, rt);
   }
   if (rt.state.ownerId !== uid) return null; // autorisation : un joueur n'accède qu'à ses parties
+  rt.lastAccess = Date.now();
   return rt;
 }
 export function autosave(gameId: string, force = false) {
@@ -93,8 +96,9 @@ export function loadSlot(uid: string, slot: number): string | null {
   const s = deserialize(fs.readFileSync(f, "utf8"));
   if (s.ownerId !== uid) return null;
   s.paused = true; s.pauseReason = "Sauvegarde chargée";
-  games.set(s.id, { state: s, lastTickReal: Date.now(), accMinutes: 0, dirty: true, lastSaved: 0 });
+  games.set(s.id, { state: s, lastTickReal: Date.now(), accMinutes: 0, dirty: true, lastSaved: 0, lastAccess: Date.now() });
   autosave(s.id, true);
+  evictIdle();
   return s.id;
 }
 export function deleteGame(uid: string, gameId: string) {
@@ -109,9 +113,26 @@ export function importGame(uid: string, txt: string) {
   s.ownerId = uid; s.id = randomUUID(); s.paused = true;
   return registerGame(s);
 }
+/**
+ * Mémoire : une partie pèse plusieurs dizaines de Mo (plus de 1 200 instruments). Les parties inactives depuis 3 minutes,
+ * ou au-delà des 6 plus récentes, sont sauvegardées puis retirées de la mémoire ; elles sont rechargées à la demande.
+ */
+const IDLE_MS = 3 * 60_000, MAX_LOADED = 6;
+export function evictIdle(now = Date.now()) {
+  const list = [...games.entries()].sort((a, b) => (b[1].lastAccess ?? b[1].lastSaved) - (a[1].lastAccess ?? a[1].lastSaved));
+  list.forEach(([id, rt], i) => {
+    const last = rt.lastAccess ?? rt.lastSaved;
+    if (now - last > IDLE_MS || i >= MAX_LOADED) {
+      try { autosave(id, rt.dirty); games.delete(id); } catch (e) { console.error("éviction", e); }
+    }
+  });
+}
 /** Sauvegarde périodique de toutes les parties actives */
 const tg = globalThis as unknown as { __fe_timer?: NodeJS.Timeout };
 if (!tg.__fe_timer) {
-  tg.__fe_timer = setInterval(() => { for (const id of games.keys()) { try { autosave(id); } catch (e) { console.error("autosave", e); } } }, 15000);
+  tg.__fe_timer = setInterval(() => {
+    for (const id of games.keys()) { try { autosave(id); } catch (e) { console.error("autosave", e); } }
+    evictIdle();
+  }, 15000);
   tg.__fe_timer.unref?.();
 }

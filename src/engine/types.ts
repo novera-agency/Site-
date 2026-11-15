@@ -217,6 +217,8 @@ export interface Mission {
   description: string; criteria: string[]; params: Record<string, number | string>; startT: number; deadlineT: number;
   status: "active" | "reussie" | "echouee"; reward: { xp: number; rep: Partial<Record<RepKey, number>>; trust?: { npc: string; delta: number } };
   progress: number; baseline?: Record<string, number>; giver?: string;
+  /** Mission du jour (générée automatiquement) et niveau d'enjeu : 1 faible · 2 moyen · 3 élevé */
+  daily?: boolean; stakes?: 1 | 2 | 3;
 }
 export interface Notification { id: string; t: number; level: "info" | "succes" | "alerte" | "critique"; title: string; body?: string; link?: string; read: boolean; }
 export interface Message { id: string; t: number; from: string; subject: string; body: string; read: boolean; actions?: { label: string; action: string; payload?: Record<string, string> }[]; handled?: boolean; }

@@ -90,7 +90,58 @@ const TEMPLATES: Tpl[] = [
     make: (s, p) => ({ title: `Atteindre ${Number(p.target ?? 50)} M€ d'encours`, description: "Développez les actifs sous gestion de votre société.", criteria: [`Encours ≥ ${Number(p.target ?? 50)} M€`], params: { target: Number(p.target ?? 50) } }),
     check: (s, m) => (s.company ? Math.min(1, s.company.aum / 100 / 1e6 / Number(m.params.target)) : 0) },
 ];
+/* ═════════════════ Missions du jour : courtes, renouvelées chaque jour ouvré ═════════════════ */
+const K = (p: Record<string, number | string>) => Number(p.k ?? 1);
+const pickN = <T,>(rng: Rng, arr: T[], n: number) => { const a = [...arr]; const out: T[] = []; while (a.length && out.length < n) out.push(a.splice(rng.int(0, a.length - 1), 1)[0]); return out; };
+const lastChange = (s: GameState, id: string) => { const d = s.quotes[id]?.daily ?? []; const n = d.length; return n >= 2 ? d[n - 1].c / d[n - 2].c - 1 : 0; };
+const weekChange = (s: GameState, id: string) => { const d = s.quotes[id]?.daily ?? []; const n = d.length; return n >= 6 ? d[n - 1].c / d[n - 6].c - 1 : 0; };
+const bigStocks = (s: GameState) => Object.values(s.instruments).filter((d) => d.cls === "action" && !d.lite && !s.quotes[d.id].halted && !s.quotes[d.id].defaulted);
+const COMPLIANCE_QS: [string, string[], number, string][] = [
+  ["Un ami vous demande s'il doit acheter le titre d'une société dont vous préparez l'introduction en bourse. Vous…", ["Refusez d'en parler : c'est une information privilégiée", "Lui conseillez d'acheter discrètement", "Lui dites d'attendre une semaine"], 0, "Toute information non publique susceptible d'influencer un cours est privilégiée : la transmettre est un délit d'initié."],
+  ["Un client âgé et prudent veut placer toute son épargne sur un produit à effet de levier. Vous…", ["Exécutez : c'est son argent", "Lui expliquez l'inadéquation et le déconseillez par écrit", "Le lui vendez avec une remise"], 1, "Le devoir de conseil impose de vérifier l'adéquation du produit au profil du client et de le tracer."],
+  ["Un collègue vous propose d'acheter juste avant les ordres d'un gros client. Vous…", ["Refusez et le signalez à la conformité", "Acceptez pour de petits montants", "Ne dites rien"], 0, "Passer devant les ordres d'un client (front running) est un abus de marché."],
+  ["Un cadeau d'un fournisseur d'une valeur de 800 € arrive au bureau. Vous…", ["Le gardez", "Le déclarez à la conformité selon la politique cadeaux", "L'offrez à un collègue"], 1, "Les cadeaux au-delà d'un seuil doivent être déclarés : ils peuvent créer un conflit d'intérêts."],
+  ["Vous découvrez une erreur de saisie qui vous fait gagner 20 000 €. Vous…", ["La signalez immédiatement", "Attendez de voir si quelqu'un la remarque", "Clôturez vite la position"], 0, "Toute erreur opérationnelle doit être déclarée sans délai, même favorable."],
+  ["Un client demande à fractionner ses dépôts en espèces pour rester sous le seuil de déclaration. Vous…", ["Acceptez", "Refusez et faites une déclaration de soupçon", "Lui conseillez une autre banque"], 1, "Le fractionnement pour échapper aux seuils est un signal de blanchiment : déclaration de soupçon obligatoire."],
+];
+const DAILY: Tpl[] = [
+  { id: "d_revue", category: "marches", xp: 20, rep: { professionnelle: 1 }, days: 1,
+    make: (s, _p, rng) => { const ids = pickN(rng, ["IDX-US5", "IDX-FR", "IDX-DE", "IDX-UK", "IDX-JP", "IDX-EU", "IDX-AS"].filter((x) => s.instruments[x]), 4); const ch = ids.map((x) => lastChange(s, x)); const best = ch.indexOf(Math.max(...ch)); return { title: "Revue de marché du matin", description: "Votre responsable veut savoir quelle place financière a le mieux terminé la dernière séance. Regardez les indices dans la salle des marchés.", criteria: ["Bonne réponse avant ce soir"], params: { o: ids.join(","), c: best, e: ids.map((x, i) => `${x} ${(ch[i] * 100).toFixed(2)} %`).join(" · ") } }; },
+    check: () => 0, choiceQuiz: (s, m) => ({ question: "Quel indice a le plus progressé lors de la dernière séance ?", options: String(m.params.o).split(",").map((x) => `${x} — ${s.instruments[x]?.name ?? x}`), correct: Number(m.params.c), explain: String(m.params.e) }) },
+  { id: "d_dividende", category: "analyse", xp: 25, rep: { professionnelle: 1 }, days: 1,
+    make: (s, _p, rng) => { const pool = bigStocks(s).filter((d) => (s.quotes[d.id].dividend ?? 0) > 0); if (!pool.length) return null; const d = rng.pick(pool); const y = (s.quotes[d.id].dividend! / s.quotes[d.id].price) * 100; return { title: `Rendement du dividende de ${d.name}`, description: `Un client demande le rendement du dividende de ${d.name} (${d.id}). Dividende annuel ÷ cours × 100 : consultez la fiche de l'action.`, criteria: ["Réponse à 0,15 point près"], params: { instrument: d.id, a: Math.round(y * 100) / 100, div: Math.round(s.quotes[d.id].dividend! * 100) / 100, px: Math.round(s.quotes[d.id].price * 100) / 100 } }; },
+    check: () => 0, quiz: (s, m) => ({ answer: Number(m.params.a), tolerance: 0.15, unit: "%", question: `Rendement du dividende de ${s.instruments[String(m.params.instrument)]?.name} (dividende ${m.params.div}, cours ${m.params.px}) ?`, explain: `${m.params.div} ÷ ${m.params.px} × 100 = ${m.params.a} %.` }) },
+  { id: "d_change", category: "macro", xp: 20, rep: { professionnelle: 1 }, days: 1,
+    make: (s, p, rng) => { const amt = Math.round(rng.range(20, 400) * K(p)) * 1000; const r = s.quotes["EURUSD"].price; return { title: "Conversion pour un client", description: `Un client veut savoir combien de dollars il obtiendra pour ${amt.toLocaleString("fr-FR")} € au cours actuel de l'EURUSD (${r.toFixed(4)}).`, criteria: ["Réponse à 0,5 % près"], params: { amt, r: Math.round(r * 10000) / 10000 } }; },
+    check: () => 0, quiz: (_s, m) => { const a = Number(m.params.amt) * Number(m.params.r); return { answer: Math.round(a), tolerance: a * 0.005, unit: "$", question: `${Number(m.params.amt).toLocaleString("fr-FR")} € en dollars au cours de ${m.params.r} ?`, explain: `${Number(m.params.amt).toLocaleString("fr-FR")} × ${m.params.r} = ${Math.round(a).toLocaleString("fr-FR")} $ (EURUSD = prix d'un euro en dollars).` }; } },
+  { id: "d_per", category: "analyse", xp: 25, rep: { professionnelle: 1 }, days: 1,
+    make: (s, _p, rng) => { const sec = rng.pick(["Banque", "Technologie", "Santé", "Énergie", "Industrie", "Luxe", "Automobile"]); const pool = Object.values(s.instruments).filter((d) => d.cls === "action" && d.sector === sec && !s.quotes[d.id].halted && (s.quotes[d.id].eps ?? 0) > 0); if (pool.length < 4) return null; const ids = pickN(rng, pool, 4).map((d) => d.id); const pe = ids.map((x) => s.quotes[x].price / s.quotes[x].eps!); return { title: `Valorisation du secteur ${sec.toLowerCase()}`, description: `Parmi quatre valeurs du secteur ${sec.toLowerCase()}, laquelle a le PER le plus bas ? Le PER figure sur chaque fiche.`, criteria: ["Bonne réponse avant ce soir"], params: { o: ids.join(","), c: pe.indexOf(Math.min(...pe)), e: ids.map((x, i) => `${x} : PER ${pe[i].toFixed(1)}`).join(" · ") } }; },
+    check: () => 0, choiceQuiz: (s, m) => ({ question: "Quel titre a le PER le plus bas ?", options: String(m.params.o).split(",").map((x) => `${x} — ${s.instruments[x]?.name ?? x}`), correct: Number(m.params.c), explain: String(m.params.e) }) },
+  { id: "d_secteur", category: "marches", xp: 25, rep: { professionnelle: 1 }, days: 1,
+    make: (s, _p, rng) => { const secs = pickN(rng, ["Banque", "Technologie", "Santé", "Énergie", "Industrie", "Luxe", "Automobile", "Immobilier", "Télécoms", "Distribution"], 4); const perf = secs.map((sec) => { const l = bigStocks(s).filter((d) => d.sector === sec); return l.length ? l.reduce((a, d) => a + weekChange(s, d.id), 0) / l.length : 0; }); return { title: "Note sectorielle de la semaine", description: "Le directeur prépare le comité d'allocation : quel secteur a le mieux résisté sur les cinq dernières séances ?", criteria: ["Bonne réponse avant ce soir"], params: { o: secs.join(","), c: perf.indexOf(Math.max(...perf)), e: secs.map((x, i) => `${x} ${(perf[i] * 100).toFixed(1)} %`).join(" · ") } }; },
+    check: () => 0, choiceQuiz: (_s, m) => ({ question: "Quel secteur a le mieux performé sur cinq séances (grandes valeurs) ?", options: String(m.params.o).split(","), correct: Number(m.params.c), explain: String(m.params.e) }) },
+  { id: "d_conformite", category: "conformite", xp: 20, rep: { conformite: 2 }, days: 1,
+    make: (_s, _p, rng) => { const i = rng.int(0, COMPLIANCE_QS.length - 1); return { title: "Quiz de conformité obligatoire", description: "La conformité vérifie que chacun connaît les règles. Une seule question, mais elle compte.", criteria: ["Bonne réponse"], params: { q: i } }; },
+    check: () => 0, choiceQuiz: (_s, m) => { const q = COMPLIANCE_QS[Number(m.params.q)]; return { question: q[0], options: q[1], correct: q[2], explain: q[3] }; } },
+  { id: "d_ordre", category: "trading", xp: 25, rep: { fiabilite: 1 }, days: 1,
+    make: (s, p, rng) => { if (!s.accounts.desk) return null; const id = rng.pick(["XWLD", "XUSA", "XEUR", "XFRA", "XGLD", "XTEC"].filter((x) => s.instruments[x])); const qty = Math.max(10, Math.round(rng.range(50, 300) * K(p) / 10) * 10); return { title: `Exécuter l'ordre du gérant : ${qty} ${id}`, description: `Un gérant vous transmet un ordre : achetez ${qty} parts de ${s.instruments[id].name} sur le book du desk avant la clôture.`, criteria: [`${qty} ${id} achetés sur le compte du desk`], params: { instrument: id, qty } }; },
+    check: (s, m) => { const q = s.fills.filter((f) => f.account === "desk" && f.instrumentId === m.params.instrument && f.side === "buy" && f.t >= m.startT).reduce((a, f) => a + f.qty, 0); return Math.min(1, q / Number(m.params.qty)); } },
+  { id: "d_pnl", category: "trading", xp: 35, rep: { professionnelle: 2 }, days: 1,
+    make: (s, p) => { if (!s.accounts.desk) return null; const cap = (s.accounts.desk.capitalAllocated ?? 0) / 100; const target = Math.round(cap * 0.0004 * K(p) / 100) * 100 || 1000; return { title: `Objectif du jour : +${target.toLocaleString("fr-FR")} € sur le desk`, description: `Votre responsable attend un P&L positif d'au moins ${target.toLocaleString("fr-FR")} € aujourd'hui sur le book du desk, sans dépasser la limite de VaR.`, criteria: [`P&L du jour ≥ ${target.toLocaleString("fr-FR")} €`, "VaR sous la limite"], params: { target }, baseline: { eq: accountEquity(s, "desk") } }; },
+    check: (s, m) => { const pnl = accountEquity(s, "desk") - (m.baseline?.eq ?? 0); if (valueAtRisk(s, "desk").var > s.career.deskLimitVaR / 100) return -1; return pnl >= Number(m.params.target) ? 1 : Math.max(0, Math.min(0.9, pnl / Number(m.params.target))); } },
+  { id: "d_var", category: "risque", xp: 30, rep: { risque: 2 }, days: 1,
+    make: (s, p) => { if (!s.accounts.desk) return null; const thr = K(p) >= 3 ? 0.6 : K(p) >= 2 ? 0.8 : 0.95; return { title: `Risque sous contrôle : VaR ≤ ${Math.round(thr * 100)} % de la limite`, description: `Le risk manager veut voir la VaR du desk sous ${Math.round(thr * 100)} % de la limite à la fin de la journée (vérification à partir de 17 h).`, criteria: [`VaR ≤ ${Math.round(thr * 100)} % de la limite en fin de journée`], params: { thr } }; },
+    check: (s, m) => { const ok = valueAtRisk(s, "desk").var <= Number(m.params.thr) * s.career.deskLimitVaR / 100; if (s.t >= m.deadlineT - 90) return ok ? 1 : 0.4; return ok ? 0.8 : 0.3; } },
+  { id: "d_client", category: "client", xp: 35, rep: { commerciale: 2, clients: 1 }, days: 1,
+    make: (s, p, rng) => { const cl = s.clients.filter((c) => !c.lost); if (!cl.length) return null; const c = rng.pick(cl); const target = Math.round(15000 * K(p) / 1000) * 1000; return { title: `Collecte : appeler ${c.name}`, description: `Appelez ${c.name} aujourd'hui (onglet Clients) et obtenez au moins ${target.toLocaleString("fr-FR")} € de nouveaux versements. Chaque maladresse au téléphone réduit l'objectif.`, criteria: [`Collecte ≥ ${target.toLocaleString("fr-FR")} € aujourd'hui`], params: { client: c.id, target }, baseline: { sales: Number(s.flags["salesYtd"] ?? 0) } }; },
+    check: (s, m) => { const got = Number(s.flags["salesYtd"] ?? 0) - (m.baseline?.sales ?? 0); return got >= Number(m.params.target) ? 1 : Math.max(0, Math.min(0.9, got / Number(m.params.target))); } },
+  { id: "d_varchiffre", category: "risque", xp: 40, rep: { risque: 2, professionnelle: 1 }, days: 1,
+    make: (s) => { if (!s.accounts.desk) return null; return { title: "Chiffre demandé par le comité : la VaR du book", description: "Le directeur présente le risque du desk au comité exécutif. Il vous demande la VaR 99 % à 1 jour du book (page Risques).", criteria: ["Réponse à 10 % près"], params: {} }; },
+    check: () => 0, quiz: (s) => { const v = valueAtRisk(s, "desk").var; return { answer: Math.round(v), tolerance: Math.max(500, v * 0.1), unit: "€", question: "VaR 99 % à 1 jour du book du desk ?", explain: `VaR actuelle : ${Math.round(v).toLocaleString("fr-FR")} €.` }; } },
+];
+for (const t of DAILY) TEMPLATES.push(t);
 const BY_ID = Object.fromEntries(TEMPLATES.map((t) => [t.id, t]));
+export const DAILY_IDS = DAILY.map((t) => t.id);
 export function missionTemplate(id: string) { return BY_ID[id]; }
 
 
@@ -147,23 +198,37 @@ function guideSteps(s: GameState, m: Mission): MissionGuide {
     case "concentration": return { steps: ["Ouvrez « Gestion des risques » : le graphique « Concentration » classe les positions du desk.", "Répondez ci-dessous."], link: "/play/risques", linkLabel: "Voir la concentration" };
     case "battre_benchmark": return { steps: ["Gérez votre compte personnel pour faire mieux que l'ETF Monde (XWLD) sur 20 jours.", "Le graphique « Évolution vs benchmark » du portefeuille montre l'écart."], link: "/play/portefeuille", linkLabel: "Voir mon portefeuille" };
     case "creer_societe": case "encours_societe": return { steps: ["Accumulez le capital requis et la réputation.", "Créez puis développez votre société."], link: "/play/entreprise", linkLabel: "Entrepreneuriat" };
+    case "d_revue": return { steps: ["Ouvrez la salle des marchés ou le bureau : la variation du jour de chaque indice y est affichée.", "Comparez les variations de la dernière séance et répondez ici."], link: "/play/terminal", linkLabel: "Voir les indices" };
+    case "d_dividende": return { steps: [`Ouvrez la fiche de ${inst(p.instrument)} : le dividende annuel par action y figure.`, "Divisez le dividende par le cours, multipliez par 100."], link: `/play/actif?id=${p.instrument}`, linkLabel: "Ouvrir la fiche" };
+    case "d_change": return { steps: ["EURUSD = nombre de dollars pour un euro.", "Multipliez le montant en euros par le cours indiqué."], link: "/play/actif?id=EURUSD", linkLabel: "Voir l'EURUSD" };
+    case "d_per": return { steps: ["Ouvrez la fiche de chacune des quatre valeurs (Rechercher un titre).", "Comparez le PER (cours ÷ bénéfice par action) et choisissez le plus bas."], link: "/play/recherche", linkLabel: "Rechercher" };
+    case "d_secteur": return { steps: ["Dans Rechercher un titre, filtrez par secteur et triez par variation.", "Regardez les grandes valeurs sur la semaine (graphique de chaque fiche)."], link: "/play/recherche", linkLabel: "Rechercher" };
+    case "d_conformite": return { steps: ["Lisez la question et choisissez la réponse conforme à la réglementation.", "En cas de doute, la réponse prudente et transparente est presque toujours la bonne."], link: "/play/missions", linkLabel: "Missions" };
+    case "d_ordre": return { steps: [`Ouvrez ${inst(p.instrument)}.`, "Dans « Passer un ordre », choisissez le compte « Book du desk », Acheter, la quantité demandée, puis validez.", "Le marché doit être ouvert pour l'exécution."], link: `/play/actif?id=${p.instrument}`, linkLabel: "Ouvrir et acheter" };
+    case "d_pnl": return { steps: ["Prenez des positions sur le book du desk pendant les heures de marché.", "Utilisez des stop-loss et surveillez la VaR : un dépassement fait échouer la mission."], link: "/play/terminal", linkLabel: "Salle des marchés" };
+    case "d_var": return { steps: ["Ouvrez la page Risques : la VaR et la limite y sont affichées.", "Réduisez les positions les plus volatiles du book si besoin.", "La vérification se fait en fin de journée."], link: "/play/risques", linkLabel: "Voir les risques" };
+    case "d_client": return { steps: [`Ouvrez Clients et appelez ${client?.name ?? "le client"}.`, "Écoutez ses besoins, proposez un produit adapté à son profil, évitez les maladresses."], link: "/play/clients", linkLabel: "Appeler" };
+    case "d_varchiffre": return { steps: ["Ouvrez la page Risques et relevez la VaR 99 % à 1 jour du book du desk.", "Répondez ici (10 % de tolérance)."], link: "/play/risques", linkLabel: "Voir la VaR" };
     default: return { steps: [m.description], link: "/play/missions", linkLabel: "Missions" };
   }
 }
 
-export function createMission(s: GameState, templateId: string, params: Record<string, number | string> = {}, giver?: string): Mission | null {
+export function createMission(s: GameState, templateId: string, params: Record<string, number | string> = {}, giver?: string, opts: { daily?: boolean; stakes?: 1 | 2 | 3; deadlineT?: number; quiet?: boolean } = {}): Mission | null {
   const t = BY_ID[templateId];
   if (!t) return null;
   if (s.missions.some((m) => m.status === "active" && m.templateId === templateId && JSON.stringify(m.params) === JSON.stringify(params) && templateId !== "recommandation")) return null;
   const rng = new Rng(s.rng);
   const made = t.make(s, params, rng);
   if (!made) return null;
-  const m: Mission = { id: nextId(s, "mis"), templateId, title: made.title, category: t.category, description: made.description, criteria: made.criteria, params: made.params, startT: s.t, deadlineT: s.t + t.days * MIN_PER_DAY, status: "active", reward: { xp: t.xp, rep: t.rep, trust: giver ? { npc: giver, delta: 5 } : undefined }, progress: 0, baseline: made.baseline, giver };
+  const st = opts.stakes ?? 1;
+  const mult = opts.daily ? [1, 1, 2, 3.5][st] : 1;
+  const rep = opts.daily ? Object.fromEntries(Object.entries(t.rep).map(([k, v]) => [k, Math.round(v! * st)])) : t.rep;
+  const m: Mission = { id: nextId(s, "mis"), templateId, title: made.title, category: t.category, description: made.description, criteria: made.criteria, params: made.params, startT: s.t, deadlineT: opts.deadlineT ?? s.t + t.days * MIN_PER_DAY, status: "active", reward: { xp: Math.round(t.xp * mult), rep, trust: giver ? { npc: giver, delta: opts.daily ? 2 * st : 5 } : undefined }, progress: 0, baseline: made.baseline, giver, ...(opts.daily ? { daily: true, stakes: st } : {}) };
   s.missions.unshift(m);
   if (s.missions.length > 150) s.missions = s.missions.filter((x, i) => i < 120 || x.status === "active");
   const g = giver ? s.npcs[giver] : undefined;
   notify(s, "info", g ? `${g.name} vous confie une mission` : `Nouvelle mission : ${m.title}`, g ? `« ${m.title} » — ${g.role}` : m.description, "/play/missions");
-  if (g && g.relation !== "client") {
+  if (g && g.relation !== "client" && !opts.quiet) {
     s.messages.unshift({ id: nextId(s, "msg"), t: s.t, from: `${g.name} — ${g.role}`, subject: `Mission : ${m.title}`, body: `${s.profile.firstName},\n\n${m.description}\n\nÉchéance : ${fmtShortDate(m.deadlineT)}.\n\n${g.name}\n\n(Besoin d'aide ? Dans l'onglet Missions, cliquez « 💡 Activer l'aide » sur cette mission.)`, read: false });
   }
   return m;
@@ -179,13 +244,16 @@ export function completeMission(s: GameState, m: Mission, success: boolean) {
     for (const [k, d] of Object.entries(m.reward.rep)) changeRep(s, k as RepKey, d!);
     if (m.reward.trust) changeTrust(s, m.reward.trust.npc, m.reward.trust.delta, `Mission réussie : ${m.title}`);
     s.career.missionsDone++;
+    if (m.daily && m.stakes === 3) { const b = Math.round(1000 * Math.max(1, s.career.rank)); s.career.ytdBonusPool += b * 100; notify(s, "succes", "Mission à fort enjeu réussie", `La direction le note : +${b.toLocaleString("fr-FR")} € provisionnés sur votre bonus.`, "/play/remuneration"); }
     const col = s.npcs.colleague;
     if (col && col.trust <= 25 && m.giver && s.mode === "carriere") { s.reputation.interne = Math.max(0, s.reputation.interne - 1); notify(s, "alerte", `${col.name} s'attribue une part du mérite`, `Votre collègue laisse entendre qu'il a beaucoup contribué à « ${m.title} ».`, "/play/reseau"); }
     notify(s, "succes", `Mission réussie : ${m.title}`, `+${m.reward.xp} XP`, "/play/missions");
   } else {
     s.career.missionsFailed++;
-    changeRep(s, "fiabilite", -2);
-    if (m.giver) changeTrust(s, m.giver, -3, `Mission échouée : ${m.title}`);
+    const st = m.daily ? m.stakes ?? 1 : 2;
+    changeRep(s, "fiabilite", -st);
+    if (m.giver) changeTrust(s, m.giver, -[0, 1, 3, 8][st], `Mission échouée : ${m.title}`);
+    if (m.daily && st === 3) { changeRep(s, "professionnelle", -3, "Échec d'une mission à fort enjeu"); s.career.stress = Math.min(100, s.career.stress + 6); }
     notify(s, "alerte", `Mission échouée : ${m.title}`, undefined, "/play/missions");
   }
   careerLog(s, `Mission ${success ? "réussie" : "échouée"} : ${m.title}`);
@@ -237,10 +305,45 @@ export function missionQuestion(s: GameState, m: Mission) {
   return null;
 }
 
+/** Appréciation globale (0-100) : confiance de la hiérarchie, réputation, dernière évaluation */
+export function appreciation(s: GameState) {
+  const n = s.npcs;
+  return 0.35 * (n.boss?.trust ?? 50) + 0.15 * (n.director?.trust ?? 50) + 0.3 * avgRepM(s) + 0.2 * (s.career.reviews[0]?.score ?? 50);
+}
+function avgRepM(s: GameState) { const v = Object.values(s.reputation); return v.reduce((a, b) => a + b, 0) / v.length; }
+/** Enjeu d'une mission : plus vous êtes apprécié et gradé, plus on vous confie des dossiers risqués (et inversement) */
+export function drawStakes(s: GameState, rng: Rng): 1 | 2 | 3 {
+  const a = appreciation(s) + (s.career.rank - 1) * 4;
+  const pHigh = Math.max(0, Math.min(0.8, (a - 52) / 30)), pLow = Math.max(0, Math.min(0.85, (55 - a) / 25));
+  const u = rng.next();
+  return u < pHigh ? 3 : u < pHigh + pLow ? 1 : 2;
+}
+/** Chaque jour ouvré : au moins deux nouvelles missions, différentes de la veille */
+export function assignDailyMissions(s: GameState, rng: Rng) {
+  if (!s.career.employed || s.mode !== "carriere") return;
+  const day = dayIndex(s.t);
+  if (day <= (s.flags["startDay"] as number)) return;
+  if ((s.flags["vacationUntil"] && s.t < (s.flags["vacationUntil"] as number)) || s.flags["burnoutUntil"]) return; // pas de missions en congés ou en arrêt
+  const yesterday = String(s.flags["dailyLast"] ?? "").split(",");
+  const n = 2 + (s.career.rank >= 3 || appreciation(s) >= 70 ? 1 : 0);
+  const pool = DAILY.filter((t) => !yesterday.includes(t.id));
+  const deadlineT = day * MIN_PER_DAY + 18 * 60 + 30;
+  const made: string[] = [];
+  for (const t of pickN(rng, pool, pool.length)) {
+    if (made.length >= n) break;
+    const st = drawStakes(s, rng);
+    const giver = st === 3 ? "director" : st === 2 ? "boss" : rng.pick(["senior", "risk", "boss"]);
+    const m = createMission(s, t.id, { k: st }, giver, { daily: true, stakes: st, deadlineT, quiet: true });
+    if (m) made.push(t.id);
+  }
+  s.flags["dailyLast"] = made.join(",");
+  if (made.length) notify(s, "info", `${made.length} missions pour aujourd'hui`, "Elles sont à terminer avant 18 h 30. Les missions à fort enjeu rapportent beaucoup… et coûtent cher en cas d'échec.", "/play/missions");
+}
+
 /** Attribution hebdomadaire de missions par le responsable */
 export function assignWeeklyMissions(s: GameState, rng: Rng) {
   if (!s.career.employed || s.mode !== "carriere") return;
-  const active = s.missions.filter((m) => m.status === "active").length;
+  const active = s.missions.filter((m) => m.status === "active" && !m.daily).length;
   if (active >= 6) return;
   const byTrack: Record<string, string[]> = {
     trader: ["pnl_semaine", "respect_var", "couvrir_change", "reduire_secteur", "concentration", "prevision_bc"],

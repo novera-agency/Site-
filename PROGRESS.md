@@ -55,6 +55,8 @@ Légende : ✅ fonctionnel et relié au moteur · 🟡 partiel · ❌ non réali
 | Mode historique 2000 → 2025 (événements réels datés, décisions réelles des banques centrales, trajectoires approchées des indices, matières premières, changes et taux) | ✅ | Repères approximatifs, pas de cours officiels ; sociétés du jeu fictives ; simulation libre à partir de 2026 |
 | Univers de plus de 1 200 actions fictives (13 pays, 12 secteurs, indices nationaux, ETF) | ✅ | Petites valeurs non suivies : calcul toutes les 30 min et sauvegarde compacte (clôtures seules) |
 | Vie privée : fiche de paie et impôt, logement (location/achat à crédit), factures, transport, abonnements, loisirs à temps limité, 4 jauges, événements de la vie, impayés et expulsion, négociation salariale à la demande | ✅ | Impôt : barème progressif simplifié (une part) |
+| Missions du jour (≥ 2 par jour ouvré, 11 modèles, enjeu selon appréciation et grade) | ✅ | |
+| Navigation en 5 catégories (Bureau, Vie professionnelle, Vie personnelle, Relations, Options) | ✅ | Barre du bas + menu latéral repliable |
 | Cours réels exacts (flux de données) | ❌ | Aucune source de données accessible ni licence de diffusion |
 | PostgreSQL / Prisma | ❌ | Remplacé par des fichiers JSON (voir ARCHITECTURE) |
 | Responsive (ordinateur, tablette, mobile) | ✅ | Menu latéral repliable |
@@ -68,7 +70,7 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 
 ## Vérifications (dernière exécution)
 - `npm run lint` : OK
-- `npm test` : 64/64
+- `npm test` : 68/68
 - `npm run e2e` : 9/9 (dont parcours 20 étapes et appel client)
 - `npm run build` : OK
 

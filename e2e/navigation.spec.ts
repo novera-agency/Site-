@@ -40,13 +40,24 @@ for (const vp of [{ name: "ordinateur", width: 1440, height: 900 }, { name: "mob
       }
       await expect(page.getByTestId("bottom-nav")).toBeVisible();
     }
-    // Navigation par la barre du bas et le menu « Plus »
+    // Navigation par les 5 catégories de la barre du bas
     await go(page, "/play");
-    await page.getByTestId("bottom-nav").getByText("Portefeuille").click();
+    const nav = page.getByTestId("bottom-nav");
+    for (const c of ["Bureau", "Vie pro", "Vie perso", "Relations", "Options"]) await expect(nav.getByText(c, { exact: true })).toBeVisible();
+    await page.getByTestId("cat-pro").click();
+    const sheet = page.getByTestId("category-sheet");
+    await expect(sheet).toContainText("Marchés");
+    await sheet.getByText("Portefeuille", { exact: true }).click();
     await expect(page).toHaveURL(/portefeuille/);
-    await page.getByTestId("more-button").click();
-    await expect(page.getByTestId("more-sheet")).toBeVisible();
-    await page.getByTestId("more-sheet").getByText("Centre de formation").click();
+    await expect(sheet).toHaveCount(0);
+    await page.getByTestId("cat-perso").click();
+    await page.getByTestId("category-sheet").getByText("Vie privée", { exact: true }).click();
+    await expect(page).toHaveURL(/\/vie/);
+    await page.getByTestId("cat-relations").click();
+    await page.getByTestId("category-sheet").getByText("Clients", { exact: true }).click();
+    await expect(page).toHaveURL(/clients/);
+    await page.getByTestId("cat-pro").click();
+    await page.getByTestId("category-sheet").getByText("Formation", { exact: true }).click();
     await expect(page).toHaveURL(/formation/);
     // La salle de réunion défile sur petit écran et les choix sont atteignables
     await page.getByTestId("speed-100").click();
