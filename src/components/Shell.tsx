@@ -14,7 +14,7 @@ import { tr } from "@/lib/i18n";
 import { HIST_END_LABEL } from "@/engine/data/history2000";
 import { Badge, Disclaimer } from "./ui";
 import type { Snapshot } from "@/server/views";
-import { sfx, startMusic, stopMusic, setSoundEnabled } from "@/lib/sound";
+import { sfx, setSoundEnabled } from "@/lib/sound";
 import { CATEGORIES, categoryOf, itemOf, type NavCategory } from "./nav";
 
 
@@ -139,18 +139,12 @@ function SideNav({ snap, path }: { snap: Snapshot; path: string }) {
   </div>; })}</>;
 }
 
-/** Ambiance : sons de nature après le premier geste du joueur, effet sonore à chaque nouvelle notification */
+/** Un court bruit d'interface à chaque nouvelle notification (aucun son de fond) */
 function SoundDirector({ snap }: { snap: Snapshot }) {
   const seen = useRef<string | null>(null);
   useEffect(() => {
-    const on = snap.sound !== false;
-    setSoundEnabled(on);
-    if (!on) return;
-    const start = () => { startMusic(); };
-    window.addEventListener("pointerdown", start, { once: true });
-    return () => window.removeEventListener("pointerdown", start);
+    setSoundEnabled(snap.sound !== false);
   }, [snap.sound]);
-  useEffect(() => () => stopMusic(), []);
   useEffect(() => {
     const top = snap.notifications[0];
     if (!top) return;

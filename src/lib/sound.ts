@@ -1,11 +1,10 @@
 "use client";
 /**
- * Ambiance sonore synthétisée (Web Audio) : bruits de nature (pluie douce, vent) et petits bruits d'interface.
- * Ni musique, ni mélodie, ni instrument. Aucun fichier audio : tout est généré dans le navigateur.
+ * Petits retours sonores d'interface (Web Audio), uniquement lors d'une notification : aucun son de fond, ni musique, ni mélodie, ni instrument.
+ * Aucun fichier audio : tout est généré dans le navigateur.
  */
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
-let ambience: { gain: GainNode; stop: () => void } | null = null;
 let enabled = true;
 
 function ac() {
@@ -47,28 +46,5 @@ export function sfx(kind: Sfx) {
     case "info": tap(0, 0.09, 0.07, 1500, 0.9); break;
   }
 }
-/** Ambiance de nature : pluie très douce et vent lent, en boucle, à bas volume (aucun instrument) */
-export function startMusic() {
-  if (!enabled || ambience) return;
-  const c = ac(); if (!c || !master) return;
-  const out = c.createGain(); out.gain.value = 0; out.connect(master);
-  out.gain.linearRampToValueAtTime(1, c.currentTime + 4);
-  // Pluie : bruit filtré, légèrement variable
-  const rain = noise(c), rhp = c.createBiquadFilter(), rlp = c.createBiquadFilter(), rg = c.createGain();
-  rhp.type = "highpass"; rhp.frequency.value = 1400; rlp.type = "lowpass"; rlp.frequency.value = 6500; rg.gain.value = 0.022;
-  rain.connect(rhp); rhp.connect(rlp); rlp.connect(rg); rg.connect(out); rain.start();
-  // Vent : bruit passe-bande dont la fréquence et le volume ondulent très lentement
-  const wind = noise(c), wf = c.createBiquadFilter(), wg = c.createGain();
-  wf.type = "bandpass"; wf.frequency.value = 420; wf.Q.value = 0.7; wg.gain.value = 0.03;
-  const l1 = c.createOscillator(), l1g = c.createGain(); l1.frequency.value = 0.06; l1g.gain.value = 180; l1.connect(l1g); l1g.connect(wf.frequency);
-  const l2 = c.createOscillator(), l2g = c.createGain(); l2.frequency.value = 0.09; l2g.gain.value = 0.015; l2.connect(l2g); l2g.connect(wg.gain);
-  wind.connect(wf); wf.connect(wg); wg.connect(out); wind.start(); l1.start(); l2.start();
-  ambience = { gain: out, stop: () => { try { rain.stop(); wind.stop(); l1.stop(); l2.stop(); } catch { /* déjà arrêté */ } out.disconnect(); } };
-}
-export function stopMusic() {
-  if (!ambience) return;
-  const a = ambience; ambience = null;
-  const c = ctx; if (c) { a.gain.gain.cancelScheduledValues(c.currentTime); a.gain.gain.setValueAtTime(a.gain.gain.value, c.currentTime); a.gain.gain.linearRampToValueAtTime(0, c.currentTime + 0.6); setTimeout(a.stop, 700); } else a.stop();
-}
-export function setSoundEnabled(on: boolean) { enabled = on; if (!on) stopMusic(); }
+export function setSoundEnabled(on: boolean) { enabled = on; }
 export function soundEnabled() { return enabled; }

@@ -79,7 +79,7 @@ Le workflow `.github/workflows/pages.yml` vérifie le code (TypeScript, 37 tests
 - **Parcours** : 8 chapitres avec objectifs, 27 succès, score de carrière ; trois fins (retraite, faillite, fortune) et tableau d'honneur local.
 - **Vie privée complète** : salaire précis, factures, logement, jauges (santé mentale, forme, vie sociale, plaisir), rencontres, couple, mariage, enfants, histoires de collègues.
 - Investissement immobilier dans 13 villes françaises, prospection confiée par le N+1, au moins deux missions générées par jour.
-- Événements mondiaux simulés (parties fictives), notifications regroupées avec trois niveaux, ambiance de nature (pluie, vent) et petits bruits synthétisés, sans musique ni instrument, portraits générés.
+- Événements mondiaux simulés (parties fictives), notifications regroupées avec trois niveaux, petits bruits de notification synthétisés, sans musique, sans instrument et sans son de fond, portraits générés.
 - Sauvegarde complète exportable en fichier et réimportable depuis l'accueil.
 - Visite guidée de l'interface au premier lancement (relançable dans Options → Paramètres).
 - Accessibilité : texte agrandi, contraste renforcé, animations réduites, navigation au clavier ; audit automatique WCAG A/AA sans erreur.

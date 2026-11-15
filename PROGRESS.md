@@ -116,3 +116,4 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 ## Assurance, immobilier, révision espacée
 - ✅ 28 questions d'assurance et 34 d'immobilier (France) ; 2 nouvelles catégories du quiz (compétence « risque » pour l'assurance).
 - ✅ Révision espacée : une question réussie ne revient jamais avant 30 jours de jeu ; réussie à la révision, elle rapporte moins d'expérience ; ratée, elle repasse en « à retravailler ». Les nouvelles questions passent toujours avant les révisions.
+- ✅ Son de fond (pluie, vent) retiré à la demande de l'utilisateur : il ne reste que de très courts bruits lors des notifications, désactivables dans Paramètres.
