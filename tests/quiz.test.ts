@@ -116,21 +116,47 @@ describe("Quiz à grande échelle : 2 questions par jour sur 20 ans", () => {
     for (const id of quizToday(s).ids) answerQuiz(s, id, quizById(id)!.correct);
     expect(quizState(s).dailyStreak).toBe(1);
   });
-  it("sur 20 ans (7 300 jours) : toujours 2 questions valides par jour, sans répétition d'une question de culture réussie", () => {
+  it("sur 20 ans (7 300 jours) : toujours 2 questions valides par jour ; une question de culture ne revient jamais avant 30 jours", () => {
     const s = game("carriere", "quiz-7");
-    const seen = new Set<string>();
-    let repeats = 0;
+    const lastSeen = new Map<string, number>();
+    let min = Infinity, reviews = 0;
     for (let d = 0; d < 7300; d++) {
       const t = quizToday(s);
       expect(t.ids.length).toBe(2);
-      for (const id of t.ids) { const q = quizById(id); expect(q, id).toBeTruthy(); expect(q!.options.length).toBe(4); }
-      for (const id of t.ids) { if (seen.has(id)) repeats++; seen.add(id); answerQuiz(s, id, quizById(id)!.correct); }
+      for (const id of t.ids) {
+        const q = quizById(id); expect(q, id).toBeTruthy(); expect(q!.options.length).toBe(4);
+        if (!id.startsWith("g:")) { const prev = lastSeen.get(id); if (prev !== undefined) { min = Math.min(min, d - prev); reviews++; } lastSeen.set(id, d); }
+        answerQuiz(s, id, q!.correct);
+      }
       s.t += 1440;
     }
-    expect(seen.size).toBeGreaterThan(7000);
-    expect(repeats).toBeLessThan(50);
+    expect(min).toBeGreaterThanOrEqual(30);
+    expect(reviews).toBeGreaterThan(100); // la banque est épuisée puis révisée
     expect(quizState(s).dailyDone).toBe(7300);
   }, 120000);
+  it("révision espacée : une question réussie reste exclue 29 jours, puis revient (révision) ; ratée à la révision, elle repasse en « à retravailler »", () => {
+    const s = game("carriere", "quiz-8");
+    const q = quizBatch(s, "assurance", 1)[0];
+    expect(answerQuiz(s, q.id, q.correct).ok).toBe(true);
+    const inBatch = () => quizBatch(s, "assurance", 200).some((x) => x.id === q.id);
+    expect(inBatch()).toBe(false);
+    s.t += 29 * 1440; expect(inBatch()).toBe(false);
+    s.t += 1440; expect(inBatch()).toBe(true);
+    const xp0 = s.skills.risque;
+    const r = answerQuiz(s, q.id, q.correct);
+    expect(r.ok && r.data.review && r.data.xp > 0).toBe(true);
+    expect(s.skills.risque).toBeGreaterThan(xp0);
+    expect(inBatch()).toBe(false);
+    s.t += 30 * 1440;
+    const w = answerQuiz(s, q.id, (q.correct + 1) % 4);
+    expect(w.ok && !w.data.correct).toBe(true);
+    expect(quizState(s).done[q.id]).toBe(0);
+    expect(inBatch()).toBe(true);
+  });
+  it("assurance et immobilier : une cinquantaine de questions rédigées chacune ou presque", () => {
+    expect(QUIZ_BANK.filter((q) => q.cat === "assurance").length).toBeGreaterThanOrEqual(25);
+    expect(QUIZ_BANK.filter((q) => q.cat === "immobilier").length).toBeGreaterThanOrEqual(30);
+  });
 });
 
 describe("Histoire réelle jusqu'en novembre 2026 et partie recommencée", () => {

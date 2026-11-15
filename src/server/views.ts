@@ -247,16 +247,16 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
     }
     case "culture": {
       const st = quizState(s);
-      const CATS = ["jour", "mix", "micro", "macro", "finance", "histoire", "calcul"];
-      const cat = CATS.includes(String(p.cat)) ? String(p.cat) as "jour" | "mix" | "micro" | "macro" | "finance" | "histoire" | "calcul" : "jour";
+      const CATS = ["jour", "mix", "micro", "macro", "finance", "assurance", "immobilier", "histoire", "calcul"];
+      const cat = CATS.includes(String(p.cat)) ? String(p.cat) as "jour" | "mix" | QuizCat : "jour";
       const today = quizToday(s);
       const countDone = (pred: (id: string) => boolean) => Object.entries(st.done).filter(([id, v]) => v === 1 && pred(id)).length;
       const byCat = (c: QuizCat) => ({ total: c === "calcul" ? null : QUIZ_TOTALS[c], done: c === "calcul" ? countDone((id) => id.startsWith("g:")) : countDone((id) => (id.startsWith("h:") ? c === "histoire" : quizById(id)?.cat === c)) });
       return {
         mode: s.mode, cat,
-        stats: { micro: byCat("micro"), macro: byCat("macro"), finance: byCat("finance"), histoire: byCat("histoire"), calcul: byCat("calcul"), total: QUIZ_TOTAL, done: quizCorrectCount(s), streak: st.streak, best: st.best, answered: st.answered, right: st.correct },
+        stats: { micro: byCat("micro"), macro: byCat("macro"), finance: byCat("finance"), assurance: byCat("assurance"), immobilier: byCat("immobilier"), histoire: byCat("histoire"), calcul: byCat("calcul"), total: QUIZ_TOTAL, done: quizCorrectCount(s), streak: st.streak, best: st.best, answered: st.answered, right: st.correct },
         daily: { total: today.ids.length, answered: today.answered.length, streak: st.dailyStreak ?? 0, best: st.dailyBest ?? 0, days: st.dailyDone ?? 0 },
-        batch: quizBatch(s, cat, 5).map((q) => ({ id: q.id, cat: q.cat, level: q.level, q: q.q, options: q.options })),
+        batch: quizBatch(s, cat, 5).map((q) => ({ id: q.id, cat: q.cat, level: q.level, q: q.q, options: q.options, review: st.done[q.id] === 1 })),
       };
     }
     case "realestate": {

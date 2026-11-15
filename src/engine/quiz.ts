@@ -8,9 +8,10 @@ import { gainXp, notify, changeRep } from "./core";
 import { dayIndex } from "./time";
 import { BANK2 } from "./quizBank2";
 import { BANK3 } from "./quizBank3";
+import { BANK4 } from "./quizBank4";
 import { genQuestion, histQuestion, histIds, GEN_FAMILIES, HIST_COUNT } from "./quizGen";
 
-export type QuizCat = "micro" | "macro" | "finance" | "histoire" | "calcul";
+export type QuizCat = "micro" | "macro" | "finance" | "histoire" | "calcul" | "assurance" | "immobilier";
 export interface QuizQ { id: string; cat: QuizCat; level: 1 | 2 | 3; q: string; options: string[]; correct: number; explain: string }
 const Q = (id: string, cat: QuizCat, level: 1 | 2 | 3, q: string, options: string[], correct: number, explain: string): QuizQ => ({ id, cat, level, q, options, correct, explain });
 
@@ -69,7 +70,7 @@ const BANK1: QuizQ[] = [
   Q("ma_ratio", "macro", 3, "Un pays a une dette publique de 3 000 Md€ et un PIB de 2 500 Md€. Son ratio dette/PIB est d'environ…", ["120 %", "83 %", "12 %", "250 %"], 0, "3 000 ÷ 2 500 = 1,2, soit 120 % du PIB. On compare ainsi les pays entre eux (le critère de Maastricht fixe 60 %)."),
 ];
 
-export const QUIZ_BANK: QuizQ[] = [...BANK1, ...BANK2, ...BANK3];
+export const QUIZ_BANK: QuizQ[] = [...BANK1, ...BANK2, ...BANK3, ...BANK4];
 const BY_ID = Object.fromEntries(QUIZ_BANK.map((q) => [q.id, q]));
 const cache = new Map<string, QuizQ>();
 /** Retrouve une question par identifiant : banque rédigée, exercice de calcul (g:famille:graine) ou événement historique (h:n) */
@@ -82,20 +83,27 @@ export function quizById(id: string): QuizQ | undefined {
   if (q) { if (cache.size > 2000) cache.clear(); cache.set(id, q); }
   return q;
 }
-const BRANCH: Record<QuizCat, "analyse" | "macro" | "marches" | "maths"> = { micro: "analyse", macro: "macro", finance: "marches", histoire: "macro", calcul: "maths" };
-const CAT_LABEL: Record<QuizCat, string> = { micro: "micro", macro: "macro", finance: "finance", histoire: "histoire financière", calcul: "calcul" };
-export const QUIZ_TOTALS = (() => { const t = { micro: 0, macro: 0, finance: 0, histoire: HIST_COUNT, calcul: 0 } as Record<QuizCat, number>; for (const q of QUIZ_BANK) t[q.cat]++; return t; })();
+const BRANCH: Record<QuizCat, "analyse" | "macro" | "marches" | "maths" | "risque"> = { micro: "analyse", macro: "macro", finance: "marches", histoire: "macro", calcul: "maths", assurance: "risque", immobilier: "analyse" };
+const CAT_LABEL: Record<QuizCat, string> = { micro: "micro", macro: "macro", finance: "finance", histoire: "histoire financière", calcul: "calcul", assurance: "assurance", immobilier: "immobilier" };
+export const QUIZ_TOTALS = (() => { const t = { micro: 0, macro: 0, finance: 0, histoire: HIST_COUNT, calcul: 0, assurance: 0, immobilier: 0 } as Record<QuizCat, number>; for (const q of QUIZ_BANK) t[q.cat]++; return t; })();
 export const QUIZ_TOTAL = QUIZ_BANK.length + HIST_COUNT;
 
 export interface QuizState {
-  done: Record<string, 0 | 1>; streak: number; best: number; answered: number; correct: number;
+  done: Record<string, 0 | 1>; /** jour de la dernière bonne réponse : une question réussie revient au bout de REVIEW_DAYS jours */ last?: Record<string, number>; streak: number; best: number; answered: number; correct: number;
   /** Les 2 questions du jour (figées au premier affichage) */
   today?: { day: number; ids: string[]; answered: string[] };
   dailyDone?: number; dailyStreak?: number; dailyBest?: number; lastDaily?: number;
 }
+/** Intervalle minimal avant qu'une question déjà réussie soit reposée (révision espacée) */
+export const REVIEW_DAYS = 30;
 export const quizState = (s: GameState): QuizState => (s.quiz ??= { done: {}, streak: 0, best: 0, answered: 0, correct: 0 });
 export const quizCorrectCount = (s: GameState) => Object.values(s.quiz?.done ?? {}).filter((v) => v === 1).length;
 
+/** Une question est « disponible » si elle n'a jamais été réussie, ou si sa dernière réussite remonte à au moins 30 jours */
+const isDue = (st: QuizState, id: string, day: number) => st.done[id] === 1 && (st.last?.[id] === undefined || day - st.last[id] >= REVIEW_DAYS);
+const available = (st: QuizState, id: string, day: number) => st.done[id] !== 1 || isDue(st, id, day);
+/** 0 = jamais vue, 1 = ratée, 2 = à réviser */
+const rank = (st: QuizState, id: string) => (st.done[id] === undefined ? 0 : st.done[id] === 0 ? 1 : 2);
 const h32 = (str: string) => { let x = 2166136261; for (let i = 0; i < str.length; i++) x = Math.imul(x ^ str.charCodeAt(i), 16777619) >>> 0; return x; };
 /** Questions de connaissances (banque rédigée + histoire) dans un ordre propre à la partie */
 const orderCache = new Map<string, string[]>();
@@ -111,7 +119,10 @@ export function quizToday(s: GameState) {
   if (st.today && st.today.day === day) return st.today;
   const order = knowledgeOrder(s);
   let know: string | undefined;
-  for (let k = 0; k < order.length; k++) { const id = order[(day + k) % order.length]; if (st.done[id] !== 1 && !(st.today?.ids.includes(id))) { know = id; break; } }
+  for (const wanted of [0, 1, 2]) { // d'abord les questions jamais vues, puis les ratées, puis celles à réviser
+    for (let k = 0; k < order.length && !know; k++) { const id = order[(day + k) % order.length]; if (rank(st, id) === wanted && available(st, id, day)) know = id; }
+    if (know) break;
+  }
   const calc = `g:${day % GEN_FAMILIES}:${day}`;
   const ids = [know ?? `g:${(day + 7) % GEN_FAMILIES}:${day + 100000}`, calc];
   st.today = { day, ids, answered: [] };
@@ -134,10 +145,10 @@ export function quizBatch(s: GameState, cat: QuizCat | "mix" | "jour", n = 5): Q
   if (cat === "histoire") ids = [...QUIZ_BANK.filter((q) => q.cat === "histoire").map((q) => q.id), ...histIds()];
   else if (cat === "mix") ids = [...ids, ...histIds()];
   else ids = QUIZ_BANK.filter((q) => q.cat === cat).map((q) => q.id);
-  const pool = ids.filter((id) => st.done[id] !== 1).map((id) => quizById(id)!).filter(Boolean);
-  pool.sort((a, b) => (st.done[a.id] === 0 ? 1 : 0) - (st.done[b.id] === 0 ? 1 : 0) || a.level - b.level || h(a.id) - h(b.id));
+  const pool = ids.filter((id) => available(st, id, day)).map((id) => quizById(id)!).filter(Boolean);
+  pool.sort((a, b) => rank(st, a.id) - rank(st, b.id) || a.level - b.level || h(a.id) - h(b.id));
   const head = pool.slice(0, Math.max(n * 3, n));
-  head.sort((a, b) => (st.done[a.id] === 0 ? 1 : 0) - (st.done[b.id] === 0 ? 1 : 0) || h(a.id) - h(b.id));
+  head.sort((a, b) => rank(st, a.id) - rank(st, b.id) || h(a.id) - h(b.id));
   const out = head.slice(0, n);
   if (out.length < n && cat === "mix") for (const q of quizBatch(s, "calcul", n - out.length)) out.push(q);
   return out;
@@ -149,19 +160,21 @@ export function answerQuiz(s: GameState, id: string, choice: number) {
   if (!Number.isInteger(choice) || choice < 0 || choice >= q.options.length) return { ok: false as const, error: "Réponse invalide." };
   const st = quizState(s);
   const right = choice === q.correct;
+  const day0 = dayIndex(s.t);
+  const review = isDue(st, id, day0); // question déjà réussie il y a au moins 30 jours
   const first = st.done[id] === undefined || st.done[id] === 0;
   st.answered++;
   let xp = 0;
   if (right) {
     st.correct++; st.streak++; st.best = Math.max(st.best, st.streak);
-    if (first) {
-      st.done[id] = 1;
-      xp = 4 * q.level + (st.streak >= 3 ? 2 : 0);
+    if (first || review) {
+      st.done[id] = 1; (st.last ??= {})[id] = day0;
+      xp = first ? 4 * q.level + (st.streak >= 3 ? 2 : 0) : 2 * q.level; // une révision réussie rapporte moins qu'une découverte
       gainXp(s, BRANCH[q.cat], xp, `Quiz d'économie : ${CAT_LABEL[q.cat]}`);
       const total = quizCorrectCount(s);
-      if (total % 25 === 0) { changeRep(s, "professionnelle", 1, "Solide culture économique"); notify(s, "succes", `Culture économique : ${total} questions réussies`, "Votre responsable remarque votre curiosité intellectuelle.", "/play/culture"); }
+      if (first && total % 25 === 0) { changeRep(s, "professionnelle", 1, "Solide culture économique"); notify(s, "succes", `Culture économique : ${total} questions réussies`, "Votre responsable remarque votre curiosité intellectuelle.", "/play/culture"); }
     }
-  } else { st.streak = 0; if (st.done[id] === undefined) st.done[id] = 0; }
+  } else { st.streak = 0; if (st.done[id] === undefined || review) st.done[id] = 0; }
   // Questions du jour : bonus quand les deux sont traitées
   const day = dayIndex(s.t);
   let daily: { done: boolean; streak: number } | undefined;
@@ -177,5 +190,5 @@ export function answerQuiz(s: GameState, id: string, choice: number) {
       daily = { done: true, streak: st.dailyStreak };
     }
   }
-  return { ok: true as const, data: { correct: right, answer: q.correct, explain: q.explain, xp, streak: st.streak, first, daily } };
+  return { ok: true as const, data: { correct: right, answer: q.correct, explain: q.explain, xp, streak: st.streak, first, review, daily } };
 }
