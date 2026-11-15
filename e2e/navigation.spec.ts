@@ -3,7 +3,7 @@ import { test, expect, type Page } from "@playwright/test";
 /** Vérifie chaque onglet : affichage, absence d'erreur, défilement à la molette (y compris au-dessus d'un graphique), barre du bas. */
 const BASE = process.env.E2E_BASE ?? "";
 const go = (page: Page, path: string) => page.goto(BASE + path);
-const PAGES = ["/play", "/play/agenda", "/play/messagerie", "/play/reunions", "/play/terminal", "/play/recherche", "/play/ordres", "/play/options", "/play/structures", "/play/portefeuille", "/play/transactions", "/play/risques", "/play/patrimoine", "/play/actualites", "/play/calendrier", "/play/macro", "/play/carriere", "/play/clients", "/play/missions", "/play/competences", "/play/reputation", "/play/reseau", "/play/rh", "/play/remuneration", "/play/banques", "/play/entreprise", "/play/formation", "/play/dictionnaire", "/play/parametres", "/play/sauvegardes", "/play/actif/?id=MAIS", "/play/actif/?id=DE10Y"];
+const PAGES = ["/play", "/play/agenda", "/play/messagerie", "/play/reunions", "/play/terminal", "/play/recherche", "/play/ordres", "/play/options", "/play/structures", "/play/portefeuille", "/play/transactions", "/play/risques", "/play/patrimoine", "/play/actualites", "/play/calendrier", "/play/macro", "/play/carriere", "/play/clients", "/play/missions", "/play/competences", "/play/reputation", "/play/reseau", "/play/rh", "/play/remuneration", "/play/banques", "/play/entreprise", "/play/formation", "/play/dictionnaire", "/play/parametres", "/play/sauvegardes", "/play/vie", "/play/actif/?id=MAIS", "/play/actif/?id=DE10Y"];
 
 async function newCareer(page: Page) {
   await go(page, "/");
@@ -14,6 +14,7 @@ async function newCareer(page: Page) {
   for (let i = 0; i < 4; i++) await page.getByTestId("next").click();
   await page.getByTestId("create").click();
   await page.waitForURL(/\/play\/?$/);
+  await expect(page.getByTestId("bottom-nav")).toBeVisible({ timeout: 20000 });
 }
 
 for (const vp of [{ name: "ordinateur", width: 1440, height: 900 }, { name: "mobile", width: 390, height: 844 }]) {
@@ -25,7 +26,7 @@ for (const vp of [{ name: "ordinateur", width: 1440, height: 900 }, { name: "mob
     await newCareer(page);
     for (const p of PAGES) {
       await go(page, p);
-      await expect(page.locator("main h1").first()).toBeVisible({ timeout: 15000 });
+      await expect(page.locator("main h1").first(), `titre absent sur ${p}`).toBeVisible({ timeout: 15000 });
       await page.waitForTimeout(700);
       const [sh, ih] = await page.evaluate(() => [document.documentElement.scrollHeight, window.innerHeight]);
       if (sh > ih + 80) {
