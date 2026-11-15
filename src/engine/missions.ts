@@ -21,7 +21,7 @@ const pctTxt = (x: number) => `${(x * 100).toFixed(0)} %`;
 const TEMPLATES: Tpl[] = [
   { id: "premier_ordre", category: "trading", xp: 30, rep: { fiabilite: 2 }, days: 3,
     make: () => ({ title: "Passer votre premier ordre", description: "Achetez un instrument (action ou ETF) sur votre compte personnel ou sur le book du desk.", criteria: ["Au moins un ordre d'achat exécuté"], params: {} }),
-    check: (s, m) => (s.fills.some((f) => f.side === "buy" && f.t >= m.startT && (f.account === "perso" || f.account === "desk")) ? 1 : 0) },
+    check: (s, m) => (s.fills.some((f) => f.side === "buy" && f.t >= m.startT && (f.account === "perso" || f.account === "desk") && !s.orders.find((o) => o.id === f.orderId)?.tag) ? 1 : 0) }, // les ordres automatiques (book initial, stops…) ne comptent pas
   { id: "analyse_actif", category: "analyse", xp: 40, rep: { professionnelle: 2 }, days: 3,
     make: (s, p, rng) => { const pool = ["MAIS", "NOVX", "TERA", "LUTB", "AERO", "CURA"]; const id = String(p.instrument ?? rng.pick(pool)); return { title: `Analyser ${s.instruments[id].name}`, description: `Ouvrez la fiche de ${id}, étudiez sa valorisation et répondez : son PER actuel est-il supérieur ou inférieur à son PER normatif ?`, criteria: ["Réponse correcte au quiz d'analyse"], params: { instrument: id } }; },
     check: () => 0,

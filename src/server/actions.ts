@@ -4,7 +4,7 @@ import type { GameState } from "@/engine/types";
 import { SPEEDS, MIN_PER_DAY, tOfDay, dayIndex, nextBusinessDay, minuteOfDay, isWeekend } from "@/engine/time";
 import { placeOrder, cancelOrder, convertCash } from "@/engine/orders";
 import { startMeeting, answerMeeting, explainTerm } from "@/engine/meetingEngine";
-import { answerMission } from "@/engine/missions";
+import { answerMission, checkMissions } from "@/engine/missions";
 import { rebalanceClient } from "@/engine/clients";
 import { subscribe } from "@/engine/structured";
 import { handleMessageAction } from "@/engine/events";
@@ -48,7 +48,14 @@ export const ActionSchema = z.discriminatedUnion("type", [
 export type Action = z.infer<typeof ActionSchema>;
 export type ActionResult = { ok: boolean; message?: string; error?: string; data?: unknown };
 
+/** Applique une action puis met à jour tout de suite la progression des missions (même en pause) */
 export function applyAction(s: GameState, a: Action): ActionResult {
+  const r = applyActionInner(s, a);
+  if (r.ok) checkMissions(s);
+  return r;
+}
+
+function applyActionInner(s: GameState, a: Action): ActionResult {
   switch (a.type) {
     case "speed": s.speed = a.speed as GameState["speed"]; if (a.speed === 0) { s.paused = true; s.pauseReason = "Pause"; } else if (!s.activeMeetingId) { s.paused = false; s.pauseReason = undefined; } return { ok: true };
     case "pause":

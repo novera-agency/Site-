@@ -17,6 +17,7 @@ export function AssetPanel({ id, compact = false }: { id: string; compact?: bool
   const [kind, setKind] = useState<"candles" | "line">("candles");
   const [inds, setInds] = useState<string[]>(["sma20"]);
   const [alert, setAlert] = useState("");
+  const [alertErr, setAlertErr] = useState("");
   if (!data) return <Loading />;
   if (data.error) return <div className="text-loss">{data.error}</div>;
   const d = data.def, q = data.quote, a = data.analytics;
@@ -62,7 +63,8 @@ export function AssetPanel({ id, compact = false }: { id: string; compact?: bool
     <div className="grid gap-4 lg:grid-cols-3">
       <Card title="Mes positions"> {data.positions.length === 0 ? <div className="text-sm text-ink-400">Aucune position.</div> : data.positions.map((p: any) => <div key={p.account} className="mb-2 rounded bg-ink-900 p-2 text-sm"><div className="text-xs text-ink-400">{p.label}</div><div className="num">{fmtNum(p.pos.qty, d.cls === "crypto" ? 4 : 0)} @ {fmtPx(p.pos.avgPrice)} — P&L latent <span className={(q.price - p.pos.avgPrice) * p.pos.qty >= 0 ? "text-gain" : "text-loss"}>{fmtNum((q.price - p.pos.avgPrice) * p.pos.qty * (d.option?.multiplier ?? d.future?.multiplier ?? (d.bond ? 10 : 1)), 2)} {d.currency}</span></div></div>)}
         <div className="mt-3 flex flex-wrap gap-2"><Button size="sm" variant="ghost" onClick={() => act({ type: "watch", instrumentId: id, on: !data.watch })}>{data.watch ? "★ Retirer de la liste" : "☆ Surveiller"}</Button>{data.optionable && <Link href={`/play/options?u=${id}`} className="rounded-md bg-ink-700 px-2.5 py-1 text-xs">Chaîne d'options</Link>}</div>
-        <div className="mt-3 flex gap-1"><input placeholder="Alerte à…" value={alert} onChange={(e) => setAlert(e.target.value)} className={inputCls} /><Button size="sm" onClick={() => { const lv = Number(alert); if (lv > 0) { act({ type: "alert", instrumentId: id, level: lv, above: lv > q.price }); setAlert(""); } }}>🔔</Button></div>
+        <div className="mt-3 flex gap-1"><input placeholder="Alerte à… (prix)" inputMode="decimal" onKeyDown={(e) => { if (e.key === "Enter") (e.currentTarget.nextElementSibling as HTMLButtonElement | null)?.click(); }} value={alert} onChange={(e) => setAlert(e.target.value)} className={inputCls} /><Button size="sm" onClick={() => { const lv = Number(alert.replace(/\s/g, "").replace(",", ".")); if (lv > 0) { act({ type: "alert", instrumentId: id, level: lv, above: lv > q.price }); setAlert(""); setAlertErr(""); } else setAlertErr("Saisissez un prix, par exemple " + fmtNum(q.price * 1.02, 2) + "."); }}>🔔 Créer l'alerte</Button></div>
+        {alertErr && <div className="mt-1 text-xs text-amber-300">{alertErr}</div>}
         {data.alerts.map((al: any) => <div key={al.id} className="mt-1 flex justify-between text-xs"><span>{al.above ? "≥" : "≤"} {al.level} {al.triggered && <Badge tone="gold">déclenchée</Badge>}</span><button onClick={() => act({ type: "alert_delete", id: al.id }, { silent: true })} className="text-ink-500">✕</button></div>)}
       </Card>
       <Card title="Actualités associées" className="lg:col-span-2">{data.news.length === 0 ? <div className="text-sm text-ink-400">Aucune actualité récente.</div> : <ul className="space-y-2">{data.news.map((n: any) => <li key={n.id} className="text-sm"><span className="num mr-2 text-xs text-ink-500">{fmtDateTime(n.t)}</span><b>{n.title}</b><div className="text-xs text-ink-400">{n.body}</div></li>)}</ul>}</Card>
