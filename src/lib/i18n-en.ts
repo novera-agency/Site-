@@ -12,7 +12,7 @@ export const EN: Record<string, string> = {
   "Mon bureau": "My office", "Résumé de la journée et prochains rendez-vous": "Daily summary and upcoming appointments",
   "Parcours et succès": "Journey & achievements", "Vos objectifs par chapitre, trophées, score": "Chapter goals, trophies, score",
   "Missions": "Missions", "Les tâches du jour confiées par votre hiérarchie": "Today's tasks from your managers",
-  "Agenda": "Calendar", "Votre emploi du temps": "Your schedule",
+  "Agenda": "Calendar", "Planning et sommeil": "Schedule & sleep", "Horaires, réveil, dormir, heures supplémentaires": "Working hours, wake-up, sleep, overtime", "Votre emploi du temps": "Your schedule",
   "Réunions": "Meetings", "Rejoindre ou relire vos réunions": "Join or review your meetings",
   "Messagerie": "Inbox", "Messages et décisions à prendre": "Messages and decisions to make",
   "Actualités": "News", "Ce qui fait bouger les marchés": "What moves the markets",

@@ -11,6 +11,7 @@ export const CATEGORIES: NavCategory[] = [
       { href: "/play/parcours", label: "Parcours et succès", icon: "🧭", desc: "Vos objectifs par chapitre, trophées, score" },
       { href: "/play/missions", label: "Missions", icon: "🎯", desc: "Les tâches du jour confiées par votre hiérarchie", badge: "missions" },
       { href: "/play/agenda", label: "Agenda", icon: "🗓️", desc: "Votre emploi du temps" },
+      { href: "/play/planning", label: "Planning et sommeil", icon: "⏰", desc: "Horaires, réveil, dormir, heures supplémentaires" },
       { href: "/play/reunions", label: "Réunions", icon: "🤝", desc: "Rejoindre ou relire vos réunions", badge: "meeting" },
       { href: "/play/messagerie", label: "Messagerie", icon: "✉️", desc: "Messages et décisions à prendre", badge: "msgs" },
       { href: "/play/actualites", label: "Actualités", icon: "📰", desc: "Ce qui fait bouger les marchés" },

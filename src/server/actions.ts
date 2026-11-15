@@ -4,7 +4,7 @@ import type { GameState } from "@/engine/types";
 import { canCall, RECALL_DAYS } from "@/engine/prospects";
 import { checkProgress, endingAvailable, endGame } from "@/engine/progression";
 import { buyProperty, setRent, setSale, withdraw, renovate } from "@/engine/realestate";
-import { doActivity, WORK_END_MIN, moveHousing, sellHousing, setTransport, setSub } from "@/engine/life";
+import { doActivity, moveHousing, sellHousing, setTransport, setSub } from "@/engine/life";
 import { SPEEDS, MIN_PER_DAY, tOfDay, dayIndex, nextBusinessDay, minuteOfDay, isWeekend, useEpoch, fmtDate } from "@/engine/time";
 import { placeOrder, cancelOrder, convertCash } from "@/engine/orders";
 import { startMeeting, answerMeeting, explainTerm } from "@/engine/meetingEngine";
@@ -17,6 +17,7 @@ import { takeVacation } from "@/engine/career";
 import { completeLesson, advanceTo } from "@/engine/engine";
 import { nextId, logDecision } from "@/engine/core";
 import { toCents } from "@/engine/money";
+import { setPlan, sleepCheck, finishSleep, doOvertime, workWindow, isWorkDay, hhmm, sleepLabel } from "@/engine/schedule";
 import { answerQuiz } from "@/engine/quiz";
 
 const num = z.coerce.number().finite();
@@ -61,6 +62,9 @@ export const ActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("re_renovate"), id: z.string().max(40) }),
   z.object({ type: z.literal("settings"), notifLevel: z.enum(["toutes", "importantes", "critiques"]).optional(), sound: z.boolean().optional(), minutesPerSecond: num.min(0.25).max(60).optional(), autoPauseImportant: z.boolean().optional(), livingExpenses: z.boolean().optional(), aiEnabled: z.boolean().optional(), explanations: z.boolean().optional(), allowShort: z.boolean().optional(), name: z.string().min(1).max(60).optional() }),
   z.object({ type: z.literal("tutorial_visit"), page: z.string().max(40) }),
+  z.object({ type: z.literal("set_plan"), start: z.number().int(), end: z.number().int(), wake: z.number().int() }),
+  z.object({ type: z.literal("sleep") }),
+  z.object({ type: z.literal("overtime"), hours: z.number().int().min(1).max(4), focus: z.enum(["avance", "dossiers", "formation"]) }),
   z.object({ type: z.literal("quiz_answer"), id: z.string().max(40), choice: z.number().int().min(0).max(5) }),
   z.object({ type: z.literal("leave_meeting") }),
 ]);
@@ -75,6 +79,21 @@ export function applyAction(s: GameState, a: Action): ActionResult {
   return r;
 }
 
+/** Fait avancer l'horloge jusqu'à `target` en respectant l'état de pause d'avant (une interruption par un événement reste une pause) */
+function runClock(s: GameState, target: number) {
+  const wasPaused = s.paused, why = s.pauseReason;
+  advanceTo(s, target);
+  if (!s.paused || !s.pauseReason || s.pauseReason === why) { s.paused = wasPaused; s.pauseReason = why; }
+}
+function doSleep(s: GameState): ActionResult {
+  const c = sleepCheck(s);
+  if (!c.ok) return { ok: false, error: c.error };
+  const t0 = s.t;
+  runClock(s, c.target);
+  const r = finishSleep(s, t0);
+  const interrupted = s.t < c.target - 5;
+  return { ok: true, message: `😴 Vous avez dormi ${r.hours} h (sommeil ${sleepLabel(r.hours)}).${interrupted ? ` Réveil anticipé : ${s.pauseReason ?? "événement"}.` : ` Réveil à ${hhmm(s.t % MIN_PER_DAY)}.`}` };
+}
 function applyActionInner(s: GameState, a: Action): ActionResult {
   switch (a.type) {
     case "speed": s.speed = a.speed as GameState["speed"]; if (a.speed === 0) { s.paused = true; s.pauseReason = "Pause"; } else if (!s.activeMeetingId) { s.paused = false; s.pauseReason = undefined; } return { ok: true };
@@ -87,8 +106,13 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
       let target: number;
       if (a.to === "next_hour") target = s.t + 60;
       else if (a.to === "market_open") target = m < 9 * 60 && !isWeekend(s.t) ? tOfDay(day, 9, 0) : tOfDay(nextBusinessDay(day + 1), 9, 0);
-      else if (a.to === "work_end") { if (isWeekend(s.t) || m >= WORK_END_MIN) return { ok: false, error: isWeekend(s.t) ? "C'est le week-end : pas de travail aujourd'hui." : "Le travail est déjà fini pour aujourd'hui." }; target = tOfDay(day, 18, 0); }
-      else if (a.to === "next_morning") target = tOfDay(nextBusinessDay(day + 1), 7, 30);
+      else if (a.to === "work_end") { if (!isWorkDay(s)) return { ok: false, error: "Pas de journée de travail aujourd'hui." }; const w = workWindow(s); if (m >= w.end) return { ok: false, error: "Le travail est déjà fini pour aujourd'hui." }; target = tOfDay(day, 0, w.end); }
+      else if (a.to === "next_morning") {
+        // Le soir, « jusqu'à demain » = aller dormir jusqu'à l'heure de réveil choisie
+        const sl = sleepCheck(s);
+        if (sl.ok) return doSleep(s);
+        target = tOfDay(nextBusinessDay(day + 1), 7, 30);
+      }
       else { const nx = s.agenda.find((x) => x.status === "prevu" && x.t > s.t); target = nx ? nx.t : s.t + 60; }
       const n = advanceTo(s, Math.min(target, s.t + 4 * MIN_PER_DAY));
       return { ok: true, message: s.paused && s.pauseReason ? `Avance interrompue : ${s.pauseReason}` : `Temps avancé (${n * 5} min simulées).` };
@@ -161,10 +185,8 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
       const r = doActivity(s, a.id);
       if (!r.ok) return { ok: false, error: r.error };
       // L'activité prend du temps réel de jeu : l'horloge avance de sa durée (s'arrête si un événement important survient)
-      const wasPaused = s.paused, why = s.pauseReason;
       const t0 = s.t;
-      advanceTo(s, t0 + r.hours * 60);
-      if (!s.paused || !s.pauseReason || s.pauseReason === why) { s.paused = wasPaused; s.pauseReason = why; }
+      runClock(s, t0 + r.hours * 60);
       const done = Math.round((s.t - t0) / 60 * 10) / 10;
       return { ok: true, message: done < r.hours ? `${r.message} Interrompue après ${done} h : ${s.pauseReason ?? "événement"}.` : r.message };
     }
@@ -209,6 +231,16 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
       if (a.allowShort !== undefined && s.difficulty !== "debutant") { s.settings.allowShort = a.allowShort; s.accounts.perso.allowShort = a.allowShort; }
       if (a.name) s.name = a.name;
       return { ok: true, message: "Paramètres enregistrés." };
+    }
+    case "set_plan": { const r = setPlan(s, { start: a.start, end: a.end, wake: a.wake }); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error }; }
+    case "sleep": return doSleep(s);
+    case "overtime": {
+      const r = doOvertime(s, a.hours, a.focus);
+      if (!r.ok) return { ok: false, error: r.error };
+      const t0 = s.t;
+      runClock(s, t0 + a.hours * 60);
+      const done = Math.round(((s.t - t0) / 60) * 10) / 10;
+      return { ok: true, message: done < a.hours ? `${r.message} Interrompu après ${done} h : ${s.pauseReason ?? "événement"}.` : r.message };
     }
     case "quiz_answer": { const r = answerQuiz(s, a.id, a.choice); return r.ok ? { ok: true, data: r.data } : { ok: false, error: r.error }; }
     case "tutorial_visit": if (a.page === "terminal") s.flags["visitedTerminal"] = true; return { ok: true };

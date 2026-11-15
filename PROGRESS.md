@@ -74,7 +74,7 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 ## Vérifications (dernière exécution)
 - `npm run lint` : OK
 - `npm test` : 104/104
-- `npm run e2e` : 21/21 (dont parcours 20 étapes, appel client, immobilier, vie privée, voix)
+- `npm run e2e` : 22/22 (dont parcours 20 étapes, appel client, immobilier, vie privée, voix)
 - Affichage émulé iPhone 13, Pixel 7 et iPad : aucune page ne déborde horizontalement (38 écrans)
 - `npm run build` : OK
 
@@ -119,3 +119,9 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 - ✅ Son de fond (pluie, vent) retiré à la demande de l'utilisateur : il ne reste que de très courts bruits lors des notifications, désactivables dans Paramètres.
 - ✅ Zoom automatique sur mobile : champs et menus déroulants à 16 px minimum (pas de zoom au toucher), échelle verrouillée pendant la saisie puis rendue au pincement ; double-toucher sans zoom. Vérifié en émulation (écran iPhone sous Chromium), pas sur un vrai iPhone.
 - ✅ Activités de loisirs : possibles seulement après le travail (18 h les jours ouvrés ; dès le matin le week-end, en congés ou sans emploi) et doivent finir avant minuit ; l'horloge avance de leur durée (1 h = +1 h au compteur du haut), s'arrête si une réunion ou un événement important survient, et l'état de pause est conservé. Nouveau saut « Jusqu'à la fin du travail (18 h) ».
+
+## Planning, sommeil, heures supplémentaires
+- ✅ Page « Planning et sommeil » (Bureau) : horaires de travail (arrivée, départ) et heure de réveil au quart d'heure, frise de la journée.
+- ✅ Dormir : l'horloge avance jusqu'au réveil choisi ; 7 à 9 h = excellent, moins de 6 h = fatigue ; la nuit non gérée par le joueur est simulée automatiquement (sans bonus ; pénalité seulement si le réveil laisse moins de 6 h 30). Le saut « Jusqu'à demain matin » le soir = aller dormir.
+- ✅ Horaires : journée de référence 9,5 h (7 h 30 → 18 h, déjeuner déduit) ; plus long = fatigue, stress, un peu de confiance du responsable ; plus court = sérénité mais confiance en baisse. Agenda, activités et temps libre suivent les horaires ; le bilan clôt la journée à l'heure de fin.
+- ✅ Heures supplémentaires (après l'horaire de fin, 1 à 4 h, avant 23 h 30) : prendre de l'avance (partir plus tôt le lendemain, 4 h de réserve), traiter des dossiers en retard (échéances repoussées), se former (expérience). Elles fatiguent, davantage au-delà de 3 h par jour, 12 h par semaine et le week-end. Elles ne sont pas rémunérées (forfait cadre).

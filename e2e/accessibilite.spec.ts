@@ -55,7 +55,7 @@ test("visite guidée, interface en anglais, réglages d'accessibilité et audit 
   await expect(page.locator("html")).not.toHaveClass(/a11y-big/);
 
   // Audit automatique WCAG A/AA sur trois écrans
-  for (const path of ["/play", "/play/vie", "/play/recherche", "/play/culture"]) {
+  for (const path of ["/play", "/play/vie", "/play/recherche", "/play/culture", "/play/planning"]) {
     await go(page, path);
     await page.locator("main h1").first().waitFor();
     await page.waitForTimeout(400);

@@ -288,6 +288,16 @@ export interface LifeState {
   /** Investissements locatifs */
   properties?: Property[];
   reBought?: string[];
+  /** Planning : horaires de travail et heure de réveil (minutes depuis minuit) */
+  plan?: { start: number; end: number; wake: number };
+  /** Dernier sommeil */
+  sleep?: { startT: number; endT: number; hours: number };
+  /** Heures d'avance prises sur le lendemain (heures supplémentaires « pour demain ») */
+  ahead?: number;
+  /** Départ anticipé du jour grâce à l'avance */
+  early?: { day: number; hours: number };
+  /** Heures supplémentaires de la semaine */
+  ot?: { week: number; hours: number; today: { day: number; hours: number } };
 }
 export interface GameState {
   version: number;

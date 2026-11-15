@@ -51,3 +51,5 @@ Pour tester l'édition navigateur : `BASE_PATH=/Site- npm run build:static`, ser
 | `tests/quiz.test.ts` (complété) | Révision espacée à 30 jours (exclue 29 jours, revient au 30e, réponse fausse = à retravailler) ; sur 7 300 jours aucune question de culture n'est reposée avant 30 jours ; banques assurance et immobilier. |
 | `e2e/zoom.spec.ts` | Mobile : aucun champ ni menu sous 16 px sur 10 écrans ; échelle verrouillée à la saisie puis rétablie à la sortie du champ. |
 | `tests/vie.test.ts` (complété) | Activités refusées avant 18 h, saut à 18 h pile, l'horloge avance exactement de la durée, refus si l'activité finirait après minuit, week-end possible dès le matin, pause conservée. |
+| `tests/vie.test.ts` (planning) | Validation des horaires, activités et horaires de départ, sommeil (réveil exact, effets, refus), nuit courte, heures supplémentaires (3 objectifs, avance du lendemain, plafonds), effets d'une journée longue ou courte, agenda replacé dans les horaires. |
+| `e2e/planning.spec.ts` | Page planning : horaires, réveil refusé trop tard, sommeil et heures supplémentaires verrouillés pendant le travail, activités selon l'horaire. |

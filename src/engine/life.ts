@@ -12,6 +12,7 @@ const EXT_LIVING = "ext:depenses_vie";
 export function eurCash(s: GameState) { return cashOf(s, "perso", "EUR") / 100; }
 import { toCents, fromCents } from "./money";
 import { dayIndex, isWeekend, MIN_PER_DAY, EPOCH_YEAR, dateOf, minuteOfDay } from "./time";
+import { getPlan, workWindow, isWorkDay, hhmm, dailySchedule } from "./schedule";
 import { BANK_BY_ID } from "./data/banks";
 import { dailyRealEstate, monthlyRealEstate, propertiesEquity } from "./realestate";
 
@@ -95,21 +96,24 @@ export function freeHours(s: GameState) {
   const l = s.life!;
   const vac = !!s.flags["vacationUntil"] && s.t < (s.flags["vacationUntil"] as number);
   const kids = l.children ?? 0;
-  const total = Math.max(1, (isWeekend(s.t) || vac || !s.career.employed ? 14 - 3 * kids : (l.perks.teletravail ? 5 : HOUSING_BY_ID[l.housing.id].commute ? 3 : 4) - kids));
+  const shift = isWorkDay(s) ? Math.round(((18 * 60 - workWindow(s).end) / 60) * 2) / 2 : 0; // partir plus tôt libère du temps, plus tard en prend
+  const total = Math.max(1, (isWeekend(s.t) || vac || !s.career.employed ? 14 - 3 * kids : (l.perks.teletravail ? 5 : HOUSING_BY_ID[l.housing.id].commute ? 3 : 4) - kids + shift));
   const used = l.free.day === dayIndex(s.t) ? l.free.used : 0;
   return { total, used, left: Math.max(0, total - used) };
 }
 
-/** Heure de fin du travail les jours ouvrés (18 h) : avant, on est au bureau */
-export const WORK_END_MIN = 18 * 60;
-const hhmm = (m: number) => `${Math.floor(m / 60)} h ${String(Math.round(m % 60)).padStart(2, "0")}`;
-/** Une activité ne se fait qu'après le travail (ou en week-end / congés / sans emploi), et doit finir avant minuit. Renvoie le motif du refus, sinon null. */
+/** Une activité ne se fait qu'en dehors des heures de travail (après le départ, ou avant l'arrivée en finissant à temps), et doit finir avant minuit. Renvoie le motif du refus, sinon null. */
 export function activityBlocked(s: GameState, a: Activity): string | null {
   const m = minuteOfDay(s.t);
-  const vac = !!s.flags["vacationUntil"] && s.t < (s.flags["vacationUntil"] as number);
-  const working = s.career.employed && !isWeekend(s.t) && !vac;
-  if (working && m < WORK_END_MIN) return `Vous êtes encore au travail (il est ${hhmm(m)}) : les activités commencent à 18 h. Avancez jusqu'à la fin du travail.`;
-  if (!working && m < 6 * 60) return `Il est ${hhmm(m)} : il est trop tôt pour une activité.`;
+  if (isWorkDay(s)) {
+    const w = workWindow(s);
+    if (m >= w.start && m < w.end) return `Vous êtes encore au travail (il est ${hhmm(m)}) : les activités commencent à ${hhmm(w.end)}. Avancez jusqu'à la fin du travail.`;
+    if (m < w.start) {
+      if (m < 6 * 60) return `Il est ${hhmm(m)} : il est trop tôt pour une activité.`;
+      if (m + a.hours * 60 > w.start) return `Vous commencez le travail à ${hhmm(w.start)} : « ${a.name} » (${a.hours} h) finirait trop tard. Choisissez plus court ou faites-la ce soir.`;
+      return null;
+    }
+  } else if (m < 6 * 60) return `Il est ${hhmm(m)} : il est trop tôt pour une activité.`;
   if (m + a.hours * 60 > MIN_PER_DAY) return `Trop tard : « ${a.name} » dure ${a.hours} h et se terminerait après minuit. Faites-la demain, ou choisissez une activité plus courte.`;
   return null;
 }
@@ -373,6 +377,7 @@ export function dailyLife(s: GameState, rng: Rng) {
   const weekend = isWeekend(s.t);
   const vac = !!s.flags["vacationUntil"] && s.t < (s.flags["vacationUntil"] as number);
   const h = HOUSING_BY_ID[l.housing.id];
+  dailySchedule(s); // planning, sommeil, avance sur le lendemain
   // Usure naturelle : sans entretien, les jauges baissent
   l.social = bar(l.social - 1.4);
   l.fun = bar(l.fun - 1.6);

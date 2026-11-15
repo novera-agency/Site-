@@ -26,7 +26,7 @@ test("mobile : aucun champ ni menu déroulant sous 16 px (pas de zoom automatiqu
   for (let i = 0; i < 4; i++) await page.getByTestId("next").click();
   await page.getByTestId("create").click();
   await page.waitForURL(/\/play\/?$/);
-  for (const path of ["/play/parametres", "/play/recherche", "/play/ordres", "/play/clients", "/play/vie", "/play/immobilier", "/play/portefeuille", "/play/transactions"]) {
+  for (const path of ["/play/parametres", "/play/recherche", "/play/ordres", "/play/clients", "/play/vie", "/play/immobilier", "/play/portefeuille", "/play/transactions", "/play/planning"]) {
     await page.goto(BASE + path);
     await page.locator("main h1").first().waitFor();
     await page.waitForTimeout(300);
