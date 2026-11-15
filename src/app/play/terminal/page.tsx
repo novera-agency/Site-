@@ -15,9 +15,10 @@ export default function Terminal() {
   useEffect(() => { act({ type: "tutorial_visit", page: "terminal" }, { silent: true }); }, [act]);
   const names: Record<string, string> = useMemo(() => Object.fromEntries((data?.list ?? []).map((x: any) => [x.id, x.n])), [data]);
   if (!snap) return null;
-  const quotes = snap.quotes;
+  const listQ: Record<string, [number, number]> = Object.fromEntries((data?.list ?? []).map((x: any) => [x.id, [x.p, x.ch]]));
+  const quotes: Record<string, [number, number]> = { ...listQ, ...snap.quotes };
   const watch = (data?.watchlist ?? []).filter((w: string) => quotes[w]);
-  const movers = Object.entries(quotes).filter(([k]) => !k.startsWith("OPT-") && !k.startsWith("IDX")).sort((a, b) => b[1][1] - a[1][1]);
+  const movers: [string, [number, number]][] = (data?.list ?? []).filter((x: any) => x.c === "action" && !x.halted).map((x: any) => [x.id, quotes[x.id]] as [string, [number, number]]).sort((a: [string, [number, number]], b: [string, [number, number]]) => b[1][1] - a[1][1]);
   const results = q.length >= 1 ? (data?.list ?? []).filter((x: any) => x.id.toLowerCase().includes(q.toLowerCase()) || x.n.toLowerCase().includes(q.toLowerCase())).slice(0, 8) : [];
   const Row = ({ id }: { id: string }) => <button onClick={() => setSel(id)} className={`grid w-full grid-cols-[1fr_auto_64px] gap-2 rounded px-2 py-1 text-left text-xs hover:bg-ink-800 ${sel === id ? "bg-ink-700" : ""}`}><span className="truncate"><b>{id}</b> <span className="text-ink-400">{names[id] ?? ""}</span></span><span className="num">{fmtPx(quotes[id][0])}</span><span className="text-right"><Change v={quotes[id][1]} /></span></button>;
   return <>

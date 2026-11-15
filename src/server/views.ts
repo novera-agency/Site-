@@ -3,7 +3,7 @@ import type { GameState } from "@/engine/types";
 import { REGIMES } from "@/engine/regimes";
 import { accountEquity, positionViews, exposures, valueAtRisk, performance, marginRequirement, cashEur, lockedMarginEur, structuredValueEur } from "@/engine/portfolio";
 import { cashBalances, accountEntries, trialBalance, isBalanced } from "@/engine/ledger";
-import { quoteBook, marketStatus, bondYield, optionIV, rateFor, dividendYield, baseVol, advNotionalEur } from "@/engine/market";
+import { quoteBook, marketStatus, bondYield, optionIV, rateFor, dividendYield, baseVol, advNotionalEur, trackedSet } from "@/engine/market";
 import { bondPriceFromYield, blackScholes } from "@/engine/pricing";
 import { listExpiries, strikeGrid, optionId, optionable, buyingPower, canTradeOnDesk } from "@/engine/orders";
 import { tutorialChecklist, wealth, CHALLENGES } from "@/engine/engine";
@@ -19,7 +19,7 @@ import { vixLike } from "@/engine/macro";
 import { relationStatus } from "@/engine/relations";
 import { BANKS, BANK_BY_ID, TRACKS, BASE_SALARY } from "@/engine/data/banks";
 import { LESSONS } from "@/engine/data/learning";
-import { skillLevel, SKILL_LEVELS, SKILL_NAMES, REP_NAMES, avgRep, toEur, multiplier } from "@/engine/core";
+import { skillLevel, SKILL_LEVELS, SKILL_NAMES, REP_NAMES, avgRep, toEur, multiplier, fx } from "@/engine/core";
 import { dayIndex, MIN_PER_DAY, fmtDate, useEpoch } from "@/engine/time";
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
@@ -62,8 +62,9 @@ export function nextSteps(s: GameState) {
 export function snapshot(s: GameState, aiAvailable = false) {
   useEpoch(s);
   const quotes: Record<string, [number, number]> = {};
+  const tracked = trackedSet(s);
   for (const [id, d] of Object.entries(s.instruments)) {
-    if (d.option && !s.watchlist.includes(id) && !Object.values(s.accounts).some((a) => a.positions[id])) continue;
+    if ((d.option || d.lite) && !tracked.has(id)) continue;
     const q = s.quotes[id];
     quotes[id] = [px(q.price), q.prevClose ? r2((q.price / q.prevClose - 1) * 100) : 0];
   }
@@ -107,7 +108,7 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
         missions: s.missions.filter((m) => m.status === "active").slice(0, 5).map((m) => ({ ...m, giverInfo: person(s, m.giver), guide: missionGuide(s, m) })),
         news: s.news.slice(0, 6), messages: s.messages.slice(0, 4),
         calendar: s.calendar.filter((c) => c.day === day || c.day === day + 1).slice(0, 10),
-        indices: ["IDX-EU", "IDX-US", "IDX-AS", "IDX-WD", "EURUSD", "BRENT", "GOLD", "AURC", "DE10Y", "US10Y"].filter((x) => s.instruments[x]).map((id) => quoteLite(s, id)),
+        indices: ["IDX-US5", "IDX-FR", "IDX-DE", "IDX-UK", "IDX-JP", "IDX-EU", "IDX-US", "IDX-AS", "IDX-WD", "EURUSD", "BRENT", "GOLD", "AURC", "DE10Y", "US10Y"].filter((x) => s.instruments[x]).map((id) => quoteLite(s, id)),
         macro: Object.values(s.macro.zones).map((z) => ({ id: z.id, name: z.name, growth: r2(z.growth), inflation: r2(z.inflation), rate: z.policyRate, y10: r2(z.y10), unemployment: r2(z.unemployment) })),
         regime: { id: s.macro.regime, ...REGIMES[s.macro.regime], since: s.macro.regimeSinceDay }, riskAversion: r2(s.macro.riskAversion), liquidity: r2(s.macro.liquidity), vix: vixLike(s),
         crises: s.crises.filter((c) => !c.resolved).map((c) => ({ ...c, label: CRISIS_LABELS[c.kind] })),
@@ -118,7 +119,7 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
       };
     }
     case "search": {
-      const list = Object.values(s.instruments).filter((d) => !d.option).map((d) => ({ ...quoteLite(s, d.id), country: d.country, liq: d.liquidity, desk: s.mode === "carriere" ? canTradeOnDesk(s, d).ok : true }));
+      const list = Object.values(s.instruments).filter((d) => !d.option).map((d) => ({ ...quoteLite(s, d.id), country: d.country, liq: d.liquidity, cap: d.cls === "action" ? r2(fx(s, s.quotes[d.id].price * (d.shares ?? 0), d.currency, "USD") / 1000) : null, halted: !!s.quotes[d.id].halted, desk: s.mode === "carriere" ? canTradeOnDesk(s, d).ok : true }));
       return { list, watchlist: s.watchlist };
     }
     case "instrument": {

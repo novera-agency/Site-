@@ -9,7 +9,7 @@ import { Rng } from "./rng";
 import { REGIMES, EQUITY_DURATION } from "./regimes";
 import { isSessionOpen, stepYearFraction, dayIndex, MIN_PER_DAY, STEP_MIN, SESSIONS, type SessionId, minuteOfDay, isWeekend, EPOCH_UTC } from "./time";
 import { bondPriceFromYield, zoneYield, blackScholes, modelIV, futurePrice } from "./pricing";
-import { fx, multiplier, toEur } from "./core";
+import { fx, multiplier, toEur, usdValue } from "./core";
 import { histActive, targetLog, steer, fxLogAt, spreadTarget } from "./historical";
 
 export const CUR_ZONE: Record<Currency, ZoneId> = { EUR: "EZ", USD: "US", GBP: "UK", JPY: "JP", CHF: "EZ", CNY: "CN", CAD: "US", AUD: "EM" };
@@ -100,13 +100,16 @@ export function shockFx(s: GameState, cur: Currency, logRet: number) {
   s.macro.factors[key] = (s.macro.factors[key] ?? 0) + logRet;
 }
 
-function updateBars(q: InstrumentState, t: number, price: number, vol: number, dayStart: boolean) {
+/** Nombre de séances conservées pour les valeurs de l'univers étendu */
+export const LITE_DAILY = 130;
+function updateBars(q: InstrumentState, t: number, price: number, vol: number, dayStart: boolean, lite = false) {
   const day = dayIndex(t);
   if (dayStart || q.lastBarDay !== day) {
     if (q.lastBarDay !== day) {
       q.prevClose = q.daily.length ? q.daily[q.daily.length - 1].c : price;
       q.daily.push({ t: day * MIN_PER_DAY, o: price, h: price, l: price, c: price, v: 0 });
-      if (q.daily.length > 520) q.daily.splice(0, q.daily.length - 520);
+      const cap = lite ? LITE_DAILY : 520;
+      if (q.daily.length > cap) q.daily.splice(0, q.daily.length - cap);
       q.lastBarDay = day;
       q.dayOpen = price; q.dayHigh = price; q.dayLow = price; q.dayVolume = 0;
     }
@@ -114,6 +117,7 @@ function updateBars(q: InstrumentState, t: number, price: number, vol: number, d
   const b = q.daily[q.daily.length - 1];
   b.c = price; b.h = Math.max(b.h, price); b.l = Math.min(b.l, price); b.v += vol;
   q.dayHigh = b.h; q.dayLow = b.l; q.dayVolume = b.v;
+  if (lite) { if (q.intraday.length) q.intraday = []; return; } // barres 15 min seulement pour les valeurs suivies
   const bt = Math.floor(t / 15) * 15;
   const ib = q.intraday[q.intraday.length - 1];
   if (!ib || ib.t !== bt) {
@@ -139,10 +143,48 @@ export function fairValue(s: GameState, d: InstrumentDef) {
   return q.eps! * d.fairPE! * Math.exp((-dur * (z.y10 - y0)) / 100) * sentiment * (1 - q.stress * 0.8);
 }
 
+/** Listes d'instruments par catégorie, mises en cache (invalidées quand un instrument est créé ou supprimé) */
+interface Cats { stocks: { d: InstrumentDef; q: InstrumentState }[]; bonds: InstrumentDef[]; baskets: InstrumentDef[]; derivs: InstrumentDef[]; fx: InstrumentDef[]; commo: InstrumentDef[]; crypto: InstrumentDef[] }
+const catCache = new WeakMap<object, Cats>();
+export function invalidateInstruments(s: GameState) { catCache.delete(s.instruments); }
+export function catsOf(s: GameState): Cats {
+  let c = catCache.get(s.instruments);
+  if (!c || (c.stocks.length && c.stocks[0].q !== s.quotes[c.stocks[0].d.id])) {
+    const all = Object.values(s.instruments);
+    c = { stocks: all.filter((d) => d.cls === "action").map((d) => ({ d, q: s.quotes[d.id] })), bonds: all.filter((d) => d.cls === "obligation"), baskets: all.filter((d) => !!d.basket), derivs: all.filter((d) => !!(d.future || d.option)), fx: all.filter((d) => d.cls === "devise"), commo: all.filter((d) => d.cls === "matiere"), crypto: all.filter((d) => d.cls === "crypto") };
+    catCache.set(s.instruments, c);
+  }
+  return c;
+}
+export function stocksOf(s: GameState) { return catsOf(s).stocks; }
+/** Membres d'un panier résolus une fois pour toutes (cotation, devise, multiplicateur) */
+const basketCache = new WeakMap<object, { w: number; q: InstrumentState; cur: Currency; mult: number }[]>();
+function basketOf(s: GameState, d: InstrumentDef) {
+  let l = basketCache.get(d.basket!);
+  if (!l || l.some((x, i) => x.w !== d.basket![i].w) || (l.length && l[0].q !== s.quotes[d.basket![0].id])) {
+    l = d.basket!.map((m) => { const md = s.instruments[m.id]; return { w: m.w, q: s.quotes[m.id], cur: md.currency, mult: md.cls === "action" ? 1 : multiplier(md) }; });
+    basketCache.set(d.basket!, l);
+  }
+  return l;
+}
+/** Instruments « suivis » par le joueur (liste de surveillance, positions, ordres) : historique complet même pour l'univers étendu */
+let trackedKey = "", trackedCache = new Set<string>();
+export function trackedSet(s: GameState) {
+  const key = `${s.seed}|${s.watchlist.length}|${s.orders.length}|${Object.values(s.accounts).reduce((a, x) => a + Object.keys(x.positions).length, 0)}|${s.missions.length}`;
+  if (key !== trackedKey) {
+    trackedKey = key;
+    trackedCache = new Set<string>(s.watchlist);
+    for (const a of Object.values(s.accounts)) for (const id of Object.keys(a.positions)) trackedCache.add(id);
+    for (const o of s.orders) if (o.status === "en_attente" || o.status === "partiel") trackedCache.add(o.instrumentId);
+    for (const m of s.missions) if (m.status === "active" && typeof m.params.instrument === "string") trackedCache.add(m.params.instrument);
+  }
+  return trackedCache;
+}
 /** Avance le marché d'un pas de 5 minutes */
 export function stepMarket(s: GameState, rng: Rng, dyByZone: Partial<Record<ZoneId, number>>) {
   const t = s.t;
   const hist = histActive(s);
+  const tracked = trackedSet(s);
   const reg = REGIMES[s.macro.regime];
   const zG = rng.normal();
   const open: Record<SessionId, boolean> = { EU: isSessionOpen("EU", t), US: isSessionOpen("US", t), ASIA: isSessionOpen("ASIA", t), FX: isSessionOpen("FX", t), CRYPTO: isSessionOpen("CRYPTO", t), COMMO: isSessionOpen("COMMO", t) };
@@ -157,8 +199,8 @@ export function stepMarket(s: GameState, rng: Rng, dyByZone: Partial<Record<Zone
   const zoneGap: Partial<Record<ZoneId, number>> = {};
   if (hist) {
     const sp: Record<string, number> = {}, st: Record<string, number> = {};
-    for (const d of Object.values(s.instruments)) {
-      if (d.cls !== "action" || s.quotes[d.id].defaulted) continue;
+    for (const { d, q: sq0 } of catsOf(s).stocks) {
+      if (sq0.defaulted || sq0.halted) continue;
       const L = targetLog(s, d.id, t); if (L === null) continue;
       const w = d.shares ?? 1;
       sp[d.zone] = (sp[d.zone] ?? 0) + w * s.quotes[d.id].price; st[d.zone] = (st[d.zone] ?? 0) + w * Math.exp(L);
@@ -166,12 +208,14 @@ export function stepMarket(s: GameState, rng: Rng, dyByZone: Partial<Record<Zone
     for (const z of Object.keys(sp) as ZoneId[]) zoneGap[z] = Math.log(sp[z] / st[z]);
   }
   const rho = Math.sqrt(reg.corr);
-  for (const d of Object.values(s.instruments)) {
-    if (d.cls !== "action") continue;
+  const yf: Partial<Record<SessionId, number>> = {};
+  for (const { d, q } of stocksOf(s)) {
     if (!open[d.session]) continue;
-    const q = s.quotes[d.id];
     if (q.halted || q.defaulted) continue;
-    const dt = stepYearFraction(d.session), sq = Math.sqrt(dt);
+    // Univers étendu non suivi : mise à jour toutes les 30 minutes (pas sextuple) pour alléger le calcul
+    const slow = d.lite && !tracked.has(d.id);
+    if (slow && Math.floor(t / STEP_MIN) % 6 !== 0) continue;
+    const dt = (yf[d.session] ?? (yf[d.session] = stepYearFraction(d.session))) * (slow ? 6 : 1), sq = Math.sqrt(dt);
     const fZone = sigM * sq * (rho * zG + Math.sqrt(1 - reg.corr) * (zoneZ[d.zone] ?? 0));
     const fSec = sigS * sq * (secZ[d.sector!] ?? 0);
     const volEff = d.vol * reg.volMult * (1 + 0.5 * q.ivBump) * (1 + 1.5 * q.stress);
@@ -189,7 +233,7 @@ export function stepMarket(s: GameState, rng: Rng, dyByZone: Partial<Record<Zone
       : (drift + mr - 0.5 * volEff * volEff) * dt + d.beta * fZone + (d.sectorBeta ?? 0.8) * fSec + idio * sq * rng.normal() + rateEff + releasePending(q);
     q.price = Math.max(0.01, q.price * Math.exp(ret));
     const vol = (d.shares! * 1e6 * 0.004 * d.liquidity * STEP_MIN) / (SESSIONS[d.session].close - SESSIONS[d.session].open) * (0.5 + Math.abs(ret) / (volEff * sq + 1e-9));
-    updateBars(q, t, q.price, Math.round(vol), false);
+    updateBars(q, t, q.price, Math.round(vol), false, !!d.lite && !tracked.has(d.id));
   }
   // Devises (log-valeur vs USD)
   if (open.FX) {
@@ -207,8 +251,7 @@ export function stepMarket(s: GameState, rng: Rng, dyByZone: Partial<Record<Zone
       if (hist) s.macro.fxLog[cur] += steer(s, `fx_${cur}`, fxLogAt(cur, t / MIN_PER_DAY + EPOCH_UTC / 86400000), s.macro.fxLog[cur], 10, dt) + FX_VOL[cur] * 0.7 * reg.volMult ** 0.5 * sq * rng.normal() + rel;
       else s.macro.fxLog[cur] += (carry + haven) * dt + FX_VOL[cur] * reg.volMult ** 0.5 * sq * rng.normal() + rel;
     }
-    for (const d of Object.values(s.instruments)) {
-      if (d.cls !== "devise") continue;
+    for (const d of catsOf(s).fx) {
       const base = d.id.slice(0, 3) as Currency, quote = d.id.slice(3) as Currency;
       const q = s.quotes[d.id];
       q.price = Math.exp(s.macro.fxLog[base] - s.macro.fxLog[quote]);
@@ -219,8 +262,7 @@ export function stepMarket(s: GameState, rng: Rng, dyByZone: Partial<Record<Zone
   if (open.COMMO) {
     const dt = stepYearFraction("COMMO"), sq = Math.sqrt(dt);
     const zC = rng.normal();
-    for (const d of Object.values(s.instruments)) {
-      if (d.cls !== "matiere") continue;
+    for (const d of catsOf(s).commo) {
       const q = s.quotes[d.id];
       const anchor = s.macro.factors[`anchor_${d.id}`] ?? q.price;
       const isEnergy = d.id === "BRENT" || d.id === "WTI" || d.id === "NGAS";
@@ -242,8 +284,7 @@ export function stepMarket(s: GameState, rng: Rng, dyByZone: Partial<Record<Zone
     const dt = stepYearFraction("CRYPTO"), sq = Math.sqrt(dt);
     const zK = rng.normal();
     const jump = rng.chance(0.0015) ? rng.normal() * 0.06 : 0;
-    for (const d of Object.values(s.instruments)) {
-      if (d.cls !== "crypto") continue;
+    for (const d of catsOf(s).crypto) {
       const q = s.quotes[d.id];
       if (q.halted) continue;
       const volEff = d.vol * (0.8 + 0.2 * reg.volMult) * (1 + 0.5 * q.ivBump);
@@ -265,28 +306,27 @@ export function stepMarket(s: GameState, rng: Rng, dyByZone: Partial<Record<Zone
 /** Recalcule les instruments dérivés : obligations, ETF, indices, futures, options */
 export function refreshDerived(s: GameState, rng: Rng | null, open?: Record<SessionId, boolean>) {
   const t = s.t, day = dayIndex(t);
+  const usd: Partial<Record<Currency, number>> = {};
   const isOpenS = (ses: SessionId) => (open ? open[ses] : isSessionOpen(ses, t));
-  for (const d of Object.values(s.instruments)) {
-    if (d.cls === "obligation") {
+  for (const d of catsOf(s).bonds) {
+    {
       if (!isOpenS(d.session) && open) continue;
       const q = s.quotes[d.id];
       q.price = bondPrice(s, d, day);
       if (open) updateBars(q, t, q.price, Math.round(advUnits(s, d.id) / 102), false);
     }
   }
-  for (const d of Object.values(s.instruments)) {
-    if (!d.basket || (open && !isOpenS(d.session))) continue;
+  for (const d of catsOf(s).baskets) {
+    if (open && !isOpenS(d.session)) continue;
     let v = 0;
-    for (const m of d.basket) {
-      const md = s.instruments[m.id];
-      v += m.w * s.quotes[m.id].price * multiplier(md) * fx(s, 1, md.currency, d.currency);
-    }
+    const den = usd[d.currency] ?? (usd[d.currency] = usdValue(s, d.currency));
+    for (const m of basketOf(s, d)) v += m.w * m.q.price * m.mult * (usd[m.cur] ?? (usd[m.cur] = usdValue(s, m.cur)));
+    v /= den;
     const q = s.quotes[d.id];
     q.price = v;
     if (open) updateBars(q, t, v, d.cls === "indice" ? 0 : Math.round(advUnits(s, d.id) / 102), false);
   }
-  for (const d of Object.values(s.instruments)) {
-    if (!d.future && !d.option) continue;
+  for (const d of catsOf(s).derivs) {
     const q = s.quotes[d.id];
     if (q.defaulted) continue;
     const und = d.option?.underlying ?? d.future!.underlying;

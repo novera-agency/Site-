@@ -7,6 +7,8 @@ Deux époques au choix :
 - **2000 → 2025, l'histoire réelle** (par défaut) : départ le 3 janvier 2000. Les vrais événements sont publiés à leur date (bulle Internet, 11 septembre, Enron, guerre d'Irak, subprimes, Lehman Brothers, crise de l'euro, Fukushima, Brexit, élections françaises et américaines, Covid, guerre en Ukraine, inflation 2022, SVB, droits de douane 2025…). Les banques centrales appliquent leurs décisions réelles. Les indices, matières premières, changes et taux suivent leurs trajectoires réelles, **reconstituées de façon approchée** (repères de fin d'année et points de retournement, voir `src/engine/data/history2000.ts`), avec la volatilité du modèle par-dessus : ce ne sont pas des cours officiels. À partir de 2026, le marché redevient simulé.
 - **2027, monde imaginaire** : marchés, crises et événements entièrement simulés.
 
+**Une cote de plus de 1 200 actions** (sociétés fictives) dans 13 pays et 12 secteurs : géants, valeurs moyennes et petites capitalisations, avec des fondamentaux cohérents par secteur (PER, marges, dividendes, endettement, volatilité, bêta). Indices AMERICA 100 / 500, PARIS 40, FRANKFURT 40, LONDON 100, TOKYO 100, EUROPA 50, ASIA PACIFIC, MONDE, et ETF nationaux, sectoriels et petites capitalisations. En mode historique, chaque valeur suit la trajectoire de son pays et de son secteur selon son bêta, et des sociétés s'introduisent en bourse au fil des années.
+
 ## Démarrage
 
 ```bash

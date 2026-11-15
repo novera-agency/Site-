@@ -1,0 +1,30 @@
+import { test, expect, type Page } from "@playwright/test";
+const BASE = process.env.E2E_BASE ?? "";
+const go = (page: Page, path: string) => page.goto(BASE + path);
+
+test("plus de 1 000 actions : recherche filtrée par pays et secteur, fiche d'une petite valeur", async ({ page }) => {
+  await go(page, "/");
+  await page.getByTestId("new-career").click();
+  await page.getByTestId("epoch-fictif").click();
+  await page.getByTestId("next").click();
+  await page.getByTestId("first-name").fill("Léa");
+  await page.getByTestId("last-name").fill("Cote");
+  for (let i = 0; i < 4; i++) await page.getByTestId("next").click();
+  await page.getByTestId("create").click();
+  await page.waitForURL(/\/play\/?$/);
+  await go(page, "/play/recherche");
+  const count = page.getByTestId("search-count");
+  await expect(count).toBeVisible({ timeout: 20000 });
+  const total = Number((await count.textContent())!.replace(/\D/g, ""));
+  expect(total).toBeGreaterThan(1000);
+  await page.getByTestId("search-country").selectOption("Japon");
+  await page.getByTestId("search-sector").selectOption("Automobile");
+  const n = Number((await count.textContent())!.replace(/\D/g, ""));
+  expect(n).toBeGreaterThan(3);
+  expect(n).toBeLessThan(40);
+  const first = page.locator("table tbody tr").first().locator("a");
+  const ticker = (await first.textContent())!;
+  await first.click();
+  await expect(page).toHaveURL(new RegExp(`id=${ticker}`));
+  await expect(page.getByText("Japon").first()).toBeVisible({ timeout: 15000 });
+});

@@ -97,63 +97,77 @@ export function fxLogAt(cur: Currency, a: number): number {
     case "CNY": return -Math.log(seriesAt("USDCNY", a));
   }
 }
-/** Ajustements sectoriels (log) par rapport à l'indice de la zone */
-function sectorLog(d: InstrumentDef, a: number): number {
-  switch (d.sector) {
-    case "Technologie": return (d.zone === "US" ? 1 : 0.6) * Math.log(seriesAt("EQ_TECH", a) / seriesAt("EQ_US", a));
-    case "Banque": return (d.zone === "EZ" ? 1 : 0.55) * Math.log(seriesAt("EQ_BANK", a) / seriesAt("EQ_EZ", a));
-    case "Assurance": return 0.35 * Math.log(seriesAt("EQ_BANK", a) / seriesAt("EQ_EZ", a));
-    case "Énergie": return 0.35 * Math.log(seriesAt("BRENT", a));
-    case "Matériaux": return 0.3 * Math.log(seriesAt("COPR", a));
-    default: return 0;
-  }
-}
 /**
- * Normalisation des ajustements sectoriels d'une zone : log de la moyenne pondérée (capitalisations de départ) des
- * rapports exp(A(t) − A(t0)). Ainsi la somme des capitalisations cibles de la zone suit exactement l'indice de référence.
+ * Trajectoire cible d'une action : log(indice de sa zone) + ajustement sectoriel + effet bêta − normalisation de zone.
+ * Tout ce qui ne dépend que de la date est calculé une fois par instant (« cadre »), puis chaque action n'ajoute que quelques opérations.
  */
-const meanCache = new Map<string, Record<string, number>>();
-function zoneMeanAdj(s: GameState, zone: ZoneId, a: number) {
-  const key = `${s.seed}|${s.createdAt}|${a}`;
-  let m = meanCache.get(key);
-  if (!m) {
-    const a0 = s.flags["histA0"] as number;
-    const num: Record<string, number> = {}, den: Record<string, number> = {};
-    for (const d of Object.values(s.instruments)) {
-      if (d.cls !== "action") continue;
-      const w = ((s.flags[`hp0_${d.id}`] as number) ?? 1) * (d.shares ?? 1);
-      num[d.zone] = (num[d.zone] ?? 0) + w * Math.exp(sectorLog(d, a) - sectorLog(d, a0)); den[d.zone] = (den[d.zone] ?? 0) + w;
-    }
-    m = {}; for (const z of Object.keys(num)) m[z] = Math.log(num[z] / den[z]);
-    if (meanCache.size > 8) meanCache.clear();
-    meanCache.set(key, m);
+type SecKey = "TECH_US" | "TECH_X" | "BANK_EZ" | "BANK_X" | "INS" | "NRG" | "MAT" | "NONE";
+function secKeyOf(d: InstrumentDef): SecKey {
+  switch (d.sector) {
+    case "Technologie": return d.zone === "US" ? "TECH_US" : "TECH_X";
+    case "Banque": return d.zone === "EZ" ? "BANK_EZ" : "BANK_X";
+    case "Assurance": return "INS";
+    case "Énergie": return "NRG";
+    case "Matériaux": return "MAT";
+    default: return "NONE";
   }
-  return m[zone] ?? 0;
 }
-/** log de la trajectoire cible d'une action (à une constante près) */
-function stockLog(s: GameState, d: InstrumentDef, a: number) { return Math.log(seriesAt(ZONE_EQ[d.zone], a)) + sectorLog(d, a) - (a === s.flags["histA0"] ? 0 : zoneMeanAdj(s, d.zone, a)); }
+interface Frame { logZ: Record<string, number>; sec: Record<SecKey, number>; mean: Record<string, number>; }
+interface StockInfo { d: InstrumentDef; w: number; sk: SecKey; bc: number; }
+const infoCache = new WeakMap<object, StockInfo[]>();
+function stockInfos(s: GameState): StockInfo[] {
+  let l = infoCache.get(s.instruments);
+  if (!l) {
+    l = Object.values(s.instruments).filter((d) => d.cls === "action").map((d) => ({ d, w: ((s.flags[`hp0_${d.id}`] as number) ?? 1) * (d.shares ?? 1), sk: secKeyOf(d), bc: 0.6 * ((d.beta ?? 1) - 1) }));
+    infoCache.set(s.instruments, l);
+  }
+  return l;
+}
+function rawFrame(a: number): Omit<Frame, "mean"> {
+  const logZ: Record<string, number> = {};
+  for (const [z, k] of Object.entries(ZONE_EQ)) logZ[z] = Math.log(seriesAt(k, a));
+  const tech = Math.log(seriesAt("EQ_TECH", a)) - logZ.US, bank = Math.log(seriesAt("EQ_BANK", a)) - logZ.EZ;
+  return { logZ, sec: { TECH_US: tech, TECH_X: 0.6 * tech, BANK_EZ: bank, BANK_X: 0.55 * bank, INS: 0.35 * bank, NRG: 0.35 * Math.log(seriesAt("BRENT", a)), MAT: 0.3 * Math.log(seriesAt("COPR", a)), NONE: 0 } };
+}
+const frameCache = new Map<string, Frame>();
+function frameOf(s: GameState, a: number): Frame {
+  const key = `${s.seed}|${s.createdAt}|${a}`;
+  let f = frameCache.get(key);
+  if (f) return f;
+  const a0 = s.flags["histA0"] as number;
+  const r = rawFrame(a);
+  const mean: Record<string, number> = {};
+  if (a !== a0) {
+    const r0 = a0 === undefined ? r : frameOf(s, a0);
+    const num: Record<string, number> = {}, den: Record<string, number> = {};
+    for (const x of stockInfos(s)) {
+      const z = x.d.zone;
+      const dA = (r.sec[x.sk] - r0.sec[x.sk]) + x.bc * (r.logZ[z] - r0.logZ[z]);
+      num[z] = (num[z] ?? 0) + x.w * Math.exp(dA); den[z] = (den[z] ?? 0) + x.w;
+    }
+    for (const z of Object.keys(num)) mean[z] = Math.log(num[z] / den[z]);
+  }
+  f = { ...r, mean };
+  if (frameCache.size > 5000) frameCache.clear();
+  frameCache.set(key, f);
+  return f;
+}
+function stockLogF(x: StockInfo, f: Frame) { const z = x.d.zone; return f.logZ[z] * (1 + x.bc) + f.sec[x.sk] - (f.mean[z] ?? 0); }
 
 /** Valeur cible (log) d'un instrument primaire à l'instant t, recalée sur son prix de départ */
-let tlKey = "";
-const tlCache = new Map<string, number | null>();
 const base0 = new Map<string, number>();
+const infoById = new WeakMap<object, Map<string, StockInfo>>();
 export function targetLog(s: GameState, id: string, t: number): number | null {
-  const key = `${s.seed}|${s.createdAt}|${t}`;
-  if (key !== tlKey) { tlKey = key; tlCache.clear(); }
-  const c = tlCache.get(id);
-  if (c !== undefined) return c;
-  const v = targetLogRaw(s, id, t);
-  tlCache.set(id, v);
-  return v;
-}
-function targetLogRaw(s: GameState, id: string, t: number): number | null {
   const d = s.instruments[id];
-  const a = absOf(t), a0 = s.flags["histA0"] as number;
+  const a = absOf(t);
   if (d.cls === "action") {
+    let m = infoById.get(s.instruments);
+    if (!m) { m = new Map(stockInfos(s).map((x) => [x.d.id, x])); infoById.set(s.instruments, m); }
+    const x = m.get(id)!;
     const bk = `${s.seed}|${s.createdAt}|${id}`;
     let b0 = base0.get(bk);
-    if (b0 === undefined) { b0 = Math.log(s.flags[`hp0_${id}`] as number) - stockLog(s, d, a0); if (base0.size > 2000) base0.clear(); base0.set(bk, b0); }
-    return b0 + stockLog(s, d, a);
+    if (b0 === undefined) { b0 = Math.log(s.flags[`hp0_${id}`] as number) - stockLogF(x, frameOf(s, s.flags["histA0"] as number)); if (base0.size > 20000) base0.clear(); base0.set(bk, b0); }
+    return b0 + stockLogF(x, frameOf(s, a));
   }
   if (d.cls === "matiere" && COMMO_KEY[id]) return Math.log(commoLevel(id, a));
   if (d.cls === "crypto" && CRYPTO_KEY[id]) return Math.log(seriesAt(CRYPTO_KEY[id], a));
@@ -187,6 +201,9 @@ export function histInitialPrices(t0: number, initialPrices: Record<string, numb
   for (const id of Object.keys(COMMO_KEY)) if (initialPrices[id] !== undefined) initialPrices[id] = commoLevel(id, a0);
   if (initialPrices["IDX-US"] !== undefined) initialPrices["IDX-US"] = seriesAt("EQ_US", a0);
   if (initialPrices["IDX-EU"] !== undefined) initialPrices["IDX-EU"] = seriesAt("EQ_EZ", a0);
+  // Niveaux de départ proches des indices réels début 2000 (CAC 40 ≈ 5 900, DAX ≈ 6 900, FTSE 100 ≈ 6 900, Nikkei ≈ 18 900)
+  const lv: Record<string, number> = { "IDX-US5": seriesAt("EQ_US", a0), "IDX-FR": 5900, "IDX-DE": 6900, "IDX-UK": seriesAt("EQ_UK", a0), "IDX-JP": seriesAt("EQ_JP", a0) };
+  for (const [k, v] of Object.entries(lv)) if (initialPrices[k] !== undefined) initialPrices[k] = v;
   for (const c of Object.keys(fxInit) as Currency[]) fxInit[c] = Math.exp(fxLogAt(c, a0));
 }
 
@@ -223,7 +240,7 @@ export function initHistorical(s: GameState) {
     d.name = d.name.replace(/\b20(2\d|3\d)\b/, (y) => String(Number(y) - (2027 - HIST_EPOCH)));
     d.description = (d.description ?? "").replace(/\b20(2\d|3\d)\b/g, (y) => String(Number(y) - (2027 - HIST_EPOCH))).replace(/coupon \d+\.\d+ %/, `coupon ${(b.couponRate * 100).toFixed(2)} %`);
   }
-  const note: Record<string, string> = { "IDX-US": " Suit approximativement le S&P 500.", "IDX-EU": " Suit approximativement l'Euro Stoxx 50 et le FTSE 100.", "IDX-AS": " Suit approximativement le Nikkei et le Hang Seng.", "IDX-WD": " Suit approximativement les grandes bourses mondiales." };
+  const note: Record<string, string> = { "IDX-US5": " Suit approximativement le S&P 500.", "IDX-FR": " Suit approximativement le CAC 40 (trajectoire de la zone euro).", "IDX-DE": " Suit approximativement le DAX (trajectoire de la zone euro).", "IDX-UK": " Suit approximativement le FTSE 100.", "IDX-JP": " Suit approximativement le Nikkei 225.", "IDX-US": " Suit approximativement le S&P 500.", "IDX-EU": " Suit approximativement l'Euro Stoxx 50 et le FTSE 100.", "IDX-AS": " Suit approximativement le Nikkei et le Hang Seng.", "IDX-WD": " Suit approximativement les grandes bourses mondiales." };
   for (const [id, n] of Object.entries(note)) if (s.instruments[id]) s.instruments[id].description = (s.instruments[id].description ?? "") + n;
   for (const [id, k] of Object.entries(CRYPTO_KEY)) {
     if (!s.instruments[id]) continue;
@@ -231,10 +248,28 @@ export function initHistorical(s: GameState) {
   }
   delete s.flags["scriptedCrisisDay"];
   s.flags["histEventIdx"] = 0;
+  // Introductions en bourse : une partie des petites valeurs (hors indices et ETF) n'est pas encore cotée en 2000
+  const inBasket = new Set<string>();
+  for (const d of Object.values(s.instruments)) for (const m of d.basket ?? []) inBasket.add(m.id);
+  const end = absDay(2024, 11, 31), ipos: [string, number][] = [];
+  for (const d of Object.values(s.instruments)) {
+    if (d.cls !== "action" || !d.lite || inBasket.has(d.id)) continue;
+    let h = 2166136261; for (const ch of d.id) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+    const f = (h >>> 0) / 4294967296;
+    const share = d.sector === "Technologie" || d.zone === "CN" || d.zone === "EM" ? 0.7 : 0.4;
+    if (f < share) ipos.push([d.id, Math.round(a0 + 30 + (f / share) * (end - a0 - 30))]);
+  }
+  ipos.sort((x, y) => x[1] - y[1]);
+  s.flags["histIpos"] = JSON.stringify(ipos);
+  s.flags["histIpoIdx"] = 0;
 }
 
 /** Après la reconstitution de l'historique : les cryptoactifs pas encore créés sont suspendus */
 export function histAfterHistory(s: GameState) {
+  for (const [id] of JSON.parse((s.flags["histIpos"] as string) ?? "[]") as [string, number][]) {
+    const q = s.quotes[id];
+    if (q) { q.halted = true; q.daily = []; q.intraday = []; }
+  }
   for (const id of Object.keys(CRYPTO_KEY)) {
     const q = s.quotes[id];
     if (!q) continue;
@@ -316,6 +351,22 @@ export function histDaily(s: GameState, setRegime: (s: GameState, r: RegimeId, c
       pushNews(s, { category: "marches", title: `Nouveau cryptoactif : ${s.instruments[id].name} commence à s'échanger`, body: `${s.instruments[id].description ?? ""} Premier cours : ${q.price < 1 ? q.price.toPrecision(2) : q.price.toFixed(2)} $.`, impact: "faible", tickers: [id], zones: [], sentiment: 0.2 });
     }
   }
+  // Introductions en bourse
+  const ipos = JSON.parse((s.flags["histIpos"] as string) ?? "[]") as [string, number][];
+  let ii = (s.flags["histIpoIdx"] as number) ?? 0;
+  while (ii < ipos.length && ipos[ii][1] <= a) {
+    const [id] = ipos[ii];
+    const d = s.instruments[id], q = s.quotes[id];
+    if (d && q && q.halted && !q.defaulted) {
+      const L = targetLog(s, id, s.t);
+      q.halted = false; q.price = L !== null ? Math.exp(L) : q.price; q.prevClose = q.dayOpen = q.dayHigh = q.dayLow = q.price;
+      delete s.macro.factors[`hl_${id}`];
+      const capM = q.price * (d.shares ?? 0);
+      pushNews(s, { category: "entreprises", title: `Introduction en bourse : ${d.name} fait ses débuts`, body: `${d.description ?? ""} Secteur ${d.sector?.toLowerCase()}, ${d.country}. Premier cours : ${q.price.toFixed(2)} ${d.currency}, soit une valorisation d'environ ${capM >= 1000 ? (capM / 1000).toFixed(1) + " milliard(s)" : Math.round(capM) + " millions"} de ${d.currency}.`, impact: "faible", tickers: [id], zones: [d.zone], sentiment: 0.2 });
+    }
+    ii++;
+  }
+  s.flags["histIpoIdx"] = ii;
   // Obligations arrivées à échéance : réémission d'une nouvelle souche (même durée, coupon au taux du marché)
   rollBonds(s);
 }

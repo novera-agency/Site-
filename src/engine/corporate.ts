@@ -20,7 +20,7 @@ export function initFundamentals(s: GameState, rng: Rng) {
     q.eps = (d.revenue! * d.margin!) / d.shares!;
     q.dividend = q.eps * d.payout!;
     q.nextEarningsDay = nextBusinessDay(today + rng.int(8, 75));
-    scheduleEarningsEvent(s, d, q.nextEarningsDay);
+    if (!d.lite) scheduleEarningsEvent(s, d, q.nextEarningsDay);
   }
 }
 function earningsMinute(d: InstrumentDef) { return d.session === "US" ? 22 * 60 + 5 : d.session === "ASIA" ? 7 * 60 + 45 : 7 * 60 + 30; }
@@ -29,7 +29,19 @@ function scheduleEarningsEvent(s: GameState, d: InstrumentDef, day: number) {
   s.calendar.push({ id: nextId(s, "cal"), day: nextBusinessDay(day + 21), minute: 8 * 60 + 45, title: `Détachement du dividende — ${d.name}`, kind: "dividende", ref: d.id, importance: 1 });
 }
 
-export function releaseEarnings(s: GameState, id: string, rng: Rng) {
+/** Univers étendu : publications et dividendes gérés sans encombrer le calendrier (actualité seulement si la valeur est suivie) */
+export function dailyLiteCorporate(s: GameState, rng: Rng, tracked: Set<string>) {
+  const day = dayIndex(s.t);
+  for (const d of Object.values(s.instruments)) {
+    if (!d.lite) continue;
+    const q = s.quotes[d.id];
+    if (q.halted || q.defaulted) continue;
+    if (q.nextEarningsDay !== undefined && q.nextEarningsDay <= day) releaseEarnings(s, d.id, rng, !tracked.has(d.id));
+    if (q.nextDivDay !== undefined && q.nextDivDay <= day) { q.nextDivDay = undefined; payDividend(s, d.id); }
+  }
+}
+
+export function releaseEarnings(s: GameState, id: string, rng: Rng, quiet = false) {
   const d = s.instruments[id], q = s.quotes[id];
   if (!d || !q || q.defaulted) return;
   const z = s.macro.zones[d.zone];
@@ -44,6 +56,11 @@ export function releaseEarnings(s: GameState, id: string, rng: Rng) {
   const reaction = surprise * 1.6 + rng.normal() * 0.015;
   applyShock(s, { kind: "instrument", id }, reaction, Math.abs(surprise) * 3, `Résultats ${d.name}`);
   const beat = surprise > 0.02 ? "supérieurs aux attentes" : surprise < -0.02 ? "inférieurs aux attentes" : "conformes aux attentes";
+  if (quiet || d.lite) {
+    q.nextEarningsDay = nextBusinessDay(dayIndex(s.t) + 91);
+    q.nextDivDay = nextBusinessDay(dayIndex(s.t) + 21);
+    if (quiet) return;
+  }
   const epsTxt = `BPA trimestriel ${(q.eps / 4).toFixed(2)} ${d.currency} (${surprise >= 0 ? "+" : ""}${(surprise * 100).toFixed(1)} % vs consensus)`;
   pushNews(s, {
     category: "entreprises",
@@ -51,8 +68,7 @@ export function releaseEarnings(s: GameState, id: string, rng: Rng) {
     body: `${epsTxt}. ${surprise > 0.04 ? "La direction relève ses perspectives annuelles." : surprise < -0.04 ? "La direction abaisse ses prévisions et évoque un environnement difficile." : "Les objectifs annuels sont confirmés."} Secteur : ${d.sector}, ${ZONE_NAMES[d.zone]}.`,
     impact: Math.abs(surprise) > 0.05 ? "fort" : Math.abs(surprise) > 0.02 ? "moyen" : "faible", tickers: [id], zones: [d.zone], sentiment: surprise * 10,
   });
-  q.nextEarningsDay = nextBusinessDay(dayIndex(s.t) + 91);
-  scheduleEarningsEvent(s, d, q.nextEarningsDay);
+  if (!d.lite) { q.nextEarningsDay = nextBusinessDay(dayIndex(s.t) + 91); scheduleEarningsEvent(s, d, q.nextEarningsDay); }
   // Résultats de l'employeur du joueur
   if (d.issuerOf && d.issuerOf === s.career.bankId && s.career.employed) {
     const bonusMood = surprise > 0.02 ? "L'enveloppe de bonus devrait progresser." : surprise < -0.02 ? "La direction annonce un plan d'économies : prudence sur les bonus." : "";

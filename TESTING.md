@@ -29,3 +29,6 @@ Pour tester l'édition navigateur : `BASE_PATH=/Site- npm run build:static`, ser
 | `tests/appel.test.ts` | Appel client parfait (montant investi), fautes successives → le client raccroche, messagerie → rappel planifié sans objectif ni pénalité. |
 | `tests/historique.test.ts` | Mode historique : départ le 3 janvier 2000 (taux Fed 5,5 %, BCE 3 %, euro ≈ 1 $, or ≈ 288 $, cryptoactifs pas encore créés, historique 1999 reconstitué) ; 140 jours simulés : hausse réelle de la Fed du 16 mai 2000, krach du Nasdaq publié, indice américain et Brent proches de leurs trajectoires, comptabilité équilibrée ; la sauvegarde conserve l'époque et une partie fictive reste en 2027. |
 | `tests/mission-terminal.test.ts` | Progression des missions recalculée après chaque action ; « premier ordre » non validé par les ordres automatiques. |
+| `tests/univers.test.ts` | Plus de 1 000 actions, tickers uniques, 13 pays, 12 secteurs, prix valides ; indices nationaux (500/40/40/100/100 valeurs) ; achat d'une petite valeur, sauvegarde < 5 Mo, définitions et clôtures restaurées au chargement. |
+| `e2e/univers.spec.ts` | Recherche : plus de 1 000 résultats, filtres pays + secteur, ouverture de la fiche d'une valeur. |
+| `e2e/historique.spec.ts` | Choix de l'époque, départ le 3 janvier 2000 ou le 4 janvier 2027, actualités et banques centrales réelles, date affichée dans le menu. |

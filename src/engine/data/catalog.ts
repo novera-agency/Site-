@@ -4,6 +4,7 @@
  */
 import type { Currency, InstrumentDef, Sector, ZoneId } from "../types";
 import type { SessionId } from "../time";
+import { generateUniverse } from "./universe";
 
 type Ctry = "FR" | "DE" | "NL" | "IT" | "ES" | "CH" | "UK" | "US" | "JP" | "CN" | "KR" | "IN" | "BR";
 const COUNTRY: Record<Ctry, { zone: ZoneId; cur: Currency; session: SessionId; label: string }> = {
@@ -180,6 +181,17 @@ export function buildCatalog(): Catalog {
     defs.push(d);
     initialPrices[d.id] = stockInitialPrice(d).price;
   }
+  // Univers étendu : plus de 1 100 sociétés fictives générées
+  const taken = new Set<string>([...STOCKS.map((r) => r[0]), ...BONDS.map((b) => b.id), ...FX.map((f) => f[0]), ...COMMODITIES.map((c) => c[0]), ...CRYPTO.map((c) => c[0]), "XWLD", "XUSA", "XEUR", "XEMG", "XTEC", "XNRG", "XBNK", "XAGG", "XHYD", "XGLD", "XCOM", "XFRA", "XDEU", "XGBR", "XJPN", "XSAN", "XSMC"]);
+  for (const g of generateUniverse(taken)) {
+    const d = { ...makeStock(g as unknown as Row), lite: true };
+    defs.push(d);
+    initialPrices[d.id] = stockInitialPrice(d).price;
+  }
+  const usdPer: Record<Currency, number> = Object.fromEntries(Object.entries(FX_INIT_LOG).map(([k, v]) => [k, Math.exp(v)])) as Record<Currency, number>;
+  const capUsd = (d: InstrumentDef) => initialPrices[d.id] * (d.shares ?? 0) * usdPer[d.currency];
+  const stocksByCap = defs.filter((d) => d.cls === "action").sort((a, b) => capUsd(b) - capUsd(a));
+  const top = (f: (d: InstrumentDef) => boolean, n: number) => stocksByCap.filter(f).slice(0, n).map((d) => d.id);
   for (const b of BONDS) { defs.push(b); initialPrices[b.id] = 100; }
   for (const [id, name, quote, vol, liq] of FX) {
     defs.push({ id, name, cls: "devise", currency: quote, session: "FX", zone: "US", vol, beta: 0, liquidity: liq, baseSpreadBps: liq > 0.9 ? 0.8 : 2, lot: 1000, description: `Paire de devises ${name}. Acheter ${id} = acheter ${id.slice(0, 3)} contre ${id.slice(3)}.` });
@@ -195,26 +207,39 @@ export function buildCatalog(): Catalog {
   // Indices et ETF (paniers) — pondérations déterminées à l'initialisation par capitalisation
   const sel = (f: (d: InstrumentDef) => boolean) => defs.filter((d) => d.cls === "action" && f(d)).map((d) => d.id);
   const indexSpecs: [string, string, string[], Currency, string][] = [
-    ["IDX-EU", "Indice EUROPA 50", sel((d) => d.zone === "EZ" || d.zone === "UK"), "EUR", "Indice des grandes capitalisations européennes (simulé)."],
-    ["IDX-US", "Indice AMERICA 100", sel((d) => d.zone === "US"), "USD", "Indice des grandes capitalisations américaines (simulé)."],
-    ["IDX-AS", "Indice ASIA PACIFIC", sel((d) => d.zone === "JP" || d.zone === "CN"), "USD", "Indice Asie-Pacifique (simulé)."],
-    ["IDX-WD", "Indice MONDE", sel(() => true), "USD", "Indice mondial toutes zones — benchmark du jeu."],
+    ["IDX-EU", "Indice EUROPA 50", top((d) => d.zone === "EZ" || d.zone === "UK", 50), "EUR", "Les 50 plus grandes capitalisations européennes (simulé)."],
+    ["IDX-US", "Indice AMERICA 100", top((d) => d.zone === "US", 100), "USD", "Les 100 plus grandes capitalisations américaines (simulé)."],
+    ["IDX-US5", "Indice AMERICA 500", top((d) => d.zone === "US", 500), "USD", "Les 500 plus grandes capitalisations américaines (simulé) — indice large du marché américain."],
+    ["IDX-FR", "Indice PARIS 40", top((d) => d.country === "France", 40), "EUR", "Les 40 plus grandes capitalisations françaises (simulé)."],
+    ["IDX-DE", "Indice FRANKFURT 40", top((d) => d.country === "Allemagne", 40), "EUR", "Les 40 plus grandes capitalisations allemandes (simulé)."],
+    ["IDX-UK", "Indice LONDON 100", top((d) => d.zone === "UK", 100), "GBP", "Les 100 plus grandes capitalisations britanniques (simulé)."],
+    ["IDX-JP", "Indice TOKYO 100", top((d) => d.zone === "JP", 100), "JPY", "Les 100 plus grandes capitalisations japonaises (simulé)."],
+    ["IDX-AS", "Indice ASIA PACIFIC", top((d) => d.zone === "JP" || d.zone === "CN", 60), "USD", "Les 60 plus grandes capitalisations du Japon et de Chine (simulé)."],
+    ["IDX-WD", "Indice MONDE", top(() => true, 500), "USD", "Les 500 plus grandes capitalisations mondiales — benchmark du jeu."],
   ];
+  const IDX_LEVEL: Record<string, number> = { "IDX-EU": 5000, "IDX-US": 6000, "IDX-US5": 6500, "IDX-FR": 8000, "IDX-DE": 24000, "IDX-UK": 9000, "IDX-JP": 45000, "IDX-AS": 3000, "IDX-WD": 4000 };
+  const IDX_SESSION: Record<Currency, SessionId> = { EUR: "EU", GBP: "EU", CHF: "EU", USD: "US", JPY: "ASIA", CNY: "ASIA", CAD: "US", AUD: "ASIA" };
   for (const [id, name, members, cur, desc] of indexSpecs) {
-    defs.push({ id, name, cls: "indice", currency: cur, session: id === "IDX-EU" ? "EU" : id === "IDX-AS" ? "ASIA" : "US", zone: id === "IDX-EU" ? "EZ" : "US", vol: 0, beta: 1, liquidity: 1, baseSpreadBps: 1, basket: members.map((m) => ({ id: m, w: 0 })), description: desc + " Non négociable directement : utilisez les ETF ou les futures." });
-    initialPrices[id] = id === "IDX-EU" ? 5000 : id === "IDX-US" ? 6000 : id === "IDX-AS" ? 3000 : 4000;
+    defs.push({ id, name, cls: "indice", currency: cur, session: id === "IDX-AS" ? "ASIA" : IDX_SESSION[cur], zone: cur === "EUR" ? "EZ" : cur === "GBP" ? "UK" : cur === "JPY" ? "JP" : "US", vol: 0, beta: 1, liquidity: 1, baseSpreadBps: 1, basket: members.map((m) => ({ id: m, w: 0 })), description: desc + ` ${members.length} valeurs. Non négociable directement : utilisez les ETF ou les futures.` });
+    initialPrices[id] = IDX_LEVEL[id];
   }
   const etfSpecs: [string, string, string[], Currency, string][] = [
-    ["XWLD", "ETF Monde Grandes Capitalisations", sel(() => true), "EUR", "Réplique l'indice MONDE (toutes actions du jeu, pondérées par la capitalisation)."],
-    ["XUSA", "ETF États-Unis 100", sel((d) => d.zone === "US"), "USD", "Réplique l'indice AMERICA 100."],
-    ["XEUR", "ETF Europe 50", sel((d) => d.zone === "EZ" || d.zone === "UK"), "EUR", "Réplique l'indice EUROPA 50."],
-    ["XEMG", "ETF Marchés émergents", sel((d) => d.zone === "EM" || d.zone === "CN"), "USD", "Actions des économies émergentes et de Chine."],
-    ["XTEC", "ETF Technologie mondiale", sel((d) => d.sector === "Technologie"), "USD", "Valeurs technologiques mondiales."],
-    ["XNRG", "ETF Énergie", sel((d) => d.sector === "Énergie"), "USD", "Producteurs d'énergie mondiaux."],
-    ["XBNK", "ETF Banques européennes", sel((d) => d.sector === "Banque" && (d.zone === "EZ")), "EUR", "Banques cotées de la zone euro et de Suisse."],
+    ["XWLD", "ETF Monde Grandes Capitalisations", top(() => true, 500), "EUR", "Réplique l'indice MONDE (500 plus grandes capitalisations)."],
+    ["XUSA", "ETF États-Unis 100", top((d) => d.zone === "US", 100), "USD", "Réplique l'indice AMERICA 100."],
+    ["XEUR", "ETF Europe 50", top((d) => d.zone === "EZ" || d.zone === "UK", 50), "EUR", "Réplique l'indice EUROPA 50."],
+    ["XFRA", "ETF France 40", top((d) => d.country === "France", 40), "EUR", "Réplique l'indice PARIS 40."],
+    ["XDEU", "ETF Allemagne 40", top((d) => d.country === "Allemagne", 40), "EUR", "Réplique l'indice FRANKFURT 40."],
+    ["XGBR", "ETF Royaume-Uni 100", top((d) => d.zone === "UK", 100), "GBP", "Réplique l'indice LONDON 100."],
+    ["XJPN", "ETF Japon 100", top((d) => d.zone === "JP", 100), "USD", "Réplique l'indice TOKYO 100."],
+    ["XEMG", "ETF Marchés émergents", top((d) => d.zone === "EM" || d.zone === "CN", 80), "USD", "Les 80 plus grandes valeurs émergentes et chinoises."],
+    ["XTEC", "ETF Technologie mondiale", top((d) => d.sector === "Technologie", 60), "USD", "Les 60 plus grandes valeurs technologiques mondiales."],
+    ["XSAN", "ETF Santé mondiale", top((d) => d.sector === "Santé", 50), "USD", "Les 50 plus grandes valeurs de la santé."],
+    ["XNRG", "ETF Énergie", top((d) => d.sector === "Énergie", 40), "USD", "Les 40 plus grands producteurs d'énergie mondiaux."],
+    ["XBNK", "ETF Banques européennes", top((d) => d.sector === "Banque" && d.zone === "EZ", 30), "EUR", "Les 30 plus grandes banques de la zone euro et de Suisse."],
+    ["XSMC", "ETF Petites capitalisations mondiales", stocksByCap.filter((d) => d.liquidity >= 0.4).slice(-200).map((d) => d.id), "USD", "200 petites valeurs liquides du monde entier : plus de croissance potentielle, plus de risque."],
   ];
   for (const [id, name, members, cur, desc] of etfSpecs) {
-    defs.push({ id, name, cls: "etf", currency: cur, session: cur === "EUR" ? "EU" : "US", zone: cur === "EUR" ? "EZ" : "US", vol: 0, beta: 1, liquidity: 0.95, baseSpreadBps: 3, basket: members.map((m) => ({ id: m, w: 0 })), description: desc });
+    defs.push({ id, name, cls: "etf", currency: cur, session: cur === "EUR" || cur === "GBP" ? "EU" : "US", zone: cur === "EUR" ? "EZ" : cur === "GBP" ? "UK" : "US", vol: 0, beta: 1, liquidity: 0.95, baseSpreadBps: 3, basket: members.map((m) => ({ id: m, w: 0 })), description: desc });
     initialPrices[id] = 100;
   }
   const bondEtf: [string, string, string[], string][] = [

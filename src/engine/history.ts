@@ -4,7 +4,7 @@ import { Rng } from "./rng";
 import { REGIMES } from "./regimes";
 import { MIN_PER_DAY, isWeekend } from "./time";
 import { multiplier, fx } from "./core";
-import { bondPrice, realizedVol } from "./market";
+import { bondPrice, realizedVol, LITE_DAILY } from "./market";
 
 /** Ajustement facultatif (mode historique) : rapport multiplicatif par instrument primaire, décalage logarithmique par devise */
 export interface HistoryAdjust { prim(id: string, day: number): number; fx(cur: Currency, day: number): number; }
@@ -102,6 +102,7 @@ export function simulateHistory(s: GameState, rng: Rng, startDay: number, nDays:
   }
   for (const def of Object.values(s.instruments)) {
     const q = s.quotes[def.id];
+    if (def.lite && q.daily.length > LITE_DAILY) q.daily = q.daily.slice(-LITE_DAILY);
     if (q.daily.length) { q.prevClose = q.daily[q.daily.length - 1].c; q.lastBarDay = dayOf(q.daily[q.daily.length - 1].t); }
     q.rv = realizedVol(q, 60, def.session === "CRYPTO" ? 365 : 252);
   }

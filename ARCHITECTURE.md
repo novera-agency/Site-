@@ -45,6 +45,7 @@ src/engine/        Moteur pur, déterministe, sans dépendance au navigateur ni 
   historical.ts    Mode historique 2000 → 2025 : guidage des cours vers des trajectoires approchées
                    (avance de la cible + rappel, correction collective par zone pour que l'indice suive),
                    décisions réelles des banques centrales, régimes et événements datés, réémission des obligations
+  data/universe.ts     Générateur déterministe de plus de 1 100 sociétés fictives (pays, secteurs, tailles, fondamentaux)
   data/history2000.ts  Repères de marché approchés, taux directeurs, macro annuelle, chronologie des événements
   engine.ts        Orchestration, création de partie, tutoriel, migrations de sauvegarde
 src/server/        Autorité serveur : sessions (auth.ts), persistance (store.ts), actions validées (actions.ts),
@@ -79,3 +80,10 @@ Un pas coûte ≈ 0,2 ms pour 117 instruments ; x100 = 20 pas/s. Les barres intr
 `time.ts` exprime le temps en minutes depuis le 1er janvier de l'année de départ (`epochYear` : 2027 par défaut, 2000 en mode historique).
 L'époque est un réglage de module : `useEpoch(s)` est appelé par `advance`, `applyAction`, `snapshot`, `buildView` et à la désérialisation ;
 le navigateur la reçoit avec chaque instantané (`epochYear`). Les listes de sauvegardes formatent les dates avec `fmtDateFor(t, epochYear)`.
+
+## Univers étendu (valeurs « lite »)
+Les sociétés générées portent `lite: true`. Tant que le joueur ne les suit pas (liste de surveillance, position, ordre, mission),
+elles sont recalculées toutes les 30 minutes simulées, ne conservent que 130 séances et pas de barres 15 minutes ;
+leurs publications et dividendes sont traités sans encombrer le calendrier. À la sauvegarde, seules leurs clôtures sont
+écrites et leurs définitions (déterministes) sont reconstruites au chargement. Les boucles du moteur utilisent des listes
+d'instruments par catégorie mises en cache (`catsOf`).

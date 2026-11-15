@@ -11,8 +11,8 @@ import { buildCatalog } from "./data/catalog";
 import { BANK_BY_ID } from "./data/banks";
 import { LESSON_BY_ID } from "./data/learning";
 import { initMacro, dailyMacro, stepYields, centralBankDecision, releaseStatistic, scheduleCalendar, updateConsensus, setRegime } from "./macro";
-import { newQuote, stepMarket, refreshDerived, realizedVol, applyShock } from "./market";
-import { initFundamentals, releaseEarnings, payDividend, dailyBonds } from "./corporate";
+import { newQuote, stepMarket, refreshDerived, realizedVol, applyShock, trackedSet } from "./market";
+import { initFundamentals, releaseEarnings, payDividend, dailyBonds, dailyLiteCorporate } from "./corporate";
 import { processOrders, checkMargins, processExpiries, dailyFuturesSettlement, listFutures, sweepNegativeCash } from "./orders";
 import { issueProducts, observeProduct, dailyStructured } from "./structured";
 import { maybeTriggerCrises, stepCrises, startCrisis } from "./crisis";
@@ -252,6 +252,7 @@ function newDay(s: GameState, rng: Rng) {
   if (!weekend) {
     dailyMacro(s, rng);
     dailyBonds(s, rng);
+    dailyLiteCorporate(s, rng, trackedSet(s));
     dailyCompetitors(s, rng);
     if (s.historical && histActive(s)) { const hc = histScriptedCrisis(s); if (hc) startCrisis(s, hc[1], rng, hc[2]); }
     else maybeTriggerCrises(s, rng);

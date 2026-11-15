@@ -7,7 +7,7 @@ import type { Account, Currency, GameState, InstrumentDef, Order, OrderType, Pos
 import { cashAcc, cashOf, marginAcc, post, bal } from "./ledger";
 import { toCents, mulToCents } from "./money";
 import { fx, multiplier, nextId, notify, gainXp, toEur, logDecision } from "./core";
-import { quoteBook, isOpen, advUnits, baseVol, refreshDerived } from "./market";
+import { quoteBook, isOpen, advUnits, baseVol, refreshDerived, invalidateInstruments } from "./market";
 import { accountEquity, marginRequirement, cashEur } from "./portfolio";
 import { ACCESS_BY_RANK, TRACKS } from "./data/banks";
 import { dayIndex, MIN_PER_DAY, thirdFriday, dateOf, fmtShortDate, SESSIONS, startOfDay } from "./time";
@@ -337,6 +337,7 @@ export function ensureOption(s: GameState, id: string): { ok: true } | { ok: fal
   if (!(strike > 0) || !grid.some((k) => Math.abs(k - strike) / strike < 1e-6)) return { ok: false, error: "Prix d'exercice non listé." };
   const type = t === "C" ? "call" : "put";
   const mult = ud.cls === "indice" ? 10 : 100;
+  invalidateInstruments(s);
   s.instruments[id] = { id, name: `${type === "call" ? "Call" : "Put"} ${ud.name} ${strike} ${fmtShortDate(expiryDay * MIN_PER_DAY)}`, cls: "option", currency: ud.currency, session: ud.session, zone: ud.zone, vol: 0, beta: 0, liquidity: 0.5, baseSpreadBps: 120, option: { underlying: und, type, strike, expiryDay, multiplier: mult }, description: `Option européenne ${type} sur ${ud.name}, prix d'exercice ${strike}, échéance ${fmtShortDate(expiryDay * MIN_PER_DAY)}, multiplicateur ${mult}. Règlement en espèces à l'échéance.` };
   s.quotes[id] = { price: 0, prevClose: 0, dayOpen: 0, dayHigh: 0, dayLow: 0, dayVolume: 0, ivBump: 0, stress: 0, daily: [], intraday: [], pending: 0, rv: 0, lastBarDay: -1 };
   refreshDerived(s, null);
@@ -358,6 +359,7 @@ export function listFutures(s: GameState) {
     const id = `${spec.root}${MONTH_CODES[dt.getUTCMonth()]}${String(dt.getUTCFullYear()).slice(2)}`;
     if (s.instruments[id]) continue;
     const ud = s.instruments[spec.underlying];
+    invalidateInstruments(s);
     s.instruments[id] = { id, name: `${spec.name} ${fmtShortDate(exp * MIN_PER_DAY).slice(3)}`, cls: "future", currency: ud.currency, session: ud.session, zone: ud.zone, vol: 0, beta: 0, liquidity: 0.95, baseSpreadBps: 1, future: { underlying: spec.underlying, expiryDay: exp, multiplier: spec.multiplier, marginPct: spec.marginPct }, description: `Contrat à terme sur ${ud.name}. Multiplicateur ${spec.multiplier}, dépôt de garantie ${(spec.marginPct * 100).toFixed(0)} % du notionnel, appels de marge quotidiens, règlement en espèces le ${fmtShortDate(exp * MIN_PER_DAY)}.` };
     s.quotes[id] = { price: 0, prevClose: 0, dayOpen: 0, dayHigh: 0, dayLow: 0, dayVolume: 0, ivBump: 0, stress: 0, daily: [], intraday: [], pending: 0, rv: 0, lastBarDay: -1 };
   }
@@ -415,7 +417,7 @@ export function processExpiries(s: GameState) {
       delete acc.positions[d.id];
     }
     for (const o of s.orders) if (o.instrumentId === d.id && (o.status === "en_attente" || o.status === "partiel")) { o.status = "expire"; o.updatedT = s.t; }
-    delete s.instruments[d.id]; delete s.quotes[d.id];
+    delete s.instruments[d.id]; delete s.quotes[d.id]; invalidateInstruments(s);
     s.watchlist = s.watchlist.filter((w) => w !== d.id);
   }
   listFutures(s);

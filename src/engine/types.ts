@@ -45,6 +45,8 @@ export interface InstrumentDef {
   risks?: string[];
   outlook?: string;
   issuerOf?: string;     // id de banque concurrente si la société est une banque du jeu
+  /** Valeur de l'univers étendu (stockage allégé : historique court, pas de barres 15 min sauf si suivie) */
+  lite?: boolean;
   // Obligations
   bond?: { issuer: string; couponRate: number; maturityDay: number; freq: 1 | 2 | 4; floating?: boolean; rating: string; gov: boolean; nominal: number; issuerStock?: string; spreadBps: number };
   // ETF / indices
@@ -75,6 +77,7 @@ export interface InstrumentState {
   intraday: Bar[];      // barres 15 minutes (fenêtre glissante)
   lastEarningsDay?: number;
   nextEarningsDay?: number;
+  nextDivDay?: number;
   halted?: boolean;
   pending: number;      // rendement log en attente d'intégration (chocs d'actualité)
   rv: number;           // volatilité réalisée 60 j (annualisée)
