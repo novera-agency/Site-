@@ -12,6 +12,7 @@ test("plus de 1 000 actions : recherche filtrée par pays et secteur, fiche d'un
   for (let i = 0; i < 4; i++) await page.getByTestId("next").click();
   await page.getByTestId("create").click();
   await page.waitForURL(/\/play\/?$/);
+  await expect(page.getByText("lundi 4 janvier 2027").first()).toBeVisible({ timeout: 15000 });
   await go(page, "/play/recherche");
   const count = page.getByTestId("search-count");
   await expect(count).toBeVisible({ timeout: 20000 });
