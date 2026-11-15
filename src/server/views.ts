@@ -21,14 +21,14 @@ import { relationStatus } from "@/engine/relations";
 import { BANKS, BANK_BY_ID, TRACKS, BASE_SALARY } from "@/engine/data/banks";
 import { LESSONS } from "@/engine/data/learning";
 import { skillLevel, SKILL_LEVELS, SKILL_NAMES, REP_NAMES, avgRep, toEur, multiplier, fx } from "@/engine/core";
-import { dayIndex, MIN_PER_DAY, fmtDate, useEpoch, isWeekend } from "@/engine/time";
+import { dayIndex, MIN_PER_DAY, fmtDate, useEpoch, isWeekend, minuteOfDay } from "@/engine/time";
 import { appreciation } from "@/engine/missions";
 import { canCall } from "@/engine/prospects";
 import { CHAPTERS, ACHIEVEMENTS, currentChapter, careerScore, endingAvailable, ENDINGS } from "@/engine/progression";
 import { wealthOf } from "@/engine/wealth";
 import { quizState, quizBatch, quizToday, quizById, quizCorrectCount, QUIZ_TOTALS, QUIZ_TOTAL, type QuizCat } from "@/engine/quiz";
 import { CITIES, CITY_BY_ID, TYPE_NAME, COND_NAME, marketValue, marketRent, rentCap, rentProbability, saleProbability, cityPrice, cityRent, listings, propertiesEquity, loanBurden } from "@/engine/realestate";
-import { payslip, monthlyBills, freeHours, priceLevel, HOUSING, HOUSING_BY_ID, rentOf, priceOf, housingEquity, mortgageRate, TRANSPORT, SUBS, ACTIVITIES } from "@/engine/life";
+import { payslip, monthlyBills, freeHours, activityBlocked, WORK_END_MIN, priceLevel, HOUSING, HOUSING_BY_ID, rentOf, priceOf, housingEquity, mortgageRate, TRANSPORT, SUBS, ACTIVITIES } from "@/engine/life";
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
 const px = (x: number) => (Math.abs(x) >= 1000 ? Math.round(x * 100) / 100 : Number(x.toPrecision(6)));
@@ -285,7 +285,7 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
         offers: HOUSING.map((h) => ({ ...h, rentNow: rentOf(s, h.id), priceNow: priceOf(s, h.id) })), mortgageRate: mortgageRate(s), city: BANK_BY_ID[s.career.bankId]?.city,
         transport: l.transport, transports: Object.entries(TRANSPORT).map(([id, x]) => ({ id, ...x, cost: Math.round(x.cost * k) })),
         subs: l.subs, subsList: Object.entries(SUBS).map(([id, x]) => ({ id, ...x, cost: Math.round(x.cost * k) })),
-        activities: ACTIVITIES.map((a) => ({ ...a, cost: a.id === "sport" && l.subs.sport ? 0 : Math.round(a.cost * k) })), free: fh, weekend: isWeekend(s.t),
+        activities: ACTIVITIES.map((a) => ({ ...a, cost: a.id === "sport" && l.subs.sport ? 0 : Math.round(a.cost * k), blocked: activityBlocked(s, a) })), workOver: !s.career.employed || isWeekend(s.t) || minuteOfDay(s.t) >= WORK_END_MIN, free: fh, weekend: isWeekend(s.t),
         perks: l.perks, partner: l.partner ?? null, children: l.children ?? 0, log: l.log.slice(0, 25), budget: l.budget.slice(0, 12), salary: s.career.salaryAnnual / 100,
         raiseAt: l.lastRaiseAskT !== undefined ? l.lastRaiseAskT + 180 * MIN_PER_DAY : null, employed: s.career.employed, vacationLeft: 25 + l.perks.extraLeave - ((s.flags["vacationDaysYear"] as number) ?? 0),
       };

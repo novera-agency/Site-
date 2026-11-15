@@ -4,7 +4,7 @@ import { applyAction } from "@/server/actions";
 import { payslip, monthlyBills, incomeTax, freeHours, priceLevel } from "@/engine/life";
 import { monthlyPayroll } from "@/engine/career";
 import { isBalanced } from "@/engine/ledger";
-import { tOfDay, dayIndex, nextBusinessDay, MIN_PER_DAY } from "@/engine/time";
+import { tOfDay, dayIndex, nextBusinessDay, MIN_PER_DAY, minuteOfDay, isWeekend } from "@/engine/time";
 import { answerMeeting } from "@/engine/meetingEngine";
 import { createGame } from "@/engine/engine";
 import { profile } from "./helpers";
@@ -42,6 +42,45 @@ describe("Vie privée", () => {
     act(s, { type: "life_activity", id: "cine" });
     expect(act(s, { type: "life_activity", id: "famille" }).ok).toBe(false); // plus assez de temps
     expect(l.mental).toBeGreaterThanOrEqual(m0);
+  });
+
+  it("activités : seulement après le travail (18 h), et l'horloge avance de leur durée", () => {
+    const s = game("carriere", "vie-horloge");
+    s.t = tOfDay(nextBusinessDay(dayIndex(s.t) + 1), 10, 0); // jour ouvré, en pleine journée de travail
+    s.agenda = []; s.paused = true; // pas de rendez-vous en attente qui interrompraient l'avance
+    const r0 = act(s, { type: "life_activity", id: "course" });
+    expect(r0.ok).toBe(false);
+    expect(r0.error).toMatch(/au travail/);
+    const t0 = s.t;
+    // « Jusqu'à la fin du travail » mène à 18 h pile
+    expect(act(s, { type: "skip", to: "work_end" }).ok).toBe(true);
+    expect(minuteOfDay(s.t)).toBe(18 * 60);
+    expect(s.t).toBeGreaterThan(t0);
+    s.paused = true; s.pauseReason = "Pause";
+    const before = s.t;
+    const r1 = act(s, { type: "life_activity", id: "course" }); // 1 h
+    expect(r1.ok).toBe(true);
+    expect(s.t - before).toBe(60);
+    expect(s.paused).toBe(true); // l'état de pause d'avant est conservé
+    const r2 = act(s, { type: "life_activity", id: "amis" }); // 3 h : 19 h → 22 h
+    expect(r2.ok).toBe(true);
+    expect(minuteOfDay(s.t)).toBe(22 * 60);
+    // Trop tard : une sortie en club de 5 h finirait après minuit
+    const r3 = act(s, { type: "life_activity", id: "club" });
+    expect(r3.ok).toBe(false);
+    expect(r3.error).toMatch(/minuit/);
+    // En semaine après 18 h, on ne peut plus « aller à la fin du travail »
+    expect(act(s, { type: "skip", to: "work_end" }).ok).toBe(false);
+  });
+  it("activités : le week-end elles sont possibles dès le matin", () => {
+    const s = game("carriere", "vie-weekend");
+    let d = dayIndex(s.t); while (!isWeekend(d * MIN_PER_DAY)) d++;
+    s.t = tOfDay(d, 9, 0);
+    s.agenda = []; s.paused = true;
+    const t0 = s.t;
+    const r = act(s, { type: "life_activity", id: "famille" }); // 6 h
+    expect(r.ok).toBe(true);
+    expect(s.t - t0).toBe(6 * 60);
   });
 
   it("logement : achat refusé sans apport, accepté avec ; la valeur nette entre dans le patrimoine", () => {

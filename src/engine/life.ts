@@ -11,7 +11,7 @@ const EXT_LIVING = "ext:depenses_vie";
 /** Solde du compte courant personnel, en euros (le grand livre compte en centimes) */
 export function eurCash(s: GameState) { return cashOf(s, "perso", "EUR") / 100; }
 import { toCents, fromCents } from "./money";
-import { dayIndex, isWeekend, MIN_PER_DAY, EPOCH_YEAR, dateOf } from "./time";
+import { dayIndex, isWeekend, MIN_PER_DAY, EPOCH_YEAR, dateOf, minuteOfDay } from "./time";
 import { BANK_BY_ID } from "./data/banks";
 import { dailyRealEstate, monthlyRealEstate, propertiesEquity } from "./realestate";
 
@@ -100,6 +100,19 @@ export function freeHours(s: GameState) {
   return { total, used, left: Math.max(0, total - used) };
 }
 
+/** Heure de fin du travail les jours ouvrés (18 h) : avant, on est au bureau */
+export const WORK_END_MIN = 18 * 60;
+const hhmm = (m: number) => `${Math.floor(m / 60)} h ${String(Math.round(m % 60)).padStart(2, "0")}`;
+/** Une activité ne se fait qu'après le travail (ou en week-end / congés / sans emploi), et doit finir avant minuit. Renvoie le motif du refus, sinon null. */
+export function activityBlocked(s: GameState, a: Activity): string | null {
+  const m = minuteOfDay(s.t);
+  const vac = !!s.flags["vacationUntil"] && s.t < (s.flags["vacationUntil"] as number);
+  const working = s.career.employed && !isWeekend(s.t) && !vac;
+  if (working && m < WORK_END_MIN) return `Vous êtes encore au travail (il est ${hhmm(m)}) : les activités commencent à 18 h. Avancez jusqu'à la fin du travail.`;
+  if (!working && m < 6 * 60) return `Il est ${hhmm(m)} : il est trop tôt pour une activité.`;
+  if (m + a.hours * 60 > MIN_PER_DAY) return `Trop tard : « ${a.name} » dure ${a.hours} h et se terminerait après minuit. Faites-la demain, ou choisissez une activité plus courte.`;
+  return null;
+}
 export function doActivity(s: GameState, id: string) {
   if (!lifeOn(s)) return { ok: false as const, error: "La vie privée n'est simulée qu'en mode carrière." };
   const a = ACTIVITIES.find((x) => x.id === id);
@@ -109,6 +122,8 @@ export function doActivity(s: GameState, id: string) {
   if (a.weekend && !isWeekend(s.t) && !(s.flags["vacationUntil"] && s.t < (s.flags["vacationUntil"] as number))) return { ok: false as const, error: "Possible seulement le week-end ou en congés." };
   if (a.id === "amour" && !l.partner) return { ok: false as const, error: "Vous n'êtes pas en couple pour l'instant." };
   if (a.id === "enfants" && !(l.children ?? 0)) return { ok: false as const, error: "Vous n'avez pas d'enfant." };
+  const blocked = activityBlocked(s, a);
+  if (blocked) return { ok: false as const, error: blocked };
   const fh = freeHours(s);
   if (fh.left < a.hours) return { ok: false as const, error: `Il ne vous reste que ${fh.left} h de temps libre aujourd'hui (il en faut ${a.hours}).` };
   const cost = a.id === "sport" && l.subs.sport ? 0 : Math.round(a.cost * priceLevel(s));
@@ -126,7 +141,7 @@ export function doActivity(s: GameState, id: string) {
   if (a.id === "club") s.career.stress = clamp(s.career.stress + 2, 0, 100);
   else s.career.stress = clamp(s.career.stress - Math.max(0, a.m) * 0.6 * tired, 0, 100);
   lg(s, `${a.emoji} ${a.name}${cost ? ` (−${cost} €)` : ""}`);
-  return { ok: true as const, message: `${a.emoji} ${a.name}${tired < 1 ? " — un peu moins d'effet, vous l'avez déjà fait cette semaine" : ""}.` };
+  return { ok: true as const, hours: a.hours, message: `${a.emoji} ${a.name} (${a.hours} h)${tired < 1 ? " — un peu moins d'effet, vous l'avez déjà fait cette semaine" : ""}.` };
 }
 
 // ───────────── Budget mensuel ─────────────

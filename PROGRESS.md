@@ -74,7 +74,7 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 ## Vérifications (dernière exécution)
 - `npm run lint` : OK
 - `npm test` : 104/104
-- `npm run e2e` : 20/20 (dont parcours 20 étapes, appel client, immobilier, vie privée, voix)
+- `npm run e2e` : 21/21 (dont parcours 20 étapes, appel client, immobilier, vie privée, voix)
 - Affichage émulé iPhone 13, Pixel 7 et iPad : aucune page ne déborde horizontalement (38 écrans)
 - `npm run build` : OK
 
@@ -118,3 +118,4 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 - ✅ Révision espacée : une question réussie ne revient jamais avant 30 jours de jeu ; réussie à la révision, elle rapporte moins d'expérience ; ratée, elle repasse en « à retravailler ». Les nouvelles questions passent toujours avant les révisions.
 - ✅ Son de fond (pluie, vent) retiré à la demande de l'utilisateur : il ne reste que de très courts bruits lors des notifications, désactivables dans Paramètres.
 - ✅ Zoom automatique sur mobile : champs et menus déroulants à 16 px minimum (pas de zoom au toucher), échelle verrouillée pendant la saisie puis rendue au pincement ; double-toucher sans zoom. Vérifié en émulation (écran iPhone sous Chromium), pas sur un vrai iPhone.
+- ✅ Activités de loisirs : possibles seulement après le travail (18 h les jours ouvrés ; dès le matin le week-end, en congés ou sans emploi) et doivent finir avant minuit ; l'horloge avance de leur durée (1 h = +1 h au compteur du haut), s'arrête si une réunion ou un événement important survient, et l'état de pause est conservé. Nouveau saut « Jusqu'à la fin du travail (18 h) ».

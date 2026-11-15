@@ -79,8 +79,9 @@ export default function Vie() {
     </Card>
 
     <Card title="🎟️ Que faire de votre temps libre ?" className="mt-4" right={<span className="text-xs text-ink-400">{data.weekend ? "Week-end : 14 h de temps libre" : "Soirée : le temps libre est limité en semaine"}</span>}>
+      {!data.workOver && <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-100" data-testid="work-banner">💼 Vous êtes encore au travail : les activités sont possibles à partir de 18 h. Chaque activité fait ensuite avancer l'horloge de sa durée.<Button size="sm" data-testid="skip-work-end" onClick={() => act({ type: "skip", to: "work_end" })}>Aller à la fin du travail</Button></div>}
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" data-testid="activities">
-        {data.activities.map((a: any) => <button key={a.id} data-testid={`act-${a.id}`} disabled={a.hours > data.free.left || (a.weekend && !data.weekend)} onClick={() => act({ type: "life_activity", id: a.id })} className="rounded-lg border border-ink-700 bg-ink-850 p-3 text-left transition enabled:hover:border-gold disabled:opacity-40">
+        {data.activities.map((a: any) => <button key={a.id} data-testid={`act-${a.id}`} disabled={!!a.blocked || a.hours > data.free.left || (a.weekend && !data.weekend)} title={a.blocked ?? undefined} onClick={() => act({ type: "life_activity", id: a.id })} className="rounded-lg border border-ink-700 bg-ink-850 p-3 text-left transition enabled:hover:border-gold disabled:opacity-40">
           <div className="flex items-baseline justify-between gap-2"><span className="font-medium text-white">{a.emoji} {a.name}</span><span className="num text-xs text-ink-300">{a.cost ? eur(a.cost) : "gratuit"} · {a.hours} h</span></div>
           <div className="mt-1 text-[11px] text-ink-400">{a.desc}{a.weekend ? " (week-end)" : ""}</div>
           <div className="mt-1 flex flex-wrap gap-x-2 text-[11px]">{fx(a.m, "mental")}{fx(a.p, "forme")}{fx(a.so, "social")}{fx(a.f, "plaisir")}</div>

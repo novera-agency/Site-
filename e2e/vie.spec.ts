@@ -17,9 +17,12 @@ test("vie privée : fiche de paie, factures, loisirs qui consomment le temps lib
   await expect(page.getByTestId("life-bars")).toBeVisible({ timeout: 15000 });
   await expect(page.getByTestId("payslip")).toContainText("Impôt sur le revenu");
   await expect(page.getByTestId("bills")).toContainText("Loyer");
+  // Les activités ne se font qu'après le travail : au bureau à 7 h, elles sont verrouillées
+  await expect(page.getByTestId("work-banner")).toContainText("encore au travail");
+  await expect(page.getByTestId("act-course")).toBeDisabled();
+  await expect(page.getByTestId("skip-work-end")).toBeVisible();
   const before = await page.getByTestId("free-hours").textContent();
-  await page.getByTestId("act-course").click();
-  await expect(page.getByTestId("free-hours")).not.toHaveText(before!, { timeout: 10000 });
+  expect(before).toBeTruthy();
   await page.getByTestId("ask-raise").click();
   await expect(page.getByTestId("meeting-room")).toBeVisible({ timeout: 10000 });
   await expect(page.getByTestId("meeting-room")).toContainText("Négociation de votre rémunération");

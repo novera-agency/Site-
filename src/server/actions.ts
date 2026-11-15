@@ -4,7 +4,7 @@ import type { GameState } from "@/engine/types";
 import { canCall, RECALL_DAYS } from "@/engine/prospects";
 import { checkProgress, endingAvailable, endGame } from "@/engine/progression";
 import { buyProperty, setRent, setSale, withdraw, renovate } from "@/engine/realestate";
-import { doActivity, moveHousing, sellHousing, setTransport, setSub } from "@/engine/life";
+import { doActivity, WORK_END_MIN, moveHousing, sellHousing, setTransport, setSub } from "@/engine/life";
 import { SPEEDS, MIN_PER_DAY, tOfDay, dayIndex, nextBusinessDay, minuteOfDay, isWeekend, useEpoch, fmtDate } from "@/engine/time";
 import { placeOrder, cancelOrder, convertCash } from "@/engine/orders";
 import { startMeeting, answerMeeting, explainTerm } from "@/engine/meetingEngine";
@@ -23,7 +23,7 @@ const num = z.coerce.number().finite();
 export const ActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("speed"), speed: z.union(SPEEDS.map((x) => z.literal(x)) as unknown as [z.ZodLiteral<0>, z.ZodLiteral<1>, ...z.ZodLiteral<number>[]]) }),
   z.object({ type: z.literal("pause"), paused: z.boolean() }),
-  z.object({ type: z.literal("skip"), to: z.enum(["next_hour", "market_open", "next_morning", "next_event"]) }),
+  z.object({ type: z.literal("skip"), to: z.enum(["next_hour", "market_open", "next_morning", "next_event", "work_end"]) }),
   z.object({ type: z.literal("order"), account: z.string().max(64), instrumentId: z.string().max(80), side: z.enum(["buy", "sell"]), orderType: z.enum(["market", "limit", "stop", "stop_limit"]), qty: num.positive(), limit: num.positive().optional(), stop: num.positive().optional(), duration: z.enum(["jour", "gtc", "date"]).optional(), expiresDays: num.int().min(1).max(90).optional(), stopLoss: num.positive().optional(), takeProfit: num.positive().optional(), clientRef: z.string().max(64).optional() }),
   z.object({ type: z.literal("cancel"), orderId: z.string().max(64) }),
   z.object({ type: z.literal("convert"), account: z.string().max(64), from: z.enum(["EUR", "USD", "GBP", "CHF", "JPY", "CAD", "AUD", "CNY"]), to: z.enum(["EUR", "USD", "GBP", "CHF", "JPY", "CAD", "AUD", "CNY"]), amount: num.positive() }),
@@ -87,6 +87,7 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
       let target: number;
       if (a.to === "next_hour") target = s.t + 60;
       else if (a.to === "market_open") target = m < 9 * 60 && !isWeekend(s.t) ? tOfDay(day, 9, 0) : tOfDay(nextBusinessDay(day + 1), 9, 0);
+      else if (a.to === "work_end") { if (isWeekend(s.t) || m >= WORK_END_MIN) return { ok: false, error: isWeekend(s.t) ? "C'est le week-end : pas de travail aujourd'hui." : "Le travail est déjà fini pour aujourd'hui." }; target = tOfDay(day, 18, 0); }
       else if (a.to === "next_morning") target = tOfDay(nextBusinessDay(day + 1), 7, 30);
       else { const nx = s.agenda.find((x) => x.status === "prevu" && x.t > s.t); target = nx ? nx.t : s.t + 60; }
       const n = advanceTo(s, Math.min(target, s.t + 4 * MIN_PER_DAY));
@@ -156,7 +157,17 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
     case "found_company": { const r = foundCompany(s, a.name, a.kind, a.capital, a.strategy); return r.ok ? { ok: true, message: "Société créée." } : { ok: false, error: r.error }; }
     case "company": { const r = companyAction(s, a.action, a.params ?? {}); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error }; }
     case "vacation": { const r = takeVacation(s, a.days); if (!r.ok) return { ok: false, error: r.error }; const n = advanceTo(s, r.until, 6000); return { ok: true, message: `Congés terminés (${Math.round(n * 5 / 1440)} jours simulés).` }; }
-    case "life_activity": { const r = doActivity(s, a.id); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error }; }
+    case "life_activity": {
+      const r = doActivity(s, a.id);
+      if (!r.ok) return { ok: false, error: r.error };
+      // L'activité prend du temps réel de jeu : l'horloge avance de sa durée (s'arrête si un événement important survient)
+      const wasPaused = s.paused, why = s.pauseReason;
+      const t0 = s.t;
+      advanceTo(s, t0 + r.hours * 60);
+      if (!s.paused || !s.pauseReason || s.pauseReason === why) { s.paused = wasPaused; s.pauseReason = why; }
+      const done = Math.round((s.t - t0) / 60 * 10) / 10;
+      return { ok: true, message: done < r.hours ? `${r.message} Interrompue après ${done} h : ${s.pauseReason ?? "événement"}.` : r.message };
+    }
     case "life_move": { const r = moveHousing(s, a.housing, a.buy); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error }; }
     case "life_sell": { if (!s.life) return { ok: false, error: "Mode carrière uniquement." }; const r = sellHousing(s); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error }; }
     case "life_transport": { const r = setTransport(s, a.mode); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error }; }
