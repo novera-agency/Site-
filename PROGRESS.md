@@ -74,7 +74,7 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 ## Vérifications (dernière exécution)
 - `npm run lint` : OK
 - `npm test` : 104/104
-- `npm run e2e` : 23/23 (dont parcours 20 étapes, appel client, immobilier, vie privée, voix)
+- `npm run e2e` : 25/25 (dont parcours 20 étapes, appel client, immobilier, vie privée, voix)
 - Affichage émulé iPhone 13, Pixel 7 et iPad : aucune page ne déborde horizontalement (38 écrans)
 - `npm run build` : OK
 
@@ -126,3 +126,4 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 - ✅ Horaires : journée de référence 9,5 h (7 h 30 → 18 h, déjeuner déduit) ; plus long = fatigue, stress, un peu de confiance du responsable ; plus court = sérénité mais confiance en baisse. Agenda, activités et temps libre suivent les horaires ; le bilan clôt la journée à l'heure de fin.
 - ✅ Heures supplémentaires (après l'horaire de fin, 1 à 4 h, avant 23 h 30) : prendre de l'avance (partir plus tôt le lendemain, 4 h de réserve), traiter des dossiers en retard (échéances repoussées), se former (expérience). Elles fatiguent, davantage au-delà de 3 h par jour, 12 h par semaine et le week-end. Elles ne sont pas rémunérées (forfait cadre).
 - ✅ Heures supplémentaires « me former » : de vraies séances de formation (3 questions par heure). Chaque heure = une leçon du centre de formation (fiche : définition, en clair, exemple, à quoi ça sert, puis exercice corrigé), une définition (QCM dans les deux sens) et un exercice de calcul à chiffres générés ; matière au choix ou compétence la plus faible. Corrections détaillées, XP par bonne réponse (leçons validées au premier succès), bonus + confiance du responsable à 80 %, carnet de formation des erreurs à revoir, 3 succès. Les leçons déjà validées ne reviennent pas avant les nouvelles ; une séance en cours bloque la suivante.
+- ✅ La séance de formation se déroule maintenant en réunion avec le N+1 (« Séance de formation avec … ») : il rappelle la notion (fiche), pose la question, corrige chaque réponse à voix haute (✔/✘ et explication) et conclut par un bilan. Tout est en choix multiples (les exercices chiffrés proposent des ordres de grandeur), à l'écrit ou à l'oral : en mode oral, le responsable lit les quatre réponses (« Première réponse : … ») et on répond « la deuxième » ou par le contenu. Réunion quittée : « Reprendre avec mon responsable » à la page Planning. Le bilan, les erreurs et le carnet restent sur la page Planning.

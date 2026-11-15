@@ -21,6 +21,8 @@ export interface MeetingTemplate {
   docs?: (c: MeetingCtx) => Doc[];
   objectives: string[];
   tension?: string;
+  /** Mode oral : les réponses possibles sont lues à voix haute après la question (QCM) */
+  readChoices?: boolean;
   start: string; nodes: Record<string, MeetingNode>;
   conclude: (c: MeetingCtx) => string;
 }
@@ -207,7 +209,8 @@ function applyChoice(c: MeetingCtx, tpl: MeetingTemplate, ch: Choice) {
   const m = c.m;
   ch.apply?.(c);
   if (salesBroken(c)) { failMeeting(c, "Trop de maladresses : le client a mis fin à l'appel."); return { ok: true as const, meeting: m }; }
-  if (ch.reply) { const r = ch.reply(c); if (r) m.log.push({ who: "—", text: r }); }
+  // Si la réunion le demande (variable replyWho), le retour sur la réponse est prononcé par ce personnage plutôt que par le narrateur
+  if (ch.reply) { const r = ch.reply(c); if (r) m.log.push({ who: m.vars.replyWho ? speakerName(c, String(m.vars.replyWho)) : "—", text: r }); }
   m.nodeId = typeof ch.next === "function" ? ch.next(c) : ch.next;
   if (!tpl.nodes[m.nodeId]) { finish(c); return { ok: true as const, meeting: m }; }
   pushNodeText(c);
@@ -253,7 +256,7 @@ export function meetingView(s: GameState, m: MeetingInstance) {
     participants: tpl.participants(c).map((p) => ({ id: p, name: s.npcs[p]?.name ?? p, role: s.npcs[p]?.role ?? "", avatar: s.npcs[p]?.avatar ?? "👤", trust: s.npcs[p]?.trust ?? 50 })),
     agenda: tpl.agenda, objectives: tpl.objectives, penalties: Number(m.vars.penalites ?? 0), maxPenalties: MAX_PENALTIES, failed: !!m.vars.failed,
     sales: m.vars.objInit ? { initial: Number(m.vars.objInit), current: Number(m.vars.objective), faults: Number(m.vars.faults ?? 0), floor: SALES_FLOOR, obtained: m.vars.obtained !== undefined ? Number(m.vars.obtained) : null } : null,
-    phone: tpl.type === "Appel téléphonique", pickup: m.vars.pickup === undefined ? null : Number(m.vars.pickup) === 1, tension: tpl.tension, docs: tpl.docs ? tpl.docs(c) : [], log: m.log, score: m.score,
+    phone: tpl.type === "Appel téléphonique", readChoices: !!tpl.readChoices, pickup: m.vars.pickup === undefined ? null : Number(m.vars.pickup) === 1, tension: tpl.tension, docs: tpl.docs ? tpl.docs(c) : [], log: m.log, score: m.score,
     choices: m.done ? [] : meetingChoices(s, m), numeric: !m.done && node?.numeric ? { prompt: node.numeric.prompt, unit: node.numeric.unit, hint: s.difficulty === "debutant" || s.settings.explanations ? node.numeric.hint : undefined } : null,
   };
 }

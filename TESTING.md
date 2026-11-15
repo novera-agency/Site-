@@ -55,3 +55,5 @@ Pour tester l'édition navigateur : `BASE_PATH=/Site- npm run build:static`, ser
 | `e2e/planning.spec.ts` | Page planning : horaires, réveil refusé trop tard, sommeil et heures supplémentaires verrouillés pendant le travail, activités selon l'horaire. |
 | `tests/vie.test.ts` (formation) | Séance de 2 h = 6 questions variées sans bonne réponse dans la vue ; XP, validation des leçons, bonus et succès ; erreurs au carnet sans bonus ; blocage d'une 2e séance ; leçons non répétées ; matières. |
 | `e2e/formation.spec.ts` | Parcours de l'écran de séance (fiche, QCM, numérique, corrections, bilan, fermeture) sur séance injectée, avec audit d'accessibilité. |
+| `tests/vie.test.ts` (réunion de formation) | « Me former » ouvre la réunion avec le N+1, qui pose la question ; réponses ✔/✘ corrigées par le responsable ; bilan ; reprise après avoir quitté ; toutes les leçons en QCM. |
+| `e2e/formation.spec.ts` | Séance complète à l'écrit (bilan et carnet sur Planning), reprise d'une séance interrompue, séance à l'oral (lecture des réponses, « la deuxième »). Le serveur de test active E2E_HOOKS pour lancer la réunion directement. |

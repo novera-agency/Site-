@@ -9,7 +9,7 @@ import { voiceSupport, voiceFor, voiceCast, ringTone, speak, stopSpeaking, liste
 import { matchChoice, parseFrenchNumber } from "@/lib/voice-match";
 import { isTermQuestion } from "@/engine/glossary";
 
-interface MView { id: string; title: string; type: string; location: string; done: boolean; outcome?: string; participants: { id: string; name: string; role: string; avatar: string; trust: number }[]; agenda: string[]; objectives: string[]; tension?: string; docs: { title: string; rows: [string, string][]; note?: string }[]; log: { who: string; text: string }[]; choices: { id: string; label: string; detail?: string }[]; numeric: { prompt: string; unit: string; hint?: string } | null; score: Record<string, number>; penalties: number; maxPenalties: number; failed: boolean; sales: { initial: number; current: number; faults: number; floor: number; obtained: number | null } | null; phone: boolean; pickup: boolean | null; }
+interface MView { id: string; title: string; type: string; location: string; done: boolean; outcome?: string; participants: { id: string; name: string; role: string; avatar: string; trust: number }[]; agenda: string[]; objectives: string[]; tension?: string; docs: { title: string; rows: [string, string][]; note?: string }[]; log: { who: string; text: string }[]; choices: { id: string; label: string; detail?: string }[]; numeric: { prompt: string; unit: string; hint?: string } | null; score: Record<string, number>; penalties: number; maxPenalties: number; failed: boolean; sales: { initial: number; current: number; faults: number; floor: number; obtained: number | null } | null; phone: boolean; pickup: boolean | null; readChoices?: boolean; }
 type Mode = "oral" | "ecrit";
 
 /** Temps de réponse à l'oral selon la difficulté (secondes) */
@@ -133,6 +133,15 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
         const r = await speak(prefix + l.text.replace(/^[✔✘]\s*/, ""), p ? cast.get(p.id)!.profile : voiceFor("narrateur"));
         if (r === "blocked" && runId.current === my) { setSoundBlocked(true); setSpeaker(null); setPhase("idle"); return; }
         if (r === "ok") setSoundBlocked(false);
+      }
+      // Questions à choix : à l'oral, les réponses possibles sont lues après la question
+      if (m.readChoices && !m.done && m.choices.length && (mode === "oral" || readAloud) && runId.current === my) {
+        const boss = m.participants[0];
+        setSpeaker(boss?.id ?? "narrateur");
+        const ORD = ["Première", "Deuxième", "Troisième", "Quatrième"];
+        const cast = voiceCast(m.participants);
+        const r = await speak(m.choices.map((c, k) => `${ORD[k]} réponse : ${c.label}.`).join(" "), boss ? cast.get(boss.id)!.profile : voiceFor("narrateur"));
+        if (r === "blocked" && runId.current === my) { setSoundBlocked(true); setSpeaker(null); setPhase("idle"); return; }
       }
       if (runId.current !== my) return;
       setSpeaker(null);
@@ -270,7 +279,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
                       {m.numeric.hint && <div className="text-xs text-ink-400">💡 {m.numeric.hint}</div>}
                       <div className="flex gap-2"><input autoFocus value={val} onChange={(e) => setVal(e.target.value)} className={inputCls} placeholder={`Votre réponse (${m.numeric.unit})`} inputMode="decimal" /><Button type="submit" disabled={busy || !val}>Répondre</Button></div>
                     </form>
-                    : <div className="grid gap-2">{m.choices.map((c) => <button key={c.id} disabled={busy} onClick={() => send({ choiceId: c.id })} className="rounded-lg border border-ink-600 bg-ink-850 px-3 py-2.5 text-left text-sm text-ink-100 transition hover:border-accent hover:bg-ink-800 disabled:opacity-50">{c.label}{c.detail && <span className="mt-0.5 block text-xs text-ink-400">{c.detail}</span>}</button>)}</div>}
+                    : <div className="grid gap-2">{m.choices.map((c) => <button key={c.id} data-testid={`choice-${c.id}`} disabled={busy} onClick={() => send({ choiceId: c.id })} className="rounded-lg border border-ink-600 bg-ink-850 px-3 py-2.5 text-left text-sm text-ink-100 transition hover:border-accent hover:bg-ink-800 disabled:opacity-50">{c.label}{c.detail && <span className="mt-0.5 block text-xs text-ink-400">{c.detail}</span>}</button>)}</div>}
                   {!m.done && sup.stt && <button onClick={chooseOral} className="mt-3 text-xs text-ink-400 underline" data-testid="switch-oral">🎙️ Passer en mode oral</button>}
                   {micError && <div className="mt-2 text-xs text-amber-300">{micError}</div>}
                 </div>

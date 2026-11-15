@@ -4,10 +4,10 @@ const BASE = process.env.E2E_BASE ?? "";
 const go = (page: Page, path: string) => page.goto(BASE + path);
 
 /**
- * La séance de formation naît d'heures supplémentaires faites le soir ; on injecte donc une séance dans la vue « planning »
- * et on simule les réponses du serveur pour vérifier tout le parcours de l'écran (fiche, QCM, numérique, corrections, bilan, fermeture).
+ * La séance de formation naît d'heures supplémentaires faites le soir. Pour l'e2e, le serveur de test (E2E_HOOKS) permet de lancer
+ * directement la réunion : le N+1 pose les questions, corrige, conclut, puis la page Planning affiche le bilan et le carnet.
  */
-test("séance de formation : fiche, QCM, question numérique, corrections, bilan et fermeture", async ({ page }) => {
+test("séance de formation avec le N+1 : questions, corrections, bilan, carnet", async ({ page }) => {
   await page.addInitScript(() => { try { sessionStorage.setItem("fe_intro", "1"); } catch { /* */ } });
   await go(page, "/");
   await page.getByTestId("new-career").click();
@@ -17,69 +17,107 @@ test("séance de formation : fiche, QCM, question numérique, corrections, bilan
   for (let i = 0; i < 4; i++) await page.getByTestId("next").click();
   await page.getByTestId("create").click();
   await page.waitForURL(/\/play\/?$/);
-
-  const items = [
-    { i: 0, label: "Fiche et exercice", kind: "qcm", prompt: "Quel coupon annuel pour une obligation de nominal 1 000 € à 4 % ?", options: ["4 €", "40 €", "400 €", "0,4 €"], unit: null, branch: "marches", card: { term: "Coupon", definition: "Intérêt périodique versé par une obligation.", simple: "Le loyer de l'argent prêté.", example: "4 % sur 1 000 € = 40 €.", application: "Mesurer le revenu d'une obligation.", level: 1 }, answer: 1, explain: "1 000 € × 4 % = 40 € par an." },
-    { i: 1, label: "Calcul", kind: "num", prompt: "Une action cote 24 € avec un bénéfice de 3 € par action. Quel est son PER ?", options: null, unit: "", branch: "maths", card: null, answer: 8, tolerance: 0.01, explain: "PER = cours ÷ bénéfice par action = 24 ÷ 3 = 8." },
-    { i: 2, label: "Définition", kind: "qcm", prompt: "Quel terme correspond à : « Intérêt périodique versé par une obligation » ?", options: ["Nominal", "Coupon", "Liquidité", "Sous-jacent"], unit: null, card: null, branch: "marches", answer: 1, explain: "Coupon : intérêt périodique versé par une obligation." },
-  ];
-  const answers: ({ ok: boolean; value: number } | null)[] = [null, null, null];
-  let closed = false;
-  const training = () => {
-    const answered = answers.filter(Boolean).length;
-    const correct = answers.filter((a) => a?.ok).length;
-    return closed ? null : {
-      id: "train-test", hours: 1, subject: "marches", count: 3, answered,
-      done: answered === 3 ? { correct, total: 3, bonusXp: correct >= 3 * 0.8 ? 6 : 0, trust: 0 } : null,
-      items: items.map((it, k) => ({ i: it.i, label: it.label, kind: it.kind, prompt: it.prompt, options: it.options, unit: it.unit, card: it.card, branch: it.branch, result: answers[k] ? { ok: answers[k]!.ok, value: answers[k]!.value, answer: it.answer, explain: it.explain } : null })),
-    };
-  };
-  await page.route("**/api/game/*/view?name=planning*", async (route) => {
-    const r = await route.fetch();
-    const json = await r.json();
-    await route.fulfill({ response: r, json: { ...json, training: training() } });
-  });
-  await page.route("**/api/game/*/action", async (route) => {
-    const body = route.request().postDataJSON();
-    if (body.type === "training_answer") {
-      const it = items[body.index];
-      const value = body.choice ?? body.value;
-      const ok = it.kind === "qcm" ? value === it.answer : Math.abs(value - it.answer) <= (it.tolerance ?? 0);
-      answers[body.index] = { ok, value };
-      await route.fulfill({ json: { ok: true, data: { ok } } });
-    } else if (body.type === "training_close") { closed = true; await route.fulfill({ json: { ok: true } }); }
-    else await route.continue();
-  });
-
   await go(page, "/play/planning");
-  await expect(page.getByTestId("training")).toBeVisible({ timeout: 15000 });
-  // 1. Fiche de cours + QCM (on se trompe volontairement)
-  await expect(page.getByTestId("tr-card")).toContainText("Coupon");
-  await expect(page.getByTestId("tr-card")).toContainText("À quoi ça sert");
-  // Accessibilité de la séance (contrastes, libellés)
+  await expect(page.getByTestId("timeline")).toBeVisible();
+  // Lancement de la séance (réunion avec le responsable)
+  const started = await page.evaluate(async () => {
+    const id = localStorage.getItem("fe_game");
+    const r = await fetch(`/api/game/${id}/action`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "start_meeting", template: "formation_n1", params: { hours: "1", subject: "marches" } }) });
+    return r.json();
+  });
+  expect(started.ok).toBe(true);
+  const room = page.getByTestId("meeting-room");
+  await expect(room).toBeVisible({ timeout: 20000 });
+  await expect(room.getByText(/Séance de formation avec/).first()).toBeVisible();
+  await room.getByTestId("mode-ecrit").click();
+  const log = room.getByTestId("meeting-log");
+  await expect(log).toContainText("vous restez tard");
+  await expect(log).toContainText("Reprenons la notion");
+  // Accessibilité de la réunion
   const ax = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(ax.violations.map((v) => `${v.id} ×${v.nodes.length}`)).toEqual([]);
-  await page.getByTestId("tr-opt-0").click();
-  await expect(page.getByTestId("tr-result")).toContainText("Pas tout à fait", { timeout: 15000 });
-  await expect(page.getByTestId("tr-result")).toContainText("40 € par an");
-  await expect(page.getByTestId("tr-opt-1")).toBeDisabled();
-  await page.getByTestId("tr-next").click();
-  // 2. Question numérique (virgule décimale acceptée)
-  await expect(page.getByTestId("tr-prompt")).toContainText("PER");
-  await expect(page.getByTestId("tr-card")).toHaveCount(0);
-  await page.getByTestId("tr-num").fill("8");
-  await page.getByTestId("tr-submit").click();
-  await expect(page.getByTestId("tr-result")).toContainText("Bonne réponse", { timeout: 15000 });
-  await page.getByTestId("tr-next").click();
-  // 3. Définition
-  await page.getByTestId("tr-opt-1").click();
-  await expect(page.getByTestId("tr-result")).toContainText("Bonne réponse", { timeout: 15000 });
-  await page.getByTestId("tr-end").click();
-  // Bilan : 2 / 3, la question ratée est rappelée avec sa correction
-  await expect(page.getByTestId("tr-summary")).toContainText("2 / 3");
-  await expect(page.getByTestId("tr-summary")).toContainText("40 € par an");
-  await expect(page.getByTestId("tr-summary")).toContainText("Sous 80 %");
-  await page.getByTestId("tr-close").click();
-  await expect(page.getByTestId("training")).toHaveCount(0, { timeout: 15000 });
+  // Trois questions : le responsable corrige à chaque réponse
+  for (let q = 0; q < 3; q++) {
+    await expect(room.getByTestId("choice-c0")).toBeVisible();
+    const before = await log.locator("> *").count();
+    await room.getByTestId("choice-c0").click();
+    await expect.poll(async () => (await log.textContent()) ?? "", { timeout: 15000 }).toMatch(/✔|✘/);
+    await expect.poll(async () => await log.locator("> *").count(), { timeout: 15000 }).toBeGreaterThan(before);
+  }
+  await expect(log).toContainText("Séance de formation :", { timeout: 15000 });
+  // Bilan sur la page Planning, avec le carnet de formation
+  await go(page, "/play/planning");
+  await expect(page.getByTestId("tr-summary")).toContainText("/ 3", { timeout: 20000 });
   await expect(page.getByTestId("notebook")).toBeVisible();
+  await page.getByTestId("tr-close").click();
+  await expect(page.getByTestId("tr-summary")).toHaveCount(0);
+});
+
+test("séance interrompue : le responsable reprend là où on s'était arrêté", async ({ page }) => {
+  await page.addInitScript(() => { try { sessionStorage.setItem("fe_intro", "1"); } catch { /* */ } });
+  await go(page, "/");
+  await page.getByTestId("new-career").click();
+  await page.getByTestId("next").click();
+  await page.getByTestId("first-name").fill("Léo");
+  await page.getByTestId("last-name").fill("Reprise");
+  for (let i = 0; i < 4; i++) await page.getByTestId("next").click();
+  await page.getByTestId("create").click();
+  await page.waitForURL(/\/play\/?$/);
+  const post = (body: object) => page.evaluate(async (b) => { const id = localStorage.getItem("fe_game"); const r = await fetch(`/api/game/${id}/action`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) }); return r.json(); }, body);
+  expect((await post({ type: "start_meeting", template: "formation_n1", params: { hours: "1" } })).ok).toBe(true);
+  const room = page.getByTestId("meeting-room");
+  await expect(room).toBeVisible({ timeout: 20000 });
+  await room.getByTestId("mode-ecrit").click();
+  await room.getByTestId("choice-c0").click();
+  await expect(room.getByTestId("meeting-log")).toContainText(/✔|✘/, { timeout: 15000 });
+  // On quitte la réunion en cours de route
+  expect((await post({ type: "leave_meeting" })).ok).toBe(true);
+  await go(page, "/play/planning");
+  await expect(page.getByTestId("training")).toBeVisible({ timeout: 20000 });
+  await expect(page.getByText("1 / 3 questions")).toBeVisible();
+  await page.getByTestId("tr-resume").click();
+  await expect(page.getByTestId("meeting-room")).toBeVisible({ timeout: 20000 });
+  await page.getByTestId("meeting-room").getByTestId("mode-ecrit").click();
+  await expect(page.getByTestId("meeting-room").getByTestId("meeting-log")).toContainText(/Question|calcul|vocabulaire|culture|notion/, { timeout: 15000 });
+});
+
+/** Micro et haut-parleur simulés (même principe que vocal.spec) */
+const fakeVoice = `
+  window.__spoken = []; window.__nextSay = null;
+  class FakeRec { start() { setTimeout(() => { const say = window.__nextSay; if (say) { window.__nextSay = null; const r = [{ transcript: say }]; r.isFinal = true; this.onresult && this.onresult({ resultIndex: 0, results: [r] }); } this.onend && this.onend(); }, 150); } stop() { this.onend && this.onend(); } abort() {} }
+  window.SpeechRecognition = FakeRec; window.webkitSpeechRecognition = FakeRec;
+  if (window.speechSynthesis) { window.speechSynthesis.speak = (u) => { window.__spoken.push(u.text); setTimeout(() => u.onend && u.onend(), 30); }; window.speechSynthesis.cancel = () => {}; }
+  navigator.mediaDevices.getUserMedia = async () => ({ getTracks: () => [{ stop() {} }] });
+`;
+test("séance de formation à l'oral : le responsable lit la question puis les réponses possibles ; on répond « la deuxième »", async ({ page }) => {
+  test.setTimeout(120000);
+  await page.addInitScript(fakeVoice);
+  await page.addInitScript(() => { try { sessionStorage.setItem("fe_intro", "1"); } catch { /* */ } });
+  await go(page, "/");
+  await page.getByTestId("new-career").click();
+  await page.getByTestId("next").click();
+  await page.getByTestId("first-name").fill("Mia");
+  await page.getByTestId("last-name").fill("Oral");
+  for (let i = 0; i < 4; i++) await page.getByTestId("next").click();
+  await page.getByTestId("create").click();
+  await page.waitForURL(/\/play\/?$/);
+  const started = await page.evaluate(async () => { const id = localStorage.getItem("fe_game"); const r = await fetch(`/api/game/${id}/action`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "start_meeting", template: "formation_n1", params: { hours: "1", subject: "maths" } }) }); return r.json(); });
+  expect(started.ok).toBe(true);
+  const room = page.getByTestId("meeting-room");
+  await expect(room).toBeVisible({ timeout: 20000 });
+  await room.getByTestId("mode-oral").click();
+  await expect(room.getByTestId("voice-listening")).toBeVisible({ timeout: 20000 });
+  const spoken = () => page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken);
+  const s1 = (await spoken()).join(" ");
+  expect(s1).toMatch(/vous restez tard/);
+  expect(s1).toMatch(/Première réponse/);
+  expect(s1).toMatch(/Deuxième réponse/);
+  const n = (await spoken()).length;
+  await page.evaluate(() => { (window as unknown as { __nextSay: string }).__nextSay = "la deuxième"; });
+  await page.waitForFunction(() => (window as unknown as { __nextSay: string | null }).__nextSay === null, null, { timeout: 15000 });
+  await page.waitForFunction((k) => (window as unknown as { __spoken: string[] }).__spoken.length > k + 1, n, { timeout: 20000 }); // correction, puis question suivante
+  await expect(room.getByTestId("voice-listening")).toBeVisible({ timeout: 20000 });
+  await room.getByTestId("show-transcript").click();
+  await expect(room.getByTestId("meeting-log")).toContainText("interprété comme", { timeout: 10000 });
+  await expect(room.getByTestId("meeting-log")).toContainText(/✔|✘/);
 });

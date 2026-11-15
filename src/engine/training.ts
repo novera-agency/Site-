@@ -25,6 +25,29 @@ export interface TQ {
   prompt: string; options?: string[]; answer: number; tolerance?: number; unit?: string; explain: string; branch: SkillBranch;
   card?: { term: string; definition: string; simple: string; example: string; application: string; level: number };
 }
+const fmtN = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 3 });
+/** Question chiffrée → 4 réponses proposées (la bonne et trois ordres de grandeur plausibles) : tout se répond à voix haute ou au clic en réunion */
+function numericOptions(answer: number, tolerance: number, unit: string, seed: string) {
+  const fmt = (x: number) => `${fmtN.format(x)}${unit ? " " + unit : ""}`;
+  const dec = Math.min(3, (String(answer).split(".")[1] ?? "").length);
+  const r = (x: number) => Math.round(x * 10 ** Math.max(dec, 2)) / 10 ** Math.max(dec, 2);
+  const step = Math.max(1, Math.abs(answer) * 0.2);
+  const cands = [answer * 2, answer / 2, answer * 10, answer / 10, answer * 1.5, answer * 0.75, answer + step, answer - step, answer * 3].map(r);
+  const right = fmt(answer);
+  const seen = new Set([right]);
+  const wrong: string[] = [];
+  for (const x of cands.map((v, i) => ({ v, h: hash(`${seed}:${i}`) })).sort((a, b) => a.h - b.h).map((o) => o.v)) {
+    if (wrong.length >= 3) break;
+    if (!Number.isFinite(x) || Math.abs(x - answer) <= Math.max(tolerance * 2, Math.abs(answer) * 0.05)) continue;
+    if (answer > 0 && x <= 0) continue;
+    const f = fmt(x); if (seen.has(f)) continue;
+    seen.add(f); wrong.push(f);
+  }
+  for (let k = 1; wrong.length < 3; k++) { const f = fmt(answer + k * 7); if (!seen.has(f)) { seen.add(f); wrong.push(f); } }
+  const pos = hash(seed) % 4;
+  const options = [...wrong]; options.splice(pos, 0, right);
+  return { options, index: pos };
+}
 const shuffle = <T,>(arr: T[], seed: string) => arr.map((v, i) => ({ v, h: hash(`${seed}:${i}`) })).sort((a, b) => a.h - b.h).map((x) => x.v);
 
 /** Reconstruit la question d'un élément de séance (déterministe : la bonne réponse n'est jamais stockée dans la vue) */
@@ -33,9 +56,9 @@ export function buildQuestion(it: TItem): TQ | null {
     const l = LESSON_BY_ID[it.id]; if (!l) return null;
     const card = { term: l.term, definition: l.definition, simple: l.simple, example: l.example, application: l.application, level: l.level };
     const ex = l.exercise;
-    return ex.kind === "qcm"
-      ? { kind: "qcm", label: "Fiche et exercice", prompt: ex.question, options: ex.options, answer: ex.answer, explain: ex.correction, branch: l.branch, card }
-      : { kind: "num", label: "Fiche et exercice", prompt: ex.question, answer: ex.answer, tolerance: ex.tolerance, unit: ex.unit, explain: ex.correction, branch: l.branch, card };
+    if (ex.kind === "qcm") return { kind: "qcm", label: "Fiche et exercice", prompt: ex.question, options: ex.options, answer: ex.answer, explain: ex.correction, branch: l.branch, card };
+    const nq = numericOptions(ex.answer, ex.tolerance, ex.unit, `lesson:${l.id}`);
+    return { kind: "qcm", label: "Fiche et exercice", prompt: ex.question, options: nq.options, answer: nq.index, explain: ex.correction, branch: l.branch, card };
   }
   if (it.k === "def") {
     const l = LESSON_BY_ID[it.id]; if (!l) return null;
@@ -162,18 +185,15 @@ export function closeTraining(s: GameState) {
   return { ok: true as const };
 }
 
-/** Vue de la séance : jamais la bonne réponse avant d'avoir répondu */
+/** Vue de la séance (page Planning) : état, et corrections une fois les questions traitées ; jamais la bonne réponse avant d'avoir répondu */
 export function trainingView(s: GameState) {
   const l = s.life; const tr = l?.training;
   if (!l || !tr) return null;
   return {
-    id: tr.id, hours: tr.hours, subject: tr.subject, count: tr.items.length, answered: tr.answers.length, done: tr.done ?? null,
+    id: tr.id, hours: tr.hours, subject: tr.subject, count: tr.items.length, answered: tr.answers.length, done: tr.done ?? null, meetingActive: !!s.activeMeetingId && s.meetings.find((m) => m.id === s.activeMeetingId)?.templateId === "formation_n1",
     items: tr.items.map((it, i) => {
       const q = buildQuestion(it)!; const a = tr.answers[i];
-      return {
-        i, label: q.label, kind: q.kind, prompt: q.prompt, options: q.options ?? null, unit: q.unit ?? null, card: q.card ?? null, branch: q.branch,
-        result: a ? { ok: a.ok, value: a.value ?? null, answer: q.answer, explain: q.explain } : null,
-      };
+      return { i, label: q.label, prompt: q.prompt, result: a ? { ok: a.ok, explain: q.explain } : null };
     }),
   };
 }

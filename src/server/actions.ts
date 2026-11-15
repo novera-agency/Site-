@@ -17,7 +17,7 @@ import { takeVacation } from "@/engine/career";
 import { completeLesson, advanceTo } from "@/engine/engine";
 import { nextId, logDecision } from "@/engine/core";
 import { toCents } from "@/engine/money";
-import { answerTraining, closeTraining } from "@/engine/training";
+import { closeTraining } from "@/engine/training";
 import { setPlan, sleepCheck, finishSleep, doOvertime, workWindow, isWorkDay, hhmm, sleepLabel } from "@/engine/schedule";
 import { answerQuiz } from "@/engine/quiz";
 
@@ -66,7 +66,7 @@ export const ActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("set_plan"), start: z.number().int(), end: z.number().int(), wake: z.number().int() }),
   z.object({ type: z.literal("sleep") }),
   z.object({ type: z.literal("overtime"), hours: z.number().int().min(1).max(4), focus: z.enum(["avance", "dossiers", "formation"]), subject: z.enum(["auto", "marches", "analyse", "maths", "macro", "risque"]).optional() }),
-  z.object({ type: z.literal("training_answer"), index: z.number().int().min(0).max(40), choice: z.number().int().min(0).max(5).optional(), value: z.number().optional() }),
+  z.object({ type: z.literal("training_resume") }),
   z.object({ type: z.literal("training_close") }),
   z.object({ type: z.literal("quiz_answer"), id: z.string().max(40), choice: z.number().int().min(0).max(5) }),
   z.object({ type: z.literal("leave_meeting") }),
@@ -146,7 +146,7 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
       return m ? { ok: true, data: { meetingId: m.id } } : { ok: false, error: "Réunion indisponible." };
     }
     case "start_meeting": {
-      const allowed = ["comite_investissement", "comite_risques", "client_point_regulier", "desk_quotidien"];
+      const allowed = ["comite_investissement", "comite_risques", "client_point_regulier", "desk_quotidien", ...(process.env.E2E_HOOKS === "1" ? ["formation_n1"] : [])];
       if (!allowed.includes(a.template)) return { ok: false, error: "Cette réunion ne peut pas être provoquée." };
       if (!s.career.employed && a.template !== "client_point_regulier") return { ok: false, error: "Vous n'êtes pas en poste." };
       const key = `manualMeeting:${a.template}:${dayIndex(s.t)}`;
@@ -235,7 +235,13 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
       if (a.name) s.name = a.name;
       return { ok: true, message: "Paramètres enregistrés." };
     }
-    case "training_answer": { const r = answerTraining(s, a.index, { choice: a.choice, value: a.value }); return r.ok ? { ok: true, data: r.data } : { ok: false, error: r.error }; }
+    case "training_resume": {
+      const tr = s.life?.training;
+      if (!tr || tr.done) return { ok: false, error: "Aucune séance de formation à reprendre." };
+      if (s.activeMeetingId) return { ok: false, error: "Vous êtes déjà en réunion." };
+      const m = startMeeting(s, "formation_n1", { resume: "1" });
+      return m ? { ok: true, data: { meetingId: m.id } } : { ok: false, error: "Votre responsable n'est pas disponible." };
+    }
     case "training_close": { const r = closeTraining(s); return r.ok ? { ok: true } : { ok: false, error: r.error }; }
     case "set_plan": { const r = setPlan(s, { start: a.start, end: a.end, wake: a.wake }); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error }; }
     case "sleep": return doSleep(s);
@@ -245,6 +251,12 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
       const t0 = s.t;
       runClock(s, t0 + a.hours * 60);
       const done = Math.round(((s.t - t0) / 60) * 10) / 10;
+      // « Me former » : votre responsable pose lui-même les questions, en réunion
+      if (a.focus === "formation") {
+        const m = startMeeting(s, "formation_n1", { hours: String(a.hours), subject: a.subject ?? "auto" });
+        if (m && m.templateId === "formation_n1") return { ok: true, message: `${r.message} Votre responsable vous reçoit pour la séance.`, data: { meetingId: m.id } };
+        return { ok: true, message: `${r.message} Votre responsable est pris par une autre réunion : reprenez la séance ensuite depuis cette page.` };
+      }
       return { ok: true, message: done < a.hours ? `${r.message} Interrompu après ${done} h : ${s.pauseReason ?? "événement"}.` : r.message };
     }
     case "quiz_answer": { const r = answerQuiz(s, a.id, a.choice); return r.ok ? { ok: true, data: r.data } : { ok: false, error: r.error }; }

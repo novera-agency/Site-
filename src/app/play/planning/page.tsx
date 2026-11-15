@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useView, useAction } from "@/lib/hooks";
+import { useGame } from "@/lib/store";
 import { Card, PageTitle, Loading, Badge, Bar, Button, Field, inputCls } from "@/components/ui";
 
 const fr = (n: number) => n.toLocaleString("fr-FR");
@@ -34,56 +35,32 @@ function Timeline({ d }: { d: any }) {
 
 const SUBJECTS: [string, string][] = [["auto", "Ma compétence la plus faible (automatique)"], ["marches", "Marchés et produits financiers"], ["analyse", "Analyse financière"], ["maths", "Mathématiques financières"], ["macro", "Macroéconomie"], ["risque", "Risques, assurance et conformité"]];
 const BR: Record<string, string> = { marches: "marchés", analyse: "analyse", maths: "maths financières", macro: "macroéconomie", risque: "risques", client: "relation client", management: "management", entrepreneuriat: "entrepreneuriat" };
-const num = (n: number) => n.toLocaleString("fr-FR", { maximumFractionDigits: 3 });
 
-/** Séance de formation : fiche à lire, puis questions corrigées une par une, bilan et carnet */
-function TrainingCard({ t, act }: { t: any; act: (a: Record<string, unknown>, o?: { silent?: boolean }) => Promise<any> }) {
-  const [idx, setIdx] = useState<number>(Math.min(t.answered, t.count - 1)); // question affichée : on reste dessus après avoir répondu, pour lire la correction
-  const [val, setVal] = useState("");
-  const [summary, setSummary] = useState(false);
-  const cur = Math.min(idx, t.count - 1);
-  const it = t.items[cur];
-  const res = it.result;
-  const answer = async (body: Record<string, unknown>) => { await act({ type: "training_answer", index: cur, ...body }, { silent: true }); };
-  const submitNum = () => { const v = parseFloat(val.replace(/\s/g, "").replace(",", ".")); if (Number.isFinite(v)) answer({ value: v }); };
+/** Séance de formation : menée en réunion par le responsable ; ici, l'état, la reprise et le bilan avec les corrections */
+function TrainingStatus({ t, act }: { t: any; act: (a: Record<string, unknown>, o?: { silent?: boolean }) => Promise<any> }) {
+  const setOpen = useGame((s) => s.setMeetingOpen);
+  const activeId = useGame((s) => s.snap?.activeMeetingId ?? null);
   const missed = t.items.filter((x: any) => x.result && !x.result.ok);
-  if (summary && t.done) {
+  if (t.done) {
     const sc = Math.round((t.done.correct / t.done.total) * 100);
-    return <Card title="📚 Bilan de la séance" className="mb-4">
+    return <Card title="📚 Bilan de la séance de formation" className="mb-4">
       <div data-testid="tr-summary" className="space-y-3 text-sm">
         <div className="flex flex-wrap items-center gap-3"><span className="num text-2xl font-semibold text-gold">{t.done.correct} / {t.done.total}</span><Badge tone={sc >= 80 ? "gain" : sc >= 50 ? "warn" : "loss"}>{sc} %</Badge>
           {t.done.bonusXp > 0 ? <span className="text-gain">Séance réussie : +{t.done.bonusXp} XP en {BR[t.subject] ?? t.subject} et un responsable plus confiant.</span> : <span className="text-ink-300">Sous 80 % : pas de bonus, mais vos erreurs sont dans le carnet ci-dessous.</span>}</div>
         {missed.length > 0 && <div><div className="mb-1 text-xs font-semibold uppercase tracking-wider text-ink-400">À retenir (vos erreurs)</div>
           <ul className="space-y-2">{missed.map((x: any) => <li key={x.i} className="rounded-md border border-ink-700 bg-ink-900 p-2 text-xs"><div className="font-medium text-ink-100">{x.prompt}</div><div className="mt-1 text-ink-300">{x.result.explain}</div></li>)}</ul></div>}
         <p className="text-xs text-ink-400">Pour aller plus loin : le <Link href="/play/formation" className="underline">centre de formation</Link> et le <Link href="/play/dictionnaire" className="underline">dictionnaire</Link>.</p>
-        <Button data-testid="tr-close" onClick={() => { setSummary(false); act({ type: "training_close" }, { silent: true }); }}>Fermer la séance</Button>
+        <Button data-testid="tr-close" onClick={() => act({ type: "training_close" }, { silent: true })}>Fermer le bilan</Button>
       </div>
     </Card>;
   }
-  return <Card title={`📚 Séance de formation — ${BR[t.subject] ?? t.subject}`} className="mb-4" right={<span className="text-xs text-ink-400">question {cur + 1} / {t.count}</span>}>
+  const inMeeting = t.meetingActive && activeId;
+  return <Card title={`📚 Séance de formation en cours — ${BR[t.subject] ?? t.subject}`} className="mb-4" right={<span className="text-xs text-ink-400">{t.answered} / {t.count} questions</span>}>
     <div data-testid="training" className="space-y-3 text-sm">
       <Bar value={t.answered} max={t.count} tone="gold" />
-      <div className="flex items-center gap-2"><Badge tone={it.label === "Calcul" ? "neutral" : it.label === "Culture" ? "warn" : it.label === "Définition" ? "info" : "gold"}>{it.label}</Badge></div>
-      {it.card && <div data-testid="tr-card" className="rounded-lg border border-gold/40 bg-yellow-500/5 p-3 text-xs">
-        <div className="mb-1 text-sm font-semibold text-gold">📖 Fiche : {it.card.term}</div>
-        <p className="text-ink-100"><b>Définition.</b> {it.card.definition}</p>
-        <p className="mt-1 text-ink-200"><b>En clair.</b> {it.card.simple}</p>
-        <p className="mt-1 text-ink-200"><b>Exemple.</b> {it.card.example}</p>
-        <p className="mt-1 text-ink-200"><b>À quoi ça sert.</b> {it.card.application}</p>
-      </div>}
-      <h3 className="text-base font-semibold text-white" data-testid="tr-prompt">{it.prompt}</h3>
-      {it.kind === "qcm"
-        ? <div className="space-y-2" role="group" aria-label="Réponses possibles">{it.options.map((o: string, i: number) => {
-          const st = !res ? "border-ink-600 bg-ink-900 hover:border-gold" : i === res.answer ? "border-green-500 bg-green-500/10" : i === res.value ? "border-red-500 bg-red-500/10" : "border-ink-700 bg-ink-900 opacity-60";
-          return <button key={i} data-testid={`tr-opt-${i}`} disabled={!!res} onClick={() => answer({ choice: i })} className={`block w-full rounded-lg border px-3 py-2.5 text-left text-sm transition ${st}`}><span className="mr-2 text-ink-400">{String.fromCharCode(65 + i)}.</span>{o}{res && i === res.answer && <span className="ml-2 text-gain">✔</span>}{res && i === res.value && i !== res.answer && <span className="ml-2 text-loss">✘</span>}</button>;
-        })}</div>
-        : <div className="flex flex-wrap items-end gap-2"><div className="w-48"><Field label={`Votre réponse${it.unit ? ` (${it.unit})` : ""}`}><input data-testid="tr-num" inputMode="decimal" aria-label="Votre réponse" disabled={!!res} value={res ? num(res.value) : val} onChange={(e) => setVal(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") submitNum(); }} className={inputCls} /></Field></div><Button data-testid="tr-submit" disabled={!!res || !val.trim()} onClick={submitNum}>Valider</Button></div>}
-      {res && <div data-testid="tr-result" role="status" className={`rounded-lg border p-3 ${res.ok ? "border-green-500/40 bg-green-500/5" : "border-red-500/40 bg-red-500/5"}`}>
-        <div className={`font-semibold ${res.ok ? "text-gain" : "text-loss"}`}>{res.ok ? "✔ Bonne réponse !" : it.kind === "num" ? `✘ Pas tout à fait : la réponse attendue est ${num(res.answer)}${it.unit ? " " + it.unit : ""}.` : "✘ Pas tout à fait."}</div>
-        <p className="mt-1 text-ink-200">{res.explain}</p>
-        <div className="mt-3">{cur + 1 < t.count ? <Button data-testid="tr-next" onClick={() => { setIdx(cur + 1); setVal(""); }}>Question suivante →</Button> : <Button data-testid="tr-end" onClick={() => setSummary(true)}>Voir le bilan</Button>}</div>
-      </div>}
-      {!res && <button className="text-[11px] text-ink-400 underline" onClick={() => act({ type: "training_close" }, { silent: true })}>Abandonner cette séance (les points déjà gagnés sont conservés)</button>}
+      <p className="text-ink-200">Votre responsable pose lui-même les questions en réunion (à l'oral ou à l'écrit) et corrige chaque réponse.</p>
+      {inMeeting ? <Button data-testid="tr-open" onClick={() => setOpen(activeId)}>Retourner en réunion</Button>
+        : <div className="flex flex-wrap gap-2"><Button data-testid="tr-resume" onClick={() => act({ type: "training_resume" }, { silent: true })}>Reprendre avec mon responsable</Button><Button variant="ghost" onClick={() => act({ type: "training_close" }, { silent: true })}>Abandonner (les points déjà gagnés sont conservés)</Button></div>}
     </div>
   </Card>;
 }
@@ -116,7 +93,7 @@ export default function Planning() {
   const maxH = Math.max(1, d.overtime.maxHours);
   return <>
     <PageTitle env="Bureau" title="Planning et sommeil" subtitle={sub} />
-    {d.training && <TrainingCard key={d.training.id} t={d.training} act={act} />}
+    {d.training && <TrainingStatus key={d.training.id + (d.training.done ? "d" : "")} t={d.training} act={act} />}
     <Card className="mb-4"><Timeline d={d} /></Card>
     <div className="grid gap-4 lg:grid-cols-3">
       <Card title="🕘 Horaires de travail">

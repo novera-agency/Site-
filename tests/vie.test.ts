@@ -10,6 +10,9 @@ import { createGame } from "@/engine/engine";
 import { getPlan, setPlan, workWindow, sleepCheck, plannedNetHours, DEFAULT_PLAN, hhmm } from "@/engine/schedule";
 import { planDay } from "@/engine/agenda";
 import { buildQuestion, answerTraining, startTraining, closeTraining, trainingView, notebookView } from "@/engine/training";
+import { LESSONS } from "@/engine/data/learning";
+import { meetingChoices } from "@/engine/meetingEngine";
+import "@/engine/meetings";
 import { checkProgress } from "@/engine/progression";
 import { Rng } from "@/engine/rng";
 import { profile } from "./helpers";
@@ -225,6 +228,7 @@ describe("Planning, sommeil et heures supplémentaires", () => {
     s.t = tOfDay(dayIndex(s.t), 18, 0);
     expect(act(s, { type: "overtime", hours: 1, focus: "formation" }).ok).toBe(true);
     expect(s.life!.training?.items.length).toBe(3); // la formation donne une séance de questions, pas de l'XP gratuite
+    act(s, { type: "leave_meeting" });
     s.life!.ahead = 4; s.t = tOfDay(dayIndex(s.t), 18, 0);
     expect(act(s, { type: "overtime", hours: 1, focus: "avance" }).message).toMatch(/réserve pleine/);
     expect(s.life!.ahead).toBe(4);
@@ -274,7 +278,7 @@ describe("Séances de formation (heures supplémentaires « me former »)", () =
     expect(v.items.length).toBe(6);
     expect(v.items.every((i) => i.result === null)).toBe(true);
     expect(JSON.stringify(v)).not.toContain('"answer"');
-    expect(v.items.find((i) => i.label === "Fiche et exercice")?.card?.definition.length).toBeGreaterThan(20);
+    expect(v.items.some((i) => i.label === "Fiche et exercice")).toBe(true);
     // l'horloge a avancé de 2 h
     expect(minuteOfDay(s.t)).toBe(20 * 60);
   });
@@ -317,6 +321,7 @@ describe("Séances de formation (heures supplémentaires « me former »)", () =
     expect(nb.notes[0].text.length).toBeGreaterThan(20);
     expect(s.life!.trainStats!.perfect).toBe(0);
     expect(closeTraining(s).ok).toBe(true);
+    act(s, { type: "leave_meeting" });
     s.t = tOfDay(dayIndex(s.t), 18, 0);
     expect(act(s, { type: "overtime", hours: 1, focus: "formation" }).ok).toBe(true); // nouvelle séance possible
   });
@@ -350,5 +355,78 @@ describe("Séances de formation (heures supplémentaires « me former »)", () =
       expect(s.life!.training!.items.length).toBe(12);
       for (const it of s.life!.training!.items) expect(buildQuestion(it), `${sub} ${it.k} ${it.id}`).toBeTruthy();
     }
+  });
+
+  it("toutes les leçons du centre de formation se posent en QCM (les exercices chiffrés proposent des ordres de grandeur)", () => {
+    for (const l of LESSONS) {
+      const q = buildQuestion({ k: "lesson", id: l.id })!;
+      expect(q.kind, l.id).toBe("qcm");
+      expect(q.options!.length, l.id).toBeGreaterThanOrEqual(3);
+      expect(new Set(q.options).size, `${l.id} ${q.options!.join(" | ")}`).toBe(q.options!.length);
+      expect(q.answer).toBeGreaterThanOrEqual(0); expect(q.answer).toBeLessThan(q.options!.length);
+    }
+  });
+
+  describe("réunion de formation avec le N+1", () => {
+    const start = (seed: string, hours = 1, subject = "marches") => { const s = evening(seed); const r = act(s, { type: "overtime", hours, focus: "formation", subject: subject as never }); expect(r.ok).toBe(true); return { s, r }; };
+    const bossLines = (s: ReturnType<typeof game>) => { const m = s.meetings[0]; return m.log.filter((l) => l.who === s.npcs.boss.name).map((l) => l.text); };
+    it("« me former » ouvre une réunion avec le responsable, qui rappelle la notion puis pose la question ; les choix sont les bonnes réponses possibles", () => {
+      const { s, r } = start("fm-r1");
+      expect(r.data).toEqual({ meetingId: s.activeMeetingId });
+      const m = s.meetings[0];
+      expect(m.templateId).toBe("formation_n1");
+      expect(s.paused).toBe(true);
+      const tq = buildQuestion(s.life!.training!.items[0])!;
+      const first = bossLines(s)[0];
+      expect(first).toContain(tq.prompt);
+      expect(first).toMatch(/vous restez tard/);
+      const ch = meetingChoices(s, m);
+      expect(ch.map((c) => c.label)).toEqual(tq.options);
+      expect(ch.every((c) => c.label.length > 0)).toBe(true);
+    });
+    it("le responsable corrige chaque réponse (✔ ou ✘ et l'explication), puis conclut ; la séance et le bilan sont enregistrés", () => {
+      const { s } = start("fm-r2", 1);
+      const m = s.meetings[0];
+      const t = s.life!.training!;
+      const trust0 = s.npcs.boss.trust;
+      t.items.forEach((it, i) => {
+        const tq = buildQuestion(it)!;
+        const choice = i === 1 ? (tq.answer + 1) % tq.options!.length : tq.answer; // on se trompe à la 2e question
+        const r = answerMeeting(s, m.id, { choiceId: `c${choice}` });
+        expect(r.ok).toBe(true);
+        const corr = m.log.filter((l) => l.who === s.npcs.boss.name && /^[✔✘]/.test(l.text)).pop()!;
+        expect(corr.text.startsWith(i === 1 ? "✘" : "✔")).toBe(true);
+        expect(corr.text.length).toBeGreaterThan(25);
+      });
+      expect(m.done).toBe(true);
+      expect(m.vars.failed).toBeUndefined();
+      expect(m.outcome).toMatch(/Séance de formation : 2\/3/);
+      expect(s.activeMeetingId).toBeUndefined();
+      expect(t.done).toEqual(expect.objectContaining({ correct: 2, total: 3 }));
+      expect(notebookView(s).notes.length).toBe(1);
+      expect(s.npcs.boss.trust).toBeGreaterThanOrEqual(trust0 - 3);
+      expect(trainingView(s)!.done).toBeTruthy();
+    });
+    it("réunion quittée en cours de route : la séance reprend à la question suivante, via « Reprendre avec mon responsable »", () => {
+      const { s } = start("fm-r3", 2);
+      const m = s.meetings[0];
+      const t = s.life!.training!;
+      answerMeeting(s, m.id, { choiceId: `c${buildQuestion(t.items[0])!.answer}` });
+      answerMeeting(s, m.id, { choiceId: `c${buildQuestion(t.items[1])!.answer}` });
+      expect(act(s, { type: "leave_meeting" }).ok).toBe(true);
+      expect(s.life!.training!.answers.length).toBe(2);
+      expect(act(s, { type: "overtime", hours: 1, focus: "formation" }).ok).toBe(false); // séance non terminée
+      const r = act(s, { type: "training_resume" });
+      expect(r.ok).toBe(true);
+      const m2 = s.meetings[0];
+      expect(m2.id).not.toBe(m.id);
+      expect(m2.nodeId).toBe("q2");
+      expect(bossLines(s).some((l) => l.includes(buildQuestion(t.items[2])!.prompt))).toBe(true);
+      // le reste de la séance se termine normalement
+      for (let i = 2; i < t.items.length; i++) answerMeeting(s, m2.id, { choiceId: `c${buildQuestion(t.items[i])!.answer}` });
+      expect(m2.done).toBe(true);
+      expect(t.done!.total).toBe(6);
+      expect(act(s, { type: "training_resume" }).ok).toBe(false); // plus rien à reprendre
+    });
   });
 });
