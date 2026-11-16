@@ -1,4 +1,5 @@
 "use client";
+import { callOn, voicesOn } from "./sound-prefs";
 /** Voix des personnages (synthèse vocale) et écoute du joueur (reconnaissance vocale), via les API du navigateur. */
 
 type Rec = { lang: string; continuous: boolean; interimResults: boolean; maxAlternatives: number; start(): void; stop(): void; abort(): void; onresult: ((e: any) => void) | null; onerror: ((e: any) => void) | null; onend: (() => void) | null; };
@@ -96,7 +97,7 @@ export function voiceCast(people: { id: string; role?: string }[]): Map<string, 
 export function ringTone(rings = 2, audible = true): Promise<void> {
   const wait = rings * 1400;
   return new Promise((resolve) => {
-    if (!audible) { setTimeout(resolve, wait); return; }
+    if (!audible || !callOn()) { setTimeout(resolve, wait); return; }
     try {
       const AC = (window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext }).AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const ctx = audioCtx && audioCtx.state !== "closed" ? audioCtx : new AC();
@@ -192,7 +193,7 @@ function speakOne(text: string, p: VoiceProfile, volume: number, gen: number, re
 }
 /** Prononce un texte ; la promesse se résout à la fin, à l'annulation ou si le son est bloqué */
 export async function speak(text: string, p: VoiceProfile, volume = 1): Promise<SpeakResult> {
-  if (!voiceSupport().tts) return "ok";
+  if (!voiceSupport().tts || !voicesOn()) return "ok"; // voix coupées dans les paramètres : rien n'est prononcé
   if (!voices.length) loadVoices();
   const gen = cancelGen;
   const clean = text.replace(/[«»"]/g, "").replace(/\s+/g, " ").trim();

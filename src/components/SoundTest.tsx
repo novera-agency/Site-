@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { speak, stopSpeaking, unlockAudio, voiceInventory, voiceDiag, voiceSupport, voiceCast, ringTone, frenchVoices, setPreferredVoices, preferredVoices, voiceByUri } from "@/lib/voice";
 import { Button, Badge } from "./ui";
+import { useSoundPrefs } from "@/lib/sound-prefs";
 
 type FV = ReturnType<typeof frenchVoices>[number];
 const QTONE: Record<string, "gain" | "gold" | "info" | "warn" | "loss"> = { naturelle: "gain", premium: "gold", bonne: "info", standard: "warn", basique: "loss" };
@@ -27,6 +28,8 @@ export function SoundTest() {
   const [busy, setBusy] = useState(false);
   const [tip, setTip] = useState("");
   const sup = typeof window !== "undefined" ? voiceSupport() : { tts: false, stt: false };
+  const sp = useSoundPrefs();
+  const off = sp.muted || !sp.voices;
   useEffect(() => {
     const refresh = () => { setInv(voiceInventory()); setList(frenchVoices()); setChosen(preferredVoices()); };
     const t = setTimeout(refresh, 300); const t2 = setTimeout(refresh, 1500);
@@ -49,8 +52,8 @@ export function SoundTest() {
   const best = list[0]?.quality;
   return <div data-testid="sound-test" className="space-y-3 text-sm">
     <div className="flex flex-wrap gap-2">
-      <Button data-testid="sound-test-run" disabled={busy || !sup.tts} onClick={run}>{busy ? "Lecture…" : "🔊 Écouter deux voix du jeu"}</Button>
-      <Button variant="ghost" onClick={() => { unlockAudio(); ringTone(1); }}>🔔 Tester le bip d'appel</Button>
+      <Button data-testid="sound-test-run" disabled={busy || !sup.tts || off} onClick={run}>{busy ? "Lecture…" : "🔊 Écouter deux voix du jeu"}</Button>
+      <Button variant="ghost" disabled={sp.muted || !sp.call} onClick={() => { unlockAudio(); ringTone(1); }}>🔔 Tester le bip d'appel</Button>
       {busy && <Button variant="ghost" onClick={() => { stopSpeaking(); setBusy(false); }}>Arrêter</Button>}
     </div>
     <ul className="space-y-0.5 text-xs text-ink-300">

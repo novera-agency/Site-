@@ -6,6 +6,7 @@
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let enabled = true;
+import { notifOn } from "./sound-prefs";
 
 function ac() {
   if (typeof window === "undefined") return null;
@@ -36,7 +37,7 @@ function tap(start: number, dur: number, vol: number, freq = 1800, q = 0.7) {
 export type Sfx = "succes" | "alerte" | "critique" | "cash" | "clic" | "info";
 /** Retours sonores sans mélodie : un tapotement = information, deux = alerte, trois = urgence, un souffle doux = réussite */
 export function sfx(kind: Sfx) {
-  if (!enabled) return;
+  if (!enabled || !notifOn()) return;
   switch (kind) {
     case "succes": tap(0, 0.35, 0.09, 2600, 0.5); break;
     case "cash": tap(0, 0.07, 0.07, 3500, 1.2); tap(0.08, 0.07, 0.07, 3500, 1.2); tap(0.16, 0.1, 0.07, 3500, 1.2); break;

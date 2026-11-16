@@ -15,6 +15,7 @@ import { HIST_END_LABEL } from "@/engine/data/history2000";
 import { Badge, Disclaimer } from "./ui";
 import type { Snapshot } from "@/server/views";
 import { sfx, setSoundEnabled } from "@/lib/sound";
+import { hasStoredSoundPrefs, setSoundPrefs, useSoundPrefs } from "@/lib/sound-prefs";
 import { CATEGORIES, categoryOf, itemOf, type NavCategory } from "./nav";
 
 
@@ -40,6 +41,7 @@ function TopBar({ snap, onMenu }: { snap: Snapshot; onMenu: () => void }) {
             </div>
           </div>
         </div>
+        <MuteButton />
         <div className="hidden items-center gap-1.5 md:flex">{snap.sessions.filter((x) => ["EU", "US", "ASIA", "CRYPTO"].includes(x.id)).map((x) => <span key={x.id} title={x.label} className="flex items-center gap-1 text-[11px] text-ink-300"><span className={`h-1.5 w-1.5 rounded-full ${x.open ? "bg-gain" : "bg-ink-500"}`} />{x.id}</span>)}</div>
         <span className="hidden sm:inline"><Badge tone={snap.crisisActive ? "loss" : "info"}>{snap.regimeLabel}</Badge></span>
         {snap.historical && <span data-testid="hist-badge" title={snap.histLive ? `Les marchés suivent les grandes tendances réelles et les événements historiques jusqu'au ${HIST_END_LABEL}.` : `Après le ${HIST_END_LABEL}, il n'y a plus de données réelles : les marchés évoluent selon le modèle et des événements mondiaux simulés peuvent survenir.`} className={`hidden rounded px-1.5 py-0.5 text-[10px] sm:inline ${snap.histLive ? "bg-blue-500/15 text-blue-200" : "bg-purple-500/15 text-purple-200"}`}>{tr(snap.histLive ? "📜 Histoire réelle" : "🎲 Simulation libre")}</span>}
@@ -59,6 +61,12 @@ function TopBar({ snap, onMenu }: { snap: Snapshot; onMenu: () => void }) {
       {snap.paused && snap.pauseReason && snap.pauseReason !== "Pause" && <div className="border-t border-amber-500/30 bg-amber-500/10 px-4 py-1.5 text-xs text-amber-200">⏸ {snap.pauseReason} — la simulation est en pause. Analysez la situation, puis reprenez avec ▶.</div>}
     </div>
   );
+}
+
+/** Bouton « mode silencieux » : coupe ou rétablit tous les bruits d'un geste */
+function MuteButton() {
+  const p = useSoundPrefs();
+  return <button data-testid="mute-toggle" aria-pressed={p.muted} aria-label={p.muted ? "Rétablir le son" : "Couper tous les bruits"} title={p.muted ? "Mode silencieux : toucher pour rétablir le son" : "Couper tous les bruits"} onClick={() => setSoundPrefs({ muted: !p.muted })} className={`rounded-md px-2 py-1 text-sm ${p.muted ? "bg-amber-500 text-black" : "bg-ink-800 text-ink-200 hover:text-white"}`}>{p.muted ? "🔇" : "🔊"}</button>;
 }
 
 function Ticker({ snap }: { snap: Snapshot }) {
@@ -143,7 +151,9 @@ function SideNav({ snap, path }: { snap: Snapshot; path: string }) {
 function SoundDirector({ snap }: { snap: Snapshot }) {
   const seen = useRef<string | null>(null);
   useEffect(() => {
-    setSoundEnabled(snap.sound !== false);
+    setSoundEnabled(true);
+    // Ancien réglage « sons coupés » de la partie : repris une fois comme réglage de l'appareil
+    if (snap.sound === false && !hasStoredSoundPrefs()) setSoundPrefs({ notif: false });
   }, [snap.sound]);
   useEffect(() => {
     const top = snap.notifications[0];

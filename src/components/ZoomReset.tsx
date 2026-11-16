@@ -10,7 +10,8 @@ export function ZoomReset() {
     // La balise est relue à chaque fois : Next peut la recréer lors d'un changement de page
     const get = () => document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
     const base = get()?.content?.replace(/,?\s*maximum-scale=[^,]*/g, "") || "width=device-width, initial-scale=1";
-    const isField = (t: EventTarget | null) => t instanceof HTMLElement && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName);
+    // Seuls les champs où l'on saisit du texte ou un menu déroulant déclenchent le zoom automatique ; pas les cases à cocher ni les boutons
+    const isField = (t: EventTarget | null) => t instanceof HTMLElement && (t.tagName === "SELECT" || t.tagName === "TEXTAREA" || (t instanceof HTMLInputElement && !["checkbox", "radio", "range", "button", "submit", "file", "color"].includes(t.type)));
     let timer: ReturnType<typeof setTimeout> | null = null;
     const lock = () => { if (timer) { clearTimeout(timer); timer = null; } const m = get(); if (m) m.content = `${base}, maximum-scale=1`; };
     const release = () => {

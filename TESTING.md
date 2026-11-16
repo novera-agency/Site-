@@ -64,3 +64,5 @@ Pour tester l'édition navigateur : `BASE_PATH=/Site- npm run build:static`, ser
 | `tests/recap.test.ts` (formules) | 30 formules : chaque famille d'exercices a sa formule, corrigés rédigés vérifiés numériquement, repérage dans le texte, formule travaillée en premier, exercice supplémentaire toujours présent, aucune répétition ni double point. |
 | `e2e/formation.spec.ts` (fiche) | Exercice supplémentaire visible, corrigé masquable. |
 | `e2e/vocal.spec.ts` (appel) | Début d'appel : un seul bip bref de 440 Hz (plus de sonnerie répétée). |
+| `tests/sound-prefs.test.ts` | Réglages du son : valeurs par défaut, mode silencieux qui n'efface pas le détail, conservation, valeurs abîmées ignorées. |
+| `e2e/sons.spec.ts` | Page Sons et bruits, bouton silence, bip de test, voix coupées → mode oral indisponible, case de l'accueil. |

@@ -9,6 +9,7 @@ import { Button, inputCls } from "@/components/ui";
 import { Intro } from "@/components/Intro";
 import { hallOfFame, type HallEntry } from "@/lib/hall";
 import { useT, setLang, getLang } from "@/lib/i18n";
+import { setSoundPrefs, useSoundPrefs } from "@/lib/sound-prefs";
 
 interface Meta { gameId: string; name: string; mode: string; bank: string; t: number; updatedAt: string; rank?: string; difficulty: string; epochYear?: number; }
 type Item = "continuer" | "nouvelle" | "charger" | "libre" | "defis" | "honneur" | "options";
@@ -64,6 +65,7 @@ function Ticker() {
 
 export default function Home() {
   const T = useT();
+  const snd = useSoundPrefs();
   const [lang, setLangState] = useState<"fr" | "en">("fr");
   useEffect(() => { setLangState(getLang()); }, []);
   const router = useRouter();
@@ -200,6 +202,7 @@ export default function Home() {
         </select>
         <span className="mt-1 block text-xs text-ink-500">S'applique aux nouvelles parties. En jeu, les boutons x2 à x100 accélèrent encore.</span>
       </label>
+      <label className="mt-5 flex cursor-pointer items-start gap-2 text-sm text-ink-300"><input type="checkbox" className="mt-1" data-testid="home-mute" checked={snd.muted} onChange={(e) => setSoundPrefs({ muted: e.target.checked })} /><span>Mode silencieux : couper tous les bruits et les voix<span className="block text-xs text-ink-500">Réglages détaillés dans la partie : Options → Paramètres.</span></span></label>
       {!STATIC && <div className="mt-6 text-sm">{session && !session.guest ? <p className="text-ink-300">Connecté en tant que <b className="text-white">{session.name}</b>. <button className="text-ink-400 underline" onClick={async () => { await api("/api/auth", { action: "logout" }); setSession(null); setSaves([]); }}>Se déconnecter</button></p> : <p className="text-ink-300">Un compte permet de retrouver vos parties depuis un autre navigateur. <button className="text-gold underline" onClick={() => setAuth("login")}>Se connecter</button> · <button className="text-gold underline" onClick={() => setAuth("register")}>Créer un compte</button></p>}</div>}
       {STATIC && <p className="mt-6 text-sm text-ink-400">Vos parties sont enregistrées dans ce navigateur. Pour les transférer, utilisez l'export dans « Gérer les sauvegardes ».</p>}
     </>,

@@ -5,6 +5,8 @@ import { useGame } from "@/lib/store";
 import { Button, Badge, inputCls } from "./ui";
 import { SoundTest } from "./SoundTest";
 import { Portrait } from "./Portrait";
+import { useSoundPrefs } from "@/lib/sound-prefs";
+import Link from "next/link";
 import { RecapCard } from "./RecapCard";
 import type { Recap } from "@/engine/recap";
 import { voiceSupport, voiceFor, voiceCast, ringTone, speak, stopSpeaking, listen, unlockAudio, type Listener } from "@/lib/voice";
@@ -55,10 +57,12 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
   const busyRef = useRef(false);
 
   const [ringing, setRinging] = useState<boolean | null>(null);
+  const sp = useSoundPrefs();
+  const voicesOff = sp.muted || !sp.voices;
   const [callStart] = useState(() => Date.now());
   const [, tick] = useState(0);
   useEffect(() => { if (!m?.phone) return; const id = setInterval(() => tick((x) => x + 1), 1000); return () => clearInterval(id); }, [m?.phone]);
-  useEffect(() => { if (!m || ringing !== null) return; if (m.phone && !m.done && m.log.length <= 1) { setRinging(true); ringTone(2, useGame.getState().snap?.sound !== false).then(() => setRinging(false)); } else setRinging(false); }, [m, ringing]);
+  useEffect(() => { if (!m || ringing !== null) return; if (m.phone && !m.done && m.log.length <= 1) { setRinging(true); ringTone(2).then(() => setRinging(false)); } else setRinging(false); }, [m, ringing]);
   useEffect(() => { try { const x = localStorage.getItem("fe_meeting_mode"); if (x === "oral" || x === "ecrit") setLastMode(x); } catch { /* */ } }, []);
   useEffect(() => { if (m?.done && mode === null) setMode("ecrit"); }, [m?.done, mode]);
   useEffect(() => { if (mode === "ecrit") logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" }); }, [m?.log.length, mode]);
@@ -214,16 +218,17 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
             {salesBar && m.pickup && <div className="flex w-full justify-center">{salesBar}</div>}
             <div className="text-lg font-semibold text-white">{m.phone ? "Comment voulez-vous mener cet appel ?" : "Comment voulez-vous mener cette réunion ?"}</div>
             <div className="grid w-full max-w-2xl gap-3 md:grid-cols-2">
-              <button data-testid="mode-oral" onClick={chooseOral} className={`rounded-xl border p-5 text-left transition hover:border-gold ${lastMode === "oral" ? "border-gold/70 bg-yellow-500/10" : "border-ink-600 bg-ink-850"}`}>
+              <button data-testid="mode-oral" disabled={voicesOff} onClick={chooseOral} className={`rounded-xl border p-5 text-left transition enabled:hover:border-gold disabled:opacity-50 ${lastMode === "oral" ? "border-gold/70 bg-yellow-500/10" : "border-ink-600 bg-ink-850"}`}>
                 <div className="text-3xl">🎙️</div><div className="mt-2 text-lg font-semibold text-white">Mode oral</div>
                 <p className="mt-1 text-sm text-ink-300">Les participants vous parlent, chacun avec sa voix. Vous répondez à voix haute, en {limit} secondes maximum. Aucun texte à l'écran : écoutez et répondez.</p>
-                <p className="mt-2 text-xs text-ink-500">Le navigateur va demander l'accès au micro.</p>
+                <p className="mt-2 text-xs text-ink-500">{voicesOff ? <span className="text-amber-300">Indisponible : les voix sont coupées.</span> : "Le navigateur va demander l'accès au micro."}</p>
               </button>
               <button data-testid="mode-ecrit" onClick={() => { remember("ecrit"); setMode("ecrit"); }} className={`rounded-xl border p-5 text-left transition hover:border-gold ${lastMode === "ecrit" ? "border-gold/70 bg-yellow-500/10" : "border-ink-600 bg-ink-850"}`}>
                 <div className="text-3xl">💬</div><div className="mt-2 text-lg font-semibold text-white">Mode écrit</div>
                 <p className="mt-1 text-sm text-ink-300">Vous lisez la conversation, avec qui a dit quoi, et vous choisissez vos réponses. Pas de limite de temps.</p>
               </button>
             </div>
+            {voicesOff && <div data-testid="oral-off" className="max-w-2xl rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">Les voix sont coupées : seul le mode écrit est disponible. <Link href="/play/parametres" className="underline">Réactiver les voix dans les paramètres</Link></div>}
             {micError && <div className="max-w-2xl rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200" data-testid="mic-error">{micError}</div>}
             <details className="w-full max-w-2xl text-left"><summary className="cursor-pointer text-center text-xs text-ink-400 underline">Vous n'entendez pas les voix ? Testez le son ici</summary><div className="mt-2 rounded-lg border border-ink-700 bg-ink-900/80 p-3"><SoundTest /></div></details>
           </div>

@@ -74,7 +74,7 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 ## Vérifications (dernière exécution)
 - `npm run lint` : OK
 - `npm test` : 104/104
-- `npm run e2e` : 26/26 (dont parcours 20 étapes, appel client, immobilier, vie privée, voix)
+- `npm run e2e` : 30/30 (dont parcours 20 étapes, appel client, immobilier, vie privée, voix)
 - Affichage émulé iPhone 13, Pixel 7 et iPad : aucune page ne déborde horizontalement (38 écrans)
 - `npm run build` : OK
 
@@ -132,3 +132,4 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 - ✅ Fiche « à retenir » à la fin de chaque entretien (toutes les réunions, et consultable dans l'historique des réunions) : titre, date, lieu et participants, verdict, bilan, ce qu'il faut retenir (corrections, objectifs), chiffres clés de la fiche documentaire, notions du glossaire employées par les interlocuteurs avec une explication en clair, vos décisions, réactions des interlocuteurs et conseils. Pour le point culture et la séance de formation : une ligne par question avec la bonne réponse et l'explication, et la notion de la fiche de cours. À capturer à l'écran, à télécharger en image PNG (1080 px de large) ou à copier en texte.
 - ✅ Fiche « à retenir » enrichie : « Formules à connaître » (formule détaillée, légende des variables, calcul pas à pas avec de nouveaux chiffres, piège classique) pour 30 formules (rendement du dividende, PER, intérêts composés, valeur actuelle, VAN, VaR, duration, delta, options, levier, marges, ROE, PEG, dette/EBITDA, rendement locatif, capacité d'emprunt, mensualité…), repérées dans l'entretien ; celles des exercices de calcul ratés ou travaillés passent en premier. « Exercice supplémentaire » avec corrigé détaillé (masquable pour s'entraîner), toujours présent. Présent dans l'écran, l'image PNG et le texte copié.
 - ✅ Sonnerie d'appel remplacée par un seul bip court et doux (440 Hz, ¼ de seconde, sans répétition), conçu pour fonctionner sur iPhone (contexte audio débloqué au premier toucher) ; silencieux si le son des notifications est coupé dans les Paramètres. L'attente avant que le client décroche reste affichée.
+- ✅ Réglages du son : Options → Paramètres → « Sons et bruits » : mode silencieux (coupe tout), et un interrupteur par type de bruit (bruits de notification, bip d'appel, voix des personnages). Bouton 🔊/🔇 en haut de l'écran et case « mode silencieux » à l'accueil. Réglages propres à l'appareil, conservés d'une partie à l'autre ; voix coupées = mode oral des réunions indisponible (mode écrit seul). L'ancien réglage de la partie « sons coupés » est repris une fois.
