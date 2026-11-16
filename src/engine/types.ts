@@ -297,14 +297,19 @@ export interface LifeState {
   /** Départ anticipé du jour grâce à l'avance */
   early?: { day: number; hours: number };
   /** Séance de formation issue des heures supplémentaires « me former » */
-  training?: { id: string; startT: number; hours: number; subject: SkillBranch; items: { k: "lesson" | "def" | "calc" | "quiz"; id: string; seed?: number }[]; answers: { ok: boolean; value?: number }[]; done?: { correct: number; total: number; bonusXp: number; trust: number } };
+  training?: { id: string; startT: number; hours: number; subject: SkillBranch; /** séance de révision des erreurs passées */ revision?: boolean; items: { k: "lesson" | "def" | "calc" | "quiz"; id: string; seed?: number; /** question déjà ratée, reposée en révision */ rev?: boolean }[]; answers: { ok: boolean; value?: number }[]; done?: { correct: number; total: number; bonusXp: number; trust: number } };
   /** Jour de la dernière séance de formation (une par jour) */
   trainDay?: number;
   /** Carnet de formation : notions ratées à retravailler */
-  notebook?: { t: number; kind: string; title: string; text: string }[];
+  notebook?: NotebookEntry[];
   trainStats?: { sessions: number; perfect: number; correct: number; total: number };
   /** Heures supplémentaires de la semaine */
   ot?: { week: number; hours: number; today: { day: number; hours: number } };
+}
+/** Erreur passée en formation ou au point culture, avec de quoi la refaire (la question se reconstruit à partir de `item`) */
+export interface NotebookEntry {
+  key: string; t: number; kind: string; title: string; text: string; from: "formation" | "culture"; count: number; fixed?: boolean;
+  item?: { k: "lesson" | "def" | "calc" | "quiz"; id: string; seed?: number }; yours?: string;
 }
 export interface GameState {
   version: number;

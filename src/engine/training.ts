@@ -11,6 +11,7 @@ import { genQuestion, GEN_FAMILIES } from "./quizGen";
 import { QUIZ_BANK, quizById } from "./quiz";
 import { gainXp, changeTrust, changeRep, notify, skillLevel, nextId } from "./core";
 import { dayIndex } from "./time";
+import { recordMistake, markFixed, unresolved, keyOf } from "./notebook";
 
 export type TItem = { k: "lesson" | "def" | "calc" | "quiz"; id: string; seed?: number };
 /** Une séance par jour, de 2 à 5 questions */
@@ -87,13 +88,13 @@ export function buildQuestion(it: TItem): TQ | null {
 /** Choix des questions : leçons pas encore validées de la compétence ciblée d'abord, puis définitions, calculs et culture */
 /** Une séance de formation par jour de jeu */
 export function trainedToday(s: GameState) { return s.life?.trainDay === dayIndex(s.t); }
-export function startTraining(s: GameState, hours: number, subject: SkillBranch | "auto") {
+export function startTraining(s: GameState, hours: number, subject: SkillBranch | "auto" | "erreurs") {
   const l = s.life!;
   if (l.training && !l.training.done) return { ok: false as const, error: "Terminez d'abord votre séance de formation en cours (ou fermez-la)." };
   const stats = l.trainStats ?? { sessions: 0, perfect: 0, correct: 0, total: 0 };
   const rnd = mulberry(hash(`${s.seed}:train:${dayIndex(s.t)}:${stats.sessions}`));
   let branch: SkillBranch;
-  if (subject === "auto") { const byXp = [...TRAIN_BRANCHES].sort((a, b) => s.skills[a] - s.skills[b] || hash(a + s.seed) - hash(b + s.seed)); branch = byXp[0]; }
+  if (subject === "auto" || subject === "erreurs") { const byXp = [...TRAIN_BRANCHES].sort((a, b) => s.skills[a] - s.skills[b] || hash(a + s.seed) - hash(b + s.seed)); branch = byXp[0]; }
   else branch = subject;
   const done = new Set(s.learning.completed);
   const inBranch = LESSONS.filter((x) => x.branch === branch);
@@ -103,7 +104,6 @@ export function startTraining(s: GameState, hours: number, subject: SkillBranch 
   const used = new Set<string>();
   const items: TItem[] = [];
   const quizPool = QUIZ_BANK.filter((q) => (QUIZ_CATS[branch] ?? []).includes(q.cat)).map((q) => q.id);
-  const notes = new Set((l.notebook ?? []).map((n) => n.title));
   // 2 à 5 questions : 1 h → 2 questions … 4 h → 5 questions, selon le schéma leçon, définition, calcul, leçon, définition
   const count = Math.max(MIN_Q, Math.min(MAX_Q, hours + 1));
   const PATTERN: ("lesson" | "def" | "calc")[] = ["lesson", "def", "calc", "lesson", "def"];
@@ -130,8 +130,14 @@ export function startTraining(s: GameState, hours: number, subject: SkillBranch 
     used.add("d:" + def.id);
     items.push({ k: "def", id: def.id, seed: Math.floor(rnd() * 1e6) });
   }
-  void notes;
-  l.training = { id: nextId(s, "train"), startT: s.t, hours, subject: branch, items, answers: [] };
+  // Séance de révision : on reprend d'abord les questions déjà ratées (les plus ratées et les plus récentes d'abord), complétées au besoin par de nouvelles questions
+  let finalItems = items;
+  if (subject === "erreurs") {
+    const rev: TItem[] = unresolved(s).sort((a, b) => b.count - a.count || b.t - a.t).slice(0, count).map((e) => ({ ...e.item!, rev: true }));
+    const seen = new Set(rev.map((it) => keyOf(it)));
+    finalItems = [...rev, ...items.filter((it) => !seen.has(keyOf(it)))].slice(0, count);
+  }
+  l.training = { id: nextId(s, "train"), startT: s.t, hours, subject: branch, ...(subject === "erreurs" ? { revision: true } : {}), items: finalItems, answers: [] };
   l.trainDay = dayIndex(s.t);
   return { ok: true as const, branch, count: items.length };
 }
@@ -160,11 +166,9 @@ export function answerTraining(s: GameState, index: number, input: { choice?: nu
     gainXp(s, q.branch, xp, it.k === "calc" ? `Séance : calcul ${it.id.split(":")[0]}` : it.k === "def" ? `Séance : ${LESSON_BY_ID[it.id].term}` : `Séance : culture ${it.id}`);
   }
   tr.answers.push({ ok, value });
-  if (!ok) {
-    const nb = (l.notebook ??= []);
-    nb.unshift({ t: s.t, kind: q.label, title: q.prompt.length > 110 ? q.prompt.slice(0, 107) + "…" : q.prompt, text: q.explain });
-    if (nb.length > 40) nb.length = 40;
-  }
+  const plain: TItem = { k: it.k, id: it.id, ...(it.seed !== undefined ? { seed: it.seed } : {}) };
+  if (!ok) recordMistake(s, { item: plain, kind: q.label, title: q.prompt, text: q.explain, yours: q.kind === "qcm" ? q.options?.[value as number] : undefined, from: "formation" });
+  else markFixed(s, plain);
   let finished: TDone | undefined;
   if (tr.answers.length === tr.items.length) finished = finalize(s);
   return { ok: true as const, data: { ok, answer: q.kind === "qcm" ? q.answer : q.answer, explain: q.explain, xp, finished } };
@@ -201,7 +205,7 @@ export function trainingView(s: GameState) {
   const l = s.life; const tr = l?.training;
   if (!l || !tr) return null;
   return {
-    id: tr.id, hours: tr.hours, subject: tr.subject, count: tr.items.length, answered: tr.answers.length, done: tr.done ?? null, meetingActive: !!s.activeMeetingId && s.meetings.find((m) => m.id === s.activeMeetingId)?.templateId === "formation_n1",
+    id: tr.id, hours: tr.hours, subject: tr.subject, revision: !!tr.revision, count: tr.items.length, answered: tr.answers.length, done: tr.done ?? null, meetingActive: !!s.activeMeetingId && s.meetings.find((m) => m.id === s.activeMeetingId)?.templateId === "formation_n1",
     items: tr.items.map((it, i) => {
       const q = buildQuestion(it)!; const a = tr.answers[i];
       return { i, label: q.label, prompt: q.prompt, result: a ? { ok: a.ok, explain: q.explain } : null };
@@ -212,6 +216,7 @@ export function notebookView(s: GameState) {
   const l = s.life;
   return {
     notes: (l?.notebook ?? []).slice(0, 20),
+    unresolved: l ? unresolved(s).length : 0,
     lessons: s.learning.completed.map((id) => LESSON_BY_ID[id]).filter(Boolean).map((x) => ({ id: x.id, term: x.term, simple: x.simple, example: x.example, application: x.application, branch: x.branch })),
     totalLessons: LESSONS.length,
     stats: l?.trainStats ?? { sessions: 0, perfect: 0, correct: 0, total: 0 },

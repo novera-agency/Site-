@@ -29,6 +29,20 @@ const IGNORED_TERMS = new Set(["Desk", "Book", "Limite", "Notation", "Allocation
 const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1).trimEnd() + "…" : t);
 const strip = (t: string) => t.replace(/^[✔✘]\s*/, "").trim();
 
+/** Formules à connaître (celles des exercices de calcul travaillés, puis celles citées dans les textes) et exercice supplémentaire corrigé */
+export function formulaSections(texts: string[], families: number[], seed: number): { formulas: Recap["formulas"]; exercise: NonNullable<Recap["exercise"]> } {
+  const found = matchFormulas(texts, 3, families);
+  const worked = (f: (typeof found)[number]) => { if (f.fam === undefined) return f.example ?? ""; const q = genQuestion(f.fam, seed % 900 + 11); return `${q.q} → ${q.options[q.correct].replace(/[.\s]+$/, "")}. ${q.explain}`; };
+  const formulas = found.map((f) => ({ title: f.title, formula: f.formula, legend: f.legend, example: worked(f), pitfall: f.pitfall }));
+  const fx = found.find((f) => f.fam !== undefined);
+  const st = found.find((f) => f.exercise);
+  let exercise: NonNullable<Recap["exercise"]>;
+  if (fx) { const q = genQuestion(fx.fam!, seed % 900 + 4000); exercise = { title: fx.title, prompt: q.q, answer: q.options[q.correct], solution: `${fx.formula}. ${q.explain}` }; }
+  else if (st) exercise = { title: st.title, prompt: st.exercise!.prompt, answer: st.exercise!.answer, solution: `${st.formula}. ${st.exercise!.solution}` };
+  else { const fam = [5, 1, 7, 10, 16][seed % 5]; const q = genQuestion(fam, seed % 900 + 5000); exercise = { title: "Calcul de base", prompt: q.q, answer: q.options[q.correct], solution: q.explain }; }
+  return { formulas, exercise };
+}
+
 export function buildRecap(s: GameState, m: MeetingInstance): Recap | null {
   const tpl = meetingTemplate(m.templateId);
   if (!tpl) return null;
@@ -67,17 +81,8 @@ export function buildRecap(s: GameState, m: MeetingInstance): Recap | null {
     if (m.vars.failed) tips.push("Avant la prochaine réunion, relisez l'ordre du jour et préparez vos chiffres.");
     if (!tips.length && total >= 4) tips.push("Bonne préparation : gardez ce réflexe (documents lus, réponses précises).");
   }
-  // Formules à connaître (celles des exercices de calcul travaillés, puis celles citées pendant l'entretien) et exercice supplémentaire
   const seed = [...m.id].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) % 100000, 7);
-  const found = matchFormulas([[...points, ...terms.map((t) => t.term), tpl.title(c)].join(" "), others.map((l) => l.text).join(" ")], 3, extra?.families ?? []);
-  const worked = (f: (typeof found)[number]) => { if (f.fam === undefined) return f.example ?? ""; const q = genQuestion(f.fam, seed % 900 + 11); return `${q.q} → ${q.options[q.correct].replace(/[.\s]+$/, "")}. ${q.explain}`; };
-  const formulas = found.map((f) => ({ title: f.title, formula: f.formula, legend: f.legend, example: worked(f), pitfall: f.pitfall }));
-  let exercise: Recap["exercise"] = null;
-  const fx = found.find((f) => f.fam !== undefined);
-  const st = found.find((f) => f.exercise);
-  if (fx) { const q = genQuestion(fx.fam!, seed % 900 + 4000); exercise = { title: fx.title, prompt: q.q, answer: q.options[q.correct], solution: `${fx.formula}. ${q.explain}` }; }
-  else if (st) exercise = { title: st.title, prompt: st.exercise!.prompt, answer: st.exercise!.answer, solution: `${st.formula}. ${st.exercise!.solution}` };
-  else { const fam = [5, 1, 7, 10, 16][seed % 5]; const q = genQuestion(fam, seed % 900 + 5000); exercise = { title: "Calcul de base", prompt: q.q, answer: q.options[q.correct], solution: q.explain }; }
+  const { formulas, exercise } = formulaSections([[...points, ...terms.map((t) => t.term), tpl.title(c)].join(" "), others.map((l) => l.text).join(" ")], extra?.families ?? [], seed);
   return {
     title: tpl.title(c), subtitle: `${tpl.location} · ${tpl.participants(c).map((id) => s.npcs[id]?.name ?? id).join(", ")}`, when: `${fmtDate(m.startedT)} · ${fmtTime(m.startedT)}`,
     verdict, outcome: m.outcome ? clip(m.outcome, 300) : "", points: points.slice(0, 8), facts, terms, formulas, exercise, decisions, reactions, tips: tips.slice(0, 4),

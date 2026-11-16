@@ -18,6 +18,7 @@ import { completeLesson, advanceTo } from "@/engine/engine";
 import { nextId, logDecision } from "@/engine/core";
 import { toCents } from "@/engine/money";
 import { closeTraining } from "@/engine/training";
+import { answerReview } from "@/engine/revision";
 import { setPlan, sleepCheck, finishSleep, doOvertime, workWindow, isWorkDay, hhmm, sleepLabel } from "@/engine/schedule";
 import { answerQuiz } from "@/engine/quiz";
 
@@ -65,7 +66,8 @@ export const ActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("tutorial_visit"), page: z.string().max(40) }),
   z.object({ type: z.literal("set_plan"), start: z.number().int(), end: z.number().int(), wake: z.number().int() }),
   z.object({ type: z.literal("sleep") }),
-  z.object({ type: z.literal("overtime"), hours: z.number().int().min(1).max(4), focus: z.enum(["avance", "dossiers", "formation"]), subject: z.enum(["auto", "marches", "analyse", "maths", "macro", "risque"]).optional() }),
+  z.object({ type: z.literal("overtime"), hours: z.number().int().min(1).max(4), focus: z.enum(["avance", "dossiers", "formation"]), subject: z.enum(["auto", "marches", "analyse", "maths", "macro", "risque", "erreurs"]).optional() }),
+  z.object({ type: z.literal("review_answer"), key: z.string().max(80), choice: z.number().int().min(0).max(5) }),
   z.object({ type: z.literal("training_resume") }),
   z.object({ type: z.literal("training_close") }),
   z.object({ type: z.literal("quiz_answer"), id: z.string().max(40), choice: z.number().int().min(0).max(5) }),
@@ -235,6 +237,7 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
       if (a.name) s.name = a.name;
       return { ok: true, message: "Paramètres enregistrés." };
     }
+    case "review_answer": { const r = answerReview(s, a.key, a.choice); return r.ok ? { ok: true, data: r.data } : { ok: false, error: r.error }; }
     case "training_resume": {
       const tr = s.life?.training;
       if (!tr || tr.done) return { ok: false, error: "Aucune séance de formation à reprendre." };

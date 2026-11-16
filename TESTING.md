@@ -66,3 +66,5 @@ Pour tester l'édition navigateur : `BASE_PATH=/Site- npm run build:static`, ser
 | `e2e/vocal.spec.ts` (appel) | Début d'appel : un seul bip bref de 440 Hz (plus de sonnerie répétée). |
 | `tests/sound-prefs.test.ts` | Réglages du son : valeurs par défaut, mode silencieux qui n'efface pas le détail, conservation, valeurs abîmées ignorées. |
 | `e2e/sons.spec.ts` | Page Sons et bruits, bouton silence, bip de test, voix coupées → mode oral indisponible, case de l'accueil. |
+| `tests/revision.test.ts` | Carnet d'erreurs (une ligne par question, compteur, maîtrisée/à revoir), anciens carnets, fiche de révision complète (réponse, fiche de cours, formule, exercice), refaire une question (gain unique), séance « Mes erreurs passées » (ordre, intro du N+1, maîtrise), limite de 60. |
+| `e2e/revision.spec.ts` | 5 erreurs provoquées au point culture (questions imposées par le serveur de test), fiches de révision intégrées avec audit d'accessibilité, refaire la question, filtre, séance de révision menée par le N+1. |

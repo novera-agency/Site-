@@ -6,6 +6,7 @@
 import type { GameState } from "./types";
 import { gainXp, notify, changeRep } from "./core";
 import { dayIndex } from "./time";
+import { recordMistake, markFixed, itemOfQuizId } from "./notebook";
 import { BANK2 } from "./quizBank2";
 import { BANK3 } from "./quizBank3";
 import { BANK4 } from "./quizBank4";
@@ -175,6 +176,8 @@ export function answerQuiz(s: GameState, id: string, choice: number) {
   const review = isDue(st, id, day0); // question déjà réussie il y a au moins 30 jours
   const first = st.done[id] === undefined || st.done[id] === 0;
   st.answered++;
+  if (!right) recordMistake(s, { item: itemOfQuizId(id), kind: q.cat === "calcul" ? "Calcul" : "Culture", title: q.q, text: q.explain, yours: q.options[choice], from: "culture" });
+  else markFixed(s, itemOfQuizId(id));
   let xp = 0;
   if (right) {
     st.correct++; st.streak++; st.best = Math.max(st.best, st.streak);

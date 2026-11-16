@@ -9,6 +9,7 @@ import type { GameState, SkillBranch } from "./types";
 import { clamp, notify, changeTrust, changeRep, gainXp } from "./core";
 import { dayIndex, isWeekend, MIN_PER_DAY, minuteOfDay, weekday } from "./time";
 import { startTraining, trainedToday } from "./training";
+import { unresolved } from "./notebook";
 
 export const DEFAULT_PLAN = { start: 7 * 60 + 30, end: 18 * 60, wake: 6 * 60 + 30 };
 export const LUNCH_MIN = 60;
@@ -110,11 +111,12 @@ export function overtimeCheck(s: GameState, hours: number) {
   if (m + hours * 60 > 23 * 60 + 30) return { ok: false as const, error: `Trop tard : ${hours} h de plus vous mèneraient après 23 h 30. Choisissez moins d'heures ou dormez.` };
   return { ok: true as const };
 }
-export function doOvertime(s: GameState, hours: number, focus: OvertimeFocus, subject: SkillBranch | "auto" = "auto") {
+export function doOvertime(s: GameState, hours: number, focus: OvertimeFocus, subject: SkillBranch | "auto" | "erreurs" = "auto") {
   const chk = overtimeCheck(s, hours);
   if (!chk.ok) return chk;
   if (!OVERTIME_FOCUS[focus]) return { ok: false as const, error: "Choix inconnu." };
   const l = s.life!;
+  if (focus === "formation" && subject === "erreurs" && unresolved(s).length === 0) return { ok: false as const, error: "Aucune erreur à revoir pour l'instant : choisissez une autre matière." };
   if (focus === "formation" && trainedToday(s) && !(l.training && !l.training.done)) return { ok: false as const, error: "Vous avez déjà fait votre séance de formation aujourd'hui : une seule par jour. Revenez demain." };
   if (focus === "formation" && l.training && !l.training.done) return { ok: false as const, error: "Terminez d'abord votre séance de formation en cours (ou fermez-la) avant d'en commencer une autre." };
   const day = dayIndex(s.t);

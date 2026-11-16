@@ -95,7 +95,10 @@ registerMeeting({
   id: "culture_n1", type: "Entretien avec un supérieur", location: "Salle des marchés", title: (c) => `Point culture avec ${bossName(c)}`,
   participants: () => ["boss"], agenda: ["Questions de culture économique et financière", "Corrections", "Bilan"], objectives: [`Donner ${CULTURE_MIN} bonnes réponses`, "Retenir les corrections"],
   readChoices: true,
-  init: (c) => { c.m.vars.ids = initialIds(c.s).join("|"); c.m.vars.replyWho = "boss"; c.m.vars.right = 0; c.m.vars.wrong = 0; c.m.vars.asked = 0; },
+  init: (c) => {
+    // Serveur de test (E2E_HOOKS) : questions imposées, pour des tests déterministes
+    const forced = process.env.E2E_HOOKS === "1" ? String(c.m.context?.ids ?? "") : "";
+    c.m.vars.ids = forced || initialIds(c.s).join("|"); c.m.vars.replyWho = "boss"; c.m.vars.right = 0; c.m.vars.wrong = 0; c.m.vars.asked = 0; },
   recap: (c) => {
     const res = String(c.m.vars.res ?? "").split(",").filter(Boolean).map(Number);
     const right = Number(c.m.vars.right ?? 0), wrong = Number(c.m.vars.wrong ?? 0);

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useView, useAction } from "@/lib/hooks";
 import { useGame } from "@/lib/store";
 import { Card, PageTitle, Loading, Badge, Bar, Button, Field, inputCls } from "@/components/ui";
+import { RecapCard } from "@/components/RecapCard";
 
 const fr = (n: number) => n.toLocaleString("fr-FR");
 const hm = (m: number) => `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}`;
@@ -33,7 +34,7 @@ function Timeline({ d }: { d: any }) {
 }
 
 
-const SUBJECTS: [string, string][] = [["auto", "Ma compétence la plus faible (automatique)"], ["marches", "Marchés et produits financiers"], ["analyse", "Analyse financière"], ["maths", "Mathématiques financières"], ["macro", "Macroéconomie"], ["risque", "Risques, assurance et conformité"]];
+const SUBJECTS: [string, string][] = [["auto", "Ma compétence la plus faible (automatique)"], ["erreurs", "Mes erreurs passées (révision)"], ["marches", "Marchés et produits financiers"], ["analyse", "Analyse financière"], ["maths", "Mathématiques financières"], ["macro", "Macroéconomie"], ["risque", "Risques, assurance et conformité"]];
 const BR: Record<string, string> = { marches: "marchés", analyse: "analyse", maths: "maths financières", macro: "macroéconomie", risque: "risques", client: "relation client", management: "management", entrepreneuriat: "entrepreneuriat" };
 
 /** Séance de formation : menée en réunion par le responsable ; ici, l'état, la reprise et le bilan avec les corrections */
@@ -55,7 +56,7 @@ function TrainingStatus({ t, act }: { t: any; act: (a: Record<string, unknown>, 
     </Card>;
   }
   const inMeeting = t.meetingActive && activeId;
-  return <Card title={`📚 Séance de formation en cours — ${BR[t.subject] ?? t.subject}`} className="mb-4" right={<span className="text-xs text-ink-400">{t.answered} / {t.count} questions</span>}>
+  return <Card title={`📚 Séance de formation en cours — ${t.revision ? "révision de vos erreurs" : BR[t.subject] ?? t.subject}`} className="mb-4" right={<span className="text-xs text-ink-400">{t.answered} / {t.count} questions</span>}>
     <div data-testid="training" className="space-y-3 text-sm">
       <Bar value={t.answered} max={t.count} tone="gold" />
       <p className="text-ink-200">Votre responsable pose lui-même les questions en réunion (à l'oral ou à l'écrit) et corrige chaque réponse.</p>
@@ -63,6 +64,40 @@ function TrainingStatus({ t, act }: { t: any; act: (a: Record<string, unknown>, 
         : <div className="flex flex-wrap gap-2"><Button data-testid="tr-resume" onClick={() => act({ type: "training_resume" }, { silent: true })}>Reprendre avec mon responsable</Button><Button variant="ghost" onClick={() => act({ type: "training_close" }, { silent: true })}>Abandonner (les points déjà gagnés sont conservés)</Button></div>}
     </div>
   </Card>;
+}
+
+
+/** Erreurs passées : fiche de révision intégrée (formules, calcul, exercice) et possibilité de refaire la question */
+function RevisionPanel({ rv, act }: { rv: any; act: (a: Record<string, unknown>, o?: { silent?: boolean }) => Promise<any> }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const [res, setRes] = useState<Record<string, { choice: number; correct: boolean; answer: number; explain: string; fixed: boolean }>>({});
+  const [filter, setFilter] = useState<"todo" | "all">("todo");
+  const shown = rv.entries.filter((e: any) => filter === "all" || !e.fixed);
+  const retry = async (key: string, choice: number) => { const r = await act({ type: "review_answer", key, choice }, { silent: true }); if (r.ok && r.data) setRes((x) => ({ ...x, [key]: { choice, ...r.data } })); };
+  return <div className="space-y-3" data-testid="revision">
+    <div className="flex flex-wrap items-center justify-between gap-2"><div className="text-xs text-ink-300"><b className="num text-white" data-testid="rv-count">{rv.unresolved}</b> erreur{rv.unresolved > 1 ? "s" : ""} à revoir · {rv.total} au total</div>
+      <div className="flex gap-1 text-[11px]">{([["todo", "À revoir"], ["all", "Toutes"]] as const).map(([k, l]) => <button key={k} aria-pressed={filter === k} onClick={() => setFilter(k)} className={`rounded px-2 py-1 ${filter === k ? "bg-gold text-black" : "bg-ink-800 text-ink-300"}`}>{l}</button>)}</div></div>
+    {shown.length === 0 && <p className="text-xs text-ink-400">{rv.total === 0 ? "Les questions que vous ratez en séance de formation ou au point culture s'ajoutent ici, avec leur fiche de révision." : "Aucune erreur à revoir : bravo !"}</p>}
+    <ul className="space-y-2">{shown.map((e: any) => {
+      const r = res[e.key]; const isOpen = open === e.key; const fixed = e.fixed || r?.fixed;
+      return <li key={e.key} className="rounded-lg border border-ink-700 bg-ink-900 p-3" data-testid="rv-entry">
+        <div className="flex flex-wrap items-center gap-2"><Badge tone={fixed ? "gain" : e.count > 2 ? "loss" : "warn"}>{fixed ? "Maîtrisée" : e.count > 1 ? `Ratée ${e.count} fois` : "À revoir"}</Badge><Badge tone="neutral">{e.kind}</Badge><span className="text-[11px] text-ink-400">{e.when}</span></div>
+        <div className="mt-1 text-sm font-medium text-ink-100">{e.title}</div>
+        <button data-testid="rv-toggle" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : e.key)} className="mt-2 text-xs text-gold underline">{isOpen ? "Masquer la fiche de révision" : "📒 Voir la fiche de révision"}</button>
+        {isOpen && <div data-testid="rv-fiche"><RecapCard recap={e.recap} />
+          {e.retry && <div className="mx-auto mt-3 w-full max-w-2xl rounded-lg border border-ink-700 bg-ink-950 p-3" data-testid="rv-retry">
+            <div className="text-xs font-semibold uppercase tracking-wider text-gold">Refaire la question, sans la correction</div>
+            <p className="mt-1 text-sm text-white">{e.retry.prompt}</p>
+            <div className="mt-2 space-y-1.5" role="group" aria-label="Réponses possibles">{e.retry.options.map((o: string, i: number) => {
+              const st = !r ? "border-ink-600 bg-ink-900 hover:border-gold" : i === r.answer ? "border-green-500 bg-green-500/10" : i === r.choice ? "border-red-500 bg-red-500/10" : "border-ink-700 bg-ink-900 opacity-60";
+              return <button key={i} data-testid={`rv-opt-${i}`} disabled={!!r} onClick={() => retry(e.key, i)} className={`block w-full rounded-md border px-3 py-2 text-left text-sm ${st}`}><span className="mr-2 text-ink-400">{String.fromCharCode(65 + i)}.</span>{o}{r && i === r.answer && <span className="ml-2 text-gain">✔</span>}{r && i === r.choice && i !== r.answer && <span className="ml-2 text-loss">✘</span>}</button>;
+            })}</div>
+            {r && <div data-testid="rv-result" role="status" className={`mt-2 rounded-md border p-2 text-xs ${r.correct ? "border-green-500/40 text-gain" : "border-red-500/40 text-loss"}`}><b>{r.correct ? (r.fixed ? "✔ Bonne réponse : question maîtrisée !" : "✔ Bonne réponse.") : "✘ Pas encore."}</b><span className="ml-1 text-ink-200">{r.explain}</span>{!r.correct && <button className="ml-2 underline" onClick={() => setRes((x) => { const c = { ...x }; delete c[e.key]; return c; })}>Réessayer</button>}</div>}
+          </div>}
+        </div>}
+      </li>;
+    })}</ul>
+  </div>;
 }
 
 export default function Planning() {
@@ -128,7 +163,8 @@ export default function Planning() {
           <fieldset className="space-y-1.5"><legend className="mb-1 text-[11px] font-medium uppercase tracking-wider text-ink-400">Objectif</legend>
             {d.overtime.focus.map((f: any) => <label key={f.id} className="flex cursor-pointer items-start gap-2 rounded-md border border-ink-700 bg-ink-900 p-2"><input type="radio" name="focus" className="mt-1" checked={focus === f.id} onChange={() => setFocus(f.id)} data-testid={`ot-focus-${f.id}`} /><span><span className="block text-xs font-medium text-ink-100">{f.label}</span><span className="block text-[11px] text-ink-400">{f.desc}</span></span></label>)}
           </fieldset>
-          {focus === "formation" && <Field label="Matière de la séance"><select data-testid="ot-subject" aria-label="Matière de la séance" className={inputCls} value={subject} onChange={(e) => setSubject(e.target.value)}>{SUBJECTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>}
+          {focus === "formation" && d.revision.unresolved > 0 && <p className="text-[11px] text-gold" data-testid="ot-errors-hint">Vous avez {d.revision.unresolved} erreur{d.revision.unresolved > 1 ? "s" : ""} passée{d.revision.unresolved > 1 ? "s" : ""} à revoir : choisissez « Mes erreurs passées » ou ouvrez les fiches de révision plus bas.</p>}
+          {focus === "formation" && <Field label="Matière de la séance"><select data-testid="ot-subject" aria-label="Matière de la séance" className={inputCls} value={subject} onChange={(e) => setSubject(e.target.value)}>{SUBJECTS.filter(([k]) => k !== "erreurs" || d.revision.unresolved > 0).map(([k, l]) => <option key={k} value={k}>{k === "erreurs" ? `${l} · ${d.revision.unresolved}` : l}</option>)}</select></Field>}
           {focus === "formation" && <p className="text-[11px] text-ink-300" data-testid="ot-formation-hint">{blockedTraining ? "Vous avez déjà fait votre séance de formation aujourd'hui (une seule par jour) : revenez demain." : `Séance du jour : ${Math.min(hours, maxH) + 1} questions avec votre responsable (une seule séance par jour, de 2 à 5 questions selon la durée).`}</p>}
           <Button data-testid="ot-btn" disabled={d.overtime.maxHours === 0 || (focus === "formation" && blockedTraining)} onClick={() => act({ type: "overtime", hours: Math.min(hours, maxH), focus, ...(focus === "formation" ? { subject } : {}) })}>⏱️ Faire {Math.min(hours, maxH)} h supplémentaire{Math.min(hours, maxH) > 1 ? "s" : ""}</Button>
           <div className="text-xs text-ink-300">Avance en réserve : <b className="num text-white" data-testid="ahead">{d.overtime.ahead} h</b> / {d.overtime.maxAhead} h
@@ -136,11 +172,10 @@ export default function Planning() {
         </div>
       </Card>
     </div>
-    <Card title="📓 Carnet de formation" className="mt-4" right={<span className="text-xs text-ink-400">{d.notebook.stats.sessions} séance{d.notebook.stats.sessions > 1 ? "s" : ""} · {d.notebook.stats.correct}/{d.notebook.stats.total} bonnes réponses</span>}>
+    <Card title="🔁 Mes erreurs passées et carnet de formation" className="mt-4" right={<span className="text-xs text-ink-400">{d.notebook.stats.sessions} séance{d.notebook.stats.sessions > 1 ? "s" : ""} · {d.notebook.stats.correct}/{d.notebook.stats.total} bonnes réponses</span>}>
       <div className="space-y-3 text-sm" data-testid="notebook">
         <div className="text-xs text-ink-300">Fiches de cours validées : <b className="num text-white">{d.notebook.lessons.length} / {d.notebook.totalLessons}</b> · <Link href="/play/formation" className="underline">centre de formation</Link></div>
-        {d.notebook.notes.length === 0 ? <p className="text-xs text-ink-400">Les notions que vous ratez en séance s'ajoutent ici avec leur correction, pour les relire quand vous voulez.</p>
-          : <details open><summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-ink-400">À revoir ({d.notebook.notes.length})</summary><ul className="mt-2 space-y-2">{d.notebook.notes.map((n: any, i: number) => <li key={i} className="rounded-md border border-ink-700 bg-ink-900 p-2 text-xs"><div className="mb-0.5"><Badge tone="neutral">{n.kind}</Badge></div><div className="font-medium text-ink-100">{n.title}</div><div className="mt-1 text-ink-300">{n.text}</div></li>)}</ul></details>}
+        <RevisionPanel rv={d.revision} act={act} />
         {d.notebook.lessons.length > 0 && <details><summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-ink-400">Fiches validées ({d.notebook.lessons.length})</summary><ul className="mt-2 space-y-2">{d.notebook.lessons.map((n: any) => <li key={n.id} className="rounded-md border border-ink-700 bg-ink-900 p-2 text-xs"><div className="font-medium text-ink-100">{n.term}</div><div className="text-ink-300">{n.simple}</div><div className="mt-1 text-ink-400">À quoi ça sert : {n.application}</div></li>)}</ul></details>}
       </div>
     </Card>

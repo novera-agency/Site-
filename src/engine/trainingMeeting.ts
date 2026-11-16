@@ -26,14 +26,15 @@ export function trainingLabel(s: GameState, nodeId: string, id: string): string 
 function intro(c: MeetingCtx, i: number, tq: TQ) {
   const t = session(c.s)!;
   const it = t.items[i];
-  const opening = i === Number(c.m.vars.first ?? 0) ? `${c.s.profile.firstName}, vous restez tard : profitons-en pour travailler les fondamentaux. ${t.items.length - i} question${t.items.length - i > 1 ? "s" : ""}, je corrige au fur et à mesure. ` : "";
+  const opening = i === Number(c.m.vars.first ?? 0) ? `${c.s.profile.firstName}, vous restez tard : ${t.revision ? "aujourd'hui nous reprenons vos erreurs passées, pour les comprendre une bonne fois" : "profitons-en pour travailler les fondamentaux"}. ${t.items.length - i} question${t.items.length - i > 1 ? "s" : ""}, je corrige au fur et à mesure. ` : "";
+  const again = it.rev ? "Vous aviez déjà buté sur celle-ci. " : "";
   if (it.k === "lesson" && tq.card) {
     const k = tq.card;
-    return `${opening}Reprenons la notion de « ${k.term} ». ${k.definition} En clair : ${k.simple} Exemple : ${k.example} À quoi ça sert : ${k.application} Question : ${tq.prompt}`;
+    return `${opening}${again}Reprenons la notion de « ${k.term} ». ${k.definition} En clair : ${k.simple} Exemple : ${k.example} À quoi ça sert : ${k.application} Question : ${tq.prompt}`;
   }
-  if (it.k === "def") return `${opening}Une question de vocabulaire, indispensable en salle. ${tq.prompt}`;
-  if (it.k === "calc") return `${opening}Un petit calcul, que vous devez pouvoir faire de tête. ${tq.prompt}`;
-  return `${opening}Un peu de culture générale. ${tq.prompt}`;
+  if (it.k === "def") return `${opening}${again}Une question de vocabulaire, indispensable en salle. ${tq.prompt}`;
+  if (it.k === "calc") return `${opening}${again}Un petit calcul, que vous devez pouvoir faire de tête. ${tq.prompt}`;
+  return `${opening}${again}Un peu de culture générale. ${tq.prompt}`;
 }
 
 const choiceFor = (i: number, k: number): Choice => ({
