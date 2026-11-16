@@ -99,11 +99,12 @@ registerMeeting({
   recap: (c) => {
     const res = String(c.m.vars.res ?? "").split(",").filter(Boolean).map(Number);
     const right = Number(c.m.vars.right ?? 0), wrong = Number(c.m.vars.wrong ?? 0);
-    const points = res.map((ok, i) => { const q = qAt(c.m.vars, i); return q ? `${ok ? "✔" : "✘"} ${q.q} → ${q.options[q.correct]}. ${q.explain}` : ""; }).filter(Boolean);
+    const points = res.map((ok, i) => { const q = qAt(c.m.vars, i); return q ? `${ok ? "✔" : "✘"} ${q.q} → ${q.options[q.correct].replace(/[.\s]+$/, "")}. ${q.explain}` : ""; }).filter(Boolean);
     const missed = res.map((ok, i) => (ok ? null : qAt(c.m.vars, i))).filter(Boolean) as QuizQ[];
     const tips = missed.length ? [`À revoir : ${[...new Set(missed.map((q) => THEME[q.cat]?.replace(/^de /, "") ?? q.cat))].join(", ")}. Ces questions reviennent dans le quiz d'économie.`] : ["Les bases sont solides : continuez le quiz d'économie pour monter en niveau."];
     tips.push("Un point culture chaque jour ouvré : 2 bonnes réponses suffisent, 5 questions au maximum.");
-    return { points, tips, verdict: right >= CULTURE_MIN && wrong === 0 ? { label: "Bases solides", tone: "gain" } : right >= CULTURE_MIN ? { label: "Bases acquises", tone: "warn" } : { label: "Bases à retravailler", tone: "loss" }, skipTerms: true, skipDecisions: true };
+    const families = res.map((ok, i) => ({ ok, id: ids(c.m.vars)[i] })).filter((x) => x.id?.startsWith("g:")).sort((a, b) => Number(a.ok) - Number(b.ok)).map((x) => Number(x.id.split(":")[1]));
+    return { points, tips, families, verdict: right >= CULTURE_MIN && wrong === 0 ? { label: "Bases solides", tone: "gain" } : right >= CULTURE_MIN ? { label: "Bases acquises", tone: "warn" } : { label: "Bases à retravailler", tone: "loss" }, skipTerms: true, skipDecisions: true };
   },
   start: "q0", nodes,
   conclude: (c) => {

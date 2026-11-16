@@ -61,3 +61,5 @@ Pour tester l'édition navigateur : `BASE_PATH=/Site- npm run build:static`, ser
 | `e2e/formation.spec.ts` (point culture) | Réunion du point culture : 2 à 5 questions, corrections, quiz du jour compté 2/2. |
 | `tests/recap.test.ts` | Fiche seulement une fois la réunion terminée ; fiche générale (corrections, décisions, notions, verdict) ; fiche du point culture et de la séance de formation ; historique consultable. |
 | `e2e/formation.spec.ts` (fiche) | Fiche visible à la fin du point culture, une ligne par question, audit d'accessibilité, téléchargement d'un vrai PNG de 1 080 px de large. |
+| `tests/recap.test.ts` (formules) | 30 formules : chaque famille d'exercices a sa formule, corrigés rédigés vérifiés numériquement, repérage dans le texte, formule travaillée en premier, exercice supplémentaire toujours présent, aucune répétition ni double point. |
+| `e2e/formation.spec.ts` (fiche) | Exercice supplémentaire visible, corrigé masquable. |

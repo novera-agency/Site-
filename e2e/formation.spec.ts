@@ -156,6 +156,13 @@ test("point culture quotidien : le N+1 pose 2 à 5 questions, corrige, et les qu
   await expect(card.getByTestId("recap-title")).toContainText("Point culture avec");
   expect(await card.getByTestId("recap-points").locator("li").count()).toBe(asked);
   await expect(card).toContainText("Fiche à retenir");
+  // Exercice supplémentaire avec corrigé que l'on peut masquer pour s'entraîner
+  await expect(card.getByTestId("recap-exercise")).toBeVisible();
+  await expect(card.getByTestId("recap-solution")).toContainText("Corrigé");
+  await card.getByTestId("recap-toggle").click();
+  await expect(card.getByTestId("recap-solution")).toHaveCount(0);
+  await card.getByTestId("recap-toggle").click();
+  await expect(card.getByTestId("recap-solution")).toBeVisible();
   const ax = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(ax.violations.map((v) => `${v.id} ×${v.nodes.length}`)).toEqual([]);
   const [dl] = await Promise.all([page.waitForEvent("download"), card.getByTestId("recap-png").click()]);

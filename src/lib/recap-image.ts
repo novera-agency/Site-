@@ -8,6 +8,8 @@ export function recapText(r: Recap): string {
   sec("À retenir", r.points);
   sec("Chiffres clés", r.facts.map(([a, b]) => `${a} : ${b}`));
   sec("Notions", r.terms.map((t) => `${t.term} : ${t.text}${t.example ? " Exemple : " + t.example : ""}`));
+  sec("Formules à connaître", r.formulas.map((f) => `${f.title} — ${f.formula}${f.legend.length ? " (" + f.legend.join(" ; ") + ")" : ""}${f.example ? " Calcul : " + f.example : ""}${f.pitfall ? " Piège : " + f.pitfall : ""}`));
+  if (r.exercise) sec("Exercice supplémentaire", [`${r.exercise.title} : ${r.exercise.prompt}`, `Corrigé : ${r.exercise.answer}. ${r.exercise.solution}`]);
   sec("Vos décisions", r.decisions);
   sec("Réactions de vos interlocuteurs", r.reactions);
   sec("Conseils", r.tips);
@@ -15,6 +17,7 @@ export function recapText(r: Recap): string {
   return L.join("\n");
 }
 
+const MONO = `"JetBrains Mono","SFMono-Regular",Menlo,Consolas,"Courier New",monospace`;
 const W = 1080, PAD = 56, FONT = `"Inter","Segoe UI",system-ui,-apple-system,Roboto,sans-serif`;
 const COL = { bg: "#0a0e15", card: "#0e131c", gold: "#d4a94f", text: "#e3e9f2", muted: "#9aa8bf", gain: "#4ade80", warn: "#fbbf24", loss: "#f87171", info: "#7aa2f7", line: "#243046" };
 
@@ -63,6 +66,30 @@ export async function recapPng(r: Recap): Promise<Blob> {
   section("À retenir", r.points.map((body) => ({ body })));
   section("Chiffres clés", r.facts.map(([head, body]) => ({ head, body })));
   section("Notions employées", r.terms.map((t) => ({ head: t.term, body: `${t.text}${t.example ? " Exemple : " + t.example : ""}` })));
+  // Formules : titre, formule (police à chasse fixe), légende, calcul pas à pas, piège
+  if (r.formulas.length) {
+    gap(26); ops.push({ kind: "rule" }); gap(16);
+    text("FORMULES À CONNAÎTRE", `700 20px ${FONT}`, COL.gold, 28);
+    gap(8);
+    for (const f of r.formulas) {
+      text(f.title, `700 25px ${FONT}`, COL.text, 36);
+      text(f.formula, `500 22px ${MONO}`, COL.gold, 32, PAD + 16);
+      for (const l of f.legend) text(`• ${l}`, `400 20px ${FONT}`, COL.muted, 28, PAD + 16);
+      if (f.example) text(`Calcul pas à pas : ${f.example}`, `400 21px ${FONT}`, COL.text, 30, PAD + 16);
+      if (f.pitfall) text(`⚠ Piège : ${f.pitfall}`, `400 20px ${FONT}`, COL.warn, 28, PAD + 16);
+      gap(14);
+    }
+  }
+  if (r.exercise) {
+    gap(18); ops.push({ kind: "rule" }); gap(16);
+    text("EXERCICE SUPPLÉMENTAIRE", `700 20px ${FONT}`, COL.gold, 28);
+    gap(8);
+    text(r.exercise.title, `700 24px ${FONT}`, COL.text, 34);
+    text(r.exercise.prompt, `400 24px ${FONT}`, COL.text, 34);
+    gap(8);
+    text(`Corrigé : ${r.exercise.answer}`, `700 24px ${FONT}`, COL.gain, 34);
+    text(r.exercise.solution, `400 21px ${FONT}`, COL.muted, 30);
+  }
   section("Vos décisions", r.decisions.map((body) => ({ body })));
   section("Réactions de vos interlocuteurs", r.reactions.map((body) => ({ body })));
   section("Conseils", r.tips.map((body) => ({ body })));

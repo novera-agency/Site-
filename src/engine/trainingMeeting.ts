@@ -97,13 +97,19 @@ registerMeeting({
     (t?.answers ?? []).forEach((a, i) => {
       const tq = buildQuestion(t!.items[i]);
       if (!tq) return;
-      if (tq.card) points.push(`📖 ${tq.card.term} : ${tq.card.definition}`);
-      points.push(`${a.ok ? "✔" : "✘"} ${tq.prompt} → ${tq.options?.[tq.answer] ?? ""}. ${tq.explain}`);
+      const it = t!.items[i];
+      const mark = a.ok ? "✔" : "✘";
+      const end = (x: string) => x.replace(/[.\s]+$/, "");
+      if (tq.card) points.push(`📖 ${tq.card.term} : ${end(tq.card.definition)}.`);
+      // Question de vocabulaire : la définition suffit (l'explication la répéterait)
+      if (it.k === "def") points.push(`${mark} ${tq.explain}`);
+      else points.push(`${mark} ${end(tq.prompt)} → ${end(tq.options?.[tq.answer] ?? "")}. ${tq.explain}`);
     });
     const d = t?.done;
     const pct = d ? d.correct / d.total : 0;
+    const families = (t?.answers ?? []).map((a, i) => ({ ok: a.ok, it: t!.items[i] })).filter((x) => x.it.k === "calc").sort((a, b) => Number(a.ok) - Number(b.ok)).map((x) => Number(x.it.id.split(":")[0]));
     return {
-      points,
+      points, families,
       tips: ["Les notions ratées sont dans votre carnet de formation (page Planning) : relisez-les.", "Une séance de formation par jour, de 2 à 5 questions."],
       verdict: !d ? { label: "Interrompue", tone: "info" } : pct >= 0.8 ? { label: "Séance réussie", tone: "gain" } : pct >= 0.5 ? { label: "À consolider", tone: "warn" } : { label: "À retravailler", tone: "loss" },
       skipTerms: true, skipDecisions: true,

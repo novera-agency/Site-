@@ -15,7 +15,7 @@ export interface Choice {
 export interface NumericQ { prompt: string; unit: string; answer: (c: MeetingCtx) => number; tolerance: (c: MeetingCtx) => number; hint?: string; onCorrect: (c: MeetingCtx) => void; onWrong: (c: MeetingCtx, given: number) => void; next: string; explain: (c: MeetingCtx) => string; }
 export interface MeetingNode { speaker: string | ((c: MeetingCtx) => string); text: (c: MeetingCtx) => string; choices?: Choice[]; numeric?: NumericQ; end?: boolean; }
 /** Contenu spécifique d'une fiche de synthèse (sinon, fiche générale construite à partir de la conversation) */
-export interface RecapExtra { points: string[]; tips?: string[]; verdict?: { label: string; tone: "gain" | "warn" | "loss" | "info" }; skipTerms?: boolean; skipDecisions?: boolean }
+export interface RecapExtra { points: string[]; /** familles d'exercices de calcul rencontrées (ordre de priorité) */ families?: number[]; tips?: string[]; verdict?: { label: string; tone: "gain" | "warn" | "loss" | "info" }; skipTerms?: boolean; skipDecisions?: boolean }
 export interface MeetingTemplate {
   id: string; type: string; title: (c: MeetingCtx) => string; location: string;
   participants: (c: MeetingCtx) => string[]; agenda: string[];
