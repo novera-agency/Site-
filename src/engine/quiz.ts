@@ -30,7 +30,7 @@ const BANK1: QuizQ[] = [
   Q("mi_public", "micro", 3, "Un éclairage public bénéficie à tous sans qu'on puisse en exclure quelqu'un. C'est un bien…", ["Privé", "De club", "Public", "Inférieur"], 2, "Un bien public est non rival (l'usage de l'un ne gêne pas les autres) et non exclusif : le marché le fournit mal, d'où le financement par l'impôt."),
   Q("mi_oligo", "micro", 1, "Quelques opérateurs seulement se partagent le marché des télécoms d'un pays. Quelle structure de marché ?", ["Monopole", "Oligopole", "Concurrence parfaite", "Monopsone"], 1, "Un oligopole réunit peu de vendeurs, qui tiennent compte des réactions de leurs rivaux."),
   Q("mi_seuil", "micro", 2, "Le seuil de rentabilité d'une entreprise est atteint quand…", ["Le chiffre d'affaires égale les coûts totaux", "Les stocks sont vides", "La marge brute est de 100 %", "La dette est remboursée"], 0, "En dessous de ce niveau d'activité l'entreprise perd de l'argent, au-dessus elle en gagne."),
-  Q("mi_marge", "micro", 1, "Une boutique achète un article 60 € et le vend 100 €. Son taux de marge brute (marge ÷ prix de vente) est de…", ["40 %", "60 %", "66 %", "167 %"], 0, "Marge = 100 − 60 = 40 €, soit 40 € ÷ 100 € = 40 % du prix de vente."),
+  Q("mi_marge", "micro", 1, "Une boutique achète un article 60 € et le vend 100 €. Son taux de marque (marge ÷ prix de vente) est de…", ["40 %", "60 %", "66 %", "167 %"], 0, "Marge = 100 − 60 = 40 €, soit 40 € ÷ 100 € = 40 % du prix de vente."),
   Q("mi_akerlof", "micro", 3, "Sur le marché des voitures d'occasion, l'acheteur connaît moins bien la qualité que le vendeur. Résultat possible : les bonnes voitures disparaissent du marché. C'est…", ["L'antisélection", "L'aléa moral", "Le monopole naturel", "L'effet de cliquet"], 0, "L'asymétrie d'information fait baisser le prix moyen, ce qui chasse les vendeurs de bonnes voitures (Akerlof, prix Nobel 2001)."),
   Q("mi_alea", "micro", 3, "Une fois assuré contre tous les dégâts, un conducteur devient moins prudent. Les économistes parlent d'…", ["Antisélection", "Aléa moral", "Externalité positive", "Rationnement"], 1, "L'aléa moral : le comportement change après la signature du contrat, car on ne supporte plus le risque. D'où les franchises."),
   Q("mi_plafond", "micro", 2, "L'État plafonne les loyers sous le prix d'équilibre. Effet le plus probable ?", ["Excès d'offre de logements", "Pénurie de logements à louer", "Baisse de la demande", "Aucun effet"], 1, "À prix bloqué trop bas, la demande dépasse l'offre : les logements disponibles se raréfient et se dégradent parfois."),
@@ -93,6 +93,8 @@ export interface QuizState {
   done: Record<string, 0 | 1>; /** jour de la dernière bonne réponse : une question réussie revient au bout de REVIEW_DAYS jours */ last?: Record<string, number>; streak: number; best: number; answered: number; correct: number;
   /** Les 2 questions du jour (figées au premier affichage) */
   today?: { day: number; ids: string[]; answered: string[] };
+  /** Derniers exercices générés proposés (seuls ceux-là peuvent être validés) */
+  served?: string[];
   dailyDone?: number; dailyStreak?: number; dailyBest?: number; lastDaily?: number;
 }
 /** Intervalle minimal avant qu'une question déjà réussie soit reposée (révision espacée) */
@@ -106,6 +108,8 @@ const available = (st: QuizState, id: string, day: number) => st.done[id] !== 1 
 /** 0 = jamais vue, 1 = ratée, 2 = à réviser */
 const rank = (st: QuizState, id: string) => (st.done[id] === undefined ? 0 : st.done[id] === 0 ? 1 : 2);
 /** Niveau d'une question de culture (1 = bases) ; les questions tirées de l'histoire du jeu sont de niveau 2 */
+export function quizServed(s: GameState, id: string) { const st = quizState(s); return !!st.served?.includes(id) || !!st.today?.ids.includes(id); }
+const markServed = (st: QuizState, ids: string[]) => { const l = (st.served ??= []); for (const id of ids) if (id.startsWith("g:") && !l.includes(id)) l.push(id); if (l.length > 80) l.splice(0, l.length - 80); };
 const levelOf = (id: string) => BY_ID[id]?.level ?? 2;
 /** La question peut-elle être posée aujourd'hui (jamais réussie, ou réussie il y a 30 jours ou plus) ? */
 export const quizAvailable = (s: GameState, id: string) => available(quizState(s), id, dayIndex(s.t));
@@ -144,11 +148,13 @@ export function quizToday(s: GameState) {
 /** Série de questions : du jour, ou d'une catégorie (jamais celles déjà réussies ; les ratées en dernier) */
 export function quizBatch(s: GameState, cat: QuizCat | "mix" | "jour", n = 5): QuizQ[] {
   const st = quizState(s);
+  if (cat === "jour") { markServed(st, quizToday(s).ids); } 
   if (cat === "jour") return quizToday(s).ids.filter((id) => !st.today!.answered.includes(id)).map((id) => quizById(id)!).filter(Boolean);
   if (cat === "calcul") {
     const out: QuizQ[] = [];
     let k = 0; const base = 1000 + st.answered * 3;
     while (out.length < n && k < 200) { const q = genQuestion((base + k) % GEN_FAMILIES, base + k); k++; if (st.done[q.id] === undefined) out.push(q); }
+    markServed(st, out.map((x) => x.id));
     return out;
   }
   const day = dayIndex(s.t);
@@ -163,6 +169,7 @@ export function quizBatch(s: GameState, cat: QuizCat | "mix" | "jour", n = 5): Q
   head.sort((a, b) => rank(st, a.id) - rank(st, b.id) || h(a.id) - h(b.id));
   const out = head.slice(0, n);
   if (out.length < n && cat === "mix") for (const q of quizBatch(s, "calcul", n - out.length)) out.push(q);
+  markServed(st, out.map((x) => x.id));
   return out;
 }
 

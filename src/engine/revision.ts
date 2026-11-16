@@ -13,6 +13,9 @@ import { fmtDate, fmtTime } from "./time";
 
 const LESSON_BY_ID = Object.fromEntries(LESSONS.map((l) => [l.id, l]));
 const strip = (t: string) => t.replace(/[.\s]+$/, "");
+/** Termine par un point, sauf si la phrase se termine déjà par une ponctuation forte (« ? », « ! ») */
+const endp = (t: string) => (/[?!…]$/.test(t.trim()) ? t.trim() : strip(t) + ".");
+const short = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1).trimEnd() + "…" : t);
 const hash = (str: string) => { let x = 7; for (let i = 0; i < str.length; i++) x = (x * 31 + str.charCodeAt(i)) % 100000; return x; };
 
 export interface RevisionEntry {
@@ -27,18 +30,18 @@ export function entryRecap(e: NotebookEntry): Recap {
   const q = e.item ? buildQuestion(e.item as TItem) : null;
   const points: string[] = [];
   if (q) {
-    points.push(`Question : ${strip(q.prompt)}.`);
+    points.push(`Question : ${endp(q.prompt)}`);
     if (e.yours) points.push(`✘ Votre réponse : ${strip(e.yours)}.`);
     points.push(`✔ Bonne réponse : ${strip(q.options?.[q.answer] ?? "")}.`);
     if (e.item?.k !== "def") points.push(`Pourquoi : ${q.explain}`); // pour une définition, la fiche de cours ci-dessous dit la même chose
-  } else { points.push(`Question : ${strip(e.title)}.`); points.push(`Pourquoi : ${e.text}`); }
+  } else { points.push(`Question : ${endp(e.title)}`); points.push(`Pourquoi : ${e.text}`); }
   // Fiche de cours de la notion (leçons et définitions)
   const les = e.item && (e.item.k === "lesson" || e.item.k === "def") ? LESSON_BY_ID[e.item.id] : undefined;
   if (les) { points.push(`📖 ${les.term} : ${strip(les.definition)}.`); points.push(`En clair : ${strip(les.simple)}.`); points.push(`Exemple : ${strip(les.example)}.`); points.push(`À quoi ça sert : ${strip(les.application)}.`); }
   const fam = e.item?.k === "calc" ? Number(e.item.id.split(":")[0]) : undefined;
   const { formulas, exercise } = formulaSections([`${e.title} ${e.text}`], fam === undefined ? [] : [fam], hash(e.key));
   return {
-    title: `Fiche de révision : ${e.title}`,
+    title: `Fiche de révision : ${short(e.title, 64)}`,
     subtitle: e.from === "culture" ? "Erreur au quiz ou au point culture" : "Erreur en séance de formation",
     when: `${fmtDate(e.t)} · ${fmtTime(e.t)}`,
     verdict: e.fixed ? { label: "Maîtrisée", tone: "gain" } : { label: e.count > 1 ? `À revoir · ratée ${e.count} fois` : "À revoir", tone: e.count > 2 ? "loss" : "warn" },

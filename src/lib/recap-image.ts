@@ -22,11 +22,13 @@ const W = 1080, PAD = 56, FONT = `"Inter","Segoe UI",system-ui,-apple-system,Rob
 const COL = { bg: "#0a0e15", card: "#0e131c", gold: "#d4a94f", text: "#e3e9f2", muted: "#9aa8bf", gain: "#4ade80", warn: "#fbbf24", loss: "#f87171", info: "#7aa2f7", line: "#243046" };
 
 /** Découpe un texte en lignes qui tiennent dans la largeur donnée */
+/** Typographie française : espace insécable avant % € $ : ; ? ! » et après «, et dans les nombres (10 000), pour ne jamais séparer un nombre de son unité */
+const nbsp = (t: string) => t.replace(/(\d) (?=\d{3}\b)/g, "$1\u00A0").replace(/ ([%€$:;?!»])/g, "\u00A0$1").replace(/« /g, "«\u00A0");
 function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
   const out: string[] = [];
-  for (const para of text.split("\n")) {
+  for (const para of nbsp(text).split("\n")) {
     let line = "";
-    for (const word of para.split(/\s+/).filter(Boolean)) {
+    for (const word of para.split(/[ \t]+/).filter(Boolean)) {
       const test = line ? `${line} ${word}` : word;
       if (ctx.measureText(test).width > maxW && line) { out.push(line); line = word; } else line = test;
     }

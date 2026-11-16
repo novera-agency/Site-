@@ -33,7 +33,7 @@ export function RecapCard({ recap }: { recap: Recap }) {
     {recap.terms.length > 0 && <Section title="Notions employées"><ul className="space-y-2 text-sm" data-testid="recap-terms">{recap.terms.map((t) => <li key={t.term}><b className="text-white">{t.term}</b> <span className="text-ink-200">— {t.text}</span>{t.example && <div className="text-xs text-ink-400">Exemple : {t.example}</div>}</li>)}</ul></Section>}
     {recap.formulas.length > 0 && <Section title="Formules à connaître"><div className="space-y-3" data-testid="recap-formulas">{recap.formulas.map((f) => <div key={f.title} className="rounded-lg border border-ink-700 bg-ink-900 p-3">
       <div className="text-sm font-semibold text-white">{f.title}</div>
-      <div className="mt-1.5 overflow-x-auto rounded-md bg-ink-950 px-2.5 py-2 font-mono text-[13px] leading-snug text-gold" tabIndex={0} aria-label={`Formule : ${f.title}`}>{f.formula}</div>
+      <div className="mt-1.5 overflow-x-auto whitespace-pre-line rounded-md bg-ink-950 px-2.5 py-2 font-mono text-[13px] leading-snug text-gold" tabIndex={0} aria-label={`Formule : ${f.title}`}>{f.formula}</div>
       <ul className="mt-1.5 space-y-0.5 text-xs text-ink-300">{f.legend.map((l) => <li key={l}>• {l}</li>)}</ul>
       {f.example && <div className="mt-2 text-xs text-ink-100"><b className="text-gold">Calcul pas à pas · </b>{f.example}</div>}
       {f.pitfall && <div className="mt-1.5 text-xs text-amber-200">⚠ Piège : {f.pitfall}</div>}

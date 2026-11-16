@@ -68,6 +68,7 @@ function Wizard() {
       <div className="mx-auto max-w-5xl px-4 py-8">
         <div className="mb-6 flex items-center justify-between"><Link href="/" className="text-sm text-ink-400 hover:text-white">← Menu</Link><div className="text-xs uppercase tracking-[0.3em] text-gold">{mode === "carriere" ? "Nouvelle carrière" : mode === "defi" ? "Mode défi" : "Bac à sable"}</div></div>
         <ol className="mb-6 flex flex-wrap gap-2">{steps.map((s, i) => <li key={s} className={`rounded-full px-3 py-1 text-xs ${i === step ? "bg-accent text-white" : i < step ? "bg-green-600/25 text-green-300" : "bg-ink-800 text-ink-400"}`}>{i + 1}. {s}</li>)}</ol>
+        <h1 className="sr-only">Nouvelle partie</h1>
         <div className="panel p-5 fade-in" key={cur}>
           {(cur === "Difficulté" || cur === "Défi") && <div className="space-y-5">
             {mode !== "defi" && <div>

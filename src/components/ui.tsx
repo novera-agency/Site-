@@ -64,7 +64,7 @@ export function Field({ label, children, hint }: { label: ReactNode; children: R
 }
 export const inputCls = "w-full rounded-md border border-ink-600 bg-ink-900 px-3 py-2 text-sm text-ink-100 outline-none focus:border-accent";
 export function Table({ head, children, className = "" }: { head: ReactNode[]; children: ReactNode; className?: string }) {
-  return <div className={`scroll-thin overflow-x-auto ${className}`}><table className="w-full text-sm"><thead><tr className="border-b border-ink-700 text-left text-[11px] uppercase tracking-wider text-ink-400">{head.map((h, i) => <th key={i} className="whitespace-nowrap px-2 py-2 font-medium">{h}</th>)}</tr></thead><tbody className="divide-y divide-ink-800">{children}</tbody></table></div>;
+  return <div tabIndex={0} role="region" aria-label="Tableau défilable" className={`scroll-thin overflow-x-auto ${className}`}><table className="w-full text-sm"><thead><tr className="border-b border-ink-700 text-left text-[11px] uppercase tracking-wider text-ink-400">{head.map((h, i) => <th key={i} className="whitespace-nowrap px-2 py-2 font-medium">{h}</th>)}</tr></thead><tbody className="divide-y divide-ink-800">{children}</tbody></table></div>;
 }
 export function Sparkline({ data, w = 120, h = 32 }: { data: number[]; w?: number; h?: number }) {
   if (data.length < 2) return <svg width={w} height={h} />;

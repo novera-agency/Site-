@@ -37,8 +37,8 @@ export function formulaSections(texts: string[], families: number[], seed: numbe
   const fx = found.find((f) => f.fam !== undefined);
   const st = found.find((f) => f.exercise);
   let exercise: NonNullable<Recap["exercise"]>;
-  if (fx) { const q = genQuestion(fx.fam!, seed % 900 + 4000); exercise = { title: fx.title, prompt: q.q, answer: q.options[q.correct], solution: `${fx.formula}. ${q.explain}` }; }
-  else if (st) exercise = { title: st.title, prompt: st.exercise!.prompt, answer: st.exercise!.answer, solution: `${st.formula}. ${st.exercise!.solution}` };
+  if (fx) { const q = genQuestion(fx.fam!, seed % 900 + 4000); exercise = { title: fx.title, prompt: q.q, answer: q.options[q.correct], solution: `${fx.formula.replace(/\n/g, " ; ")}. ${q.explain}` }; }
+  else if (st) exercise = { title: st.title, prompt: st.exercise!.prompt, answer: st.exercise!.answer, solution: `${st.formula.replace(/\n/g, " ; ")}. ${st.exercise!.solution}` };
   else { const fam = [5, 1, 7, 10, 16][seed % 5]; const q = genQuestion(fam, seed % 900 + 5000); exercise = { title: "Calcul de base", prompt: q.q, answer: q.options[q.correct], solution: q.explain }; }
   return { formulas, exercise };
 }
@@ -57,10 +57,10 @@ export function buildRecap(s: GameState, m: MeetingInstance): Recap | null {
   const corrections = m.log.filter((l) => l.who === "Correction").map((l) => clip(l.text, 260));
   const points = extra ? extra.points : corrections.slice(0, 4);
   if (!extra && tpl.objectives.length) points.unshift(`Objectifs de la réunion : ${tpl.objectives.join(" · ")}.`);
-  if (!extra && points.length < 2 && m.outcome) points.push(clip(m.outcome, 260));
+  if (!extra && !points.length && m.outcome) points.push(clip(m.outcome, 260)); // le bilan figure déjà en tête de fiche : pas de répétition
   // Chiffres clés : premières lignes de la fiche documentaire de la réunion
   const docs = tpl.docs ? tpl.docs(c) : [];
-  const facts: [string, string][] = !extra && docs[0] ? docs[0].rows.slice(0, 5).map(([a, b]) => [a, clip(String(b), 80)] as [string, string]) : [];
+  const facts: [string, string][] = !extra && docs[0] ? docs[0].rows.slice(0, 5).map(([a, b]) => [a, clip(String(b), 160)] as [string, string]) : [];
   // Notions employées par les participants, expliquées en clair
   const terms: Recap["terms"] = [];
   if (!extra?.skipTerms) {

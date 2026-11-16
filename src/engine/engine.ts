@@ -277,7 +277,7 @@ function newDay(s: GameState, rng: Rng) {
     if (!histActive(s)) maybeWorldEvent(s, rng);
     if (s.historical && histActive(s)) { const hc = histScriptedCrisis(s); if (hc) startCrisis(s, hc[1], rng, hc[2]); }
     else maybeTriggerCrises(s, rng);
-    if (!s.flags["vacationUntil"] || s.t >= (s.flags["vacationUntil"] as number)) { delete s.flags["vacationUntil"]; maybeCareerEvent(s, rng); planDay(s, rng); }
+    if (!s.flags["vacationUntil"] || s.t >= (s.flags["vacationUntil"] as number)) { delete s.flags["vacationUntil"]; maybeCareerEvent(s, rng); if (!s.flags["burnoutUntil"]) planDay(s, rng); /* en arrêt pour épuisement, pas de réunions */ }
     if (weekday(s.t) === 1) { assignWeeklyMissions(s, rng); mondayRelations(s); }
     assignDailyMissions(s, rng);
     assignProspects(s, rng);

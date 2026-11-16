@@ -224,7 +224,7 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
       buckets: ALLOC_BUCKETS.map((b) => ({ ...b, price: b.id === "CASH" ? 1 : s.quotes[b.id]?.price })), totalAum: totalAum(s), feesYtd: ((s.flags["feesYtd"] as number) ?? 0) / 100, salesYtd: (s.flags["salesYtd"] as number) ?? 0,
     };
     case "missions": return { appreciation: Math.round(appreciation(s)), rank: s.career.rank, missions: s.missions.slice(0, 80).map((m) => ({ ...m, question: m.status === "active" ? missionQuestion(s, m) : null, guide: missionGuide(s, m), giverInfo: person(s, m.giver) })) };
-    case "learning": return { lessons: LESSONS, completed: s.learning.completed, attempts: s.learning.attempts };
+    case "learning": return { lessons: LESSONS.map((l) => ({ ...l, exercise: l.exercise.kind === "qcm" ? { kind: l.exercise.kind, question: l.exercise.question, options: l.exercise.options } : { kind: l.exercise.kind, question: l.exercise.question, unit: l.exercise.unit } })), completed: s.learning.completed, attempts: s.learning.attempts };
     case "skills": return { skills: Object.entries(s.skills).map(([k, xp]) => ({ id: k, name: SKILL_NAMES[k as keyof typeof SKILL_NAMES], xp, level: skillLevel(xp), next: SKILL_LEVELS[skillLevel(xp) + 1] ?? null, prev: SKILL_LEVELS[skillLevel(xp)] })), log: s.skillLog.slice(0, 60), reputation: Object.entries(s.reputation).map(([k, v]) => ({ id: k, name: REP_NAMES[k as keyof typeof REP_NAMES], value: v })), avgRep: avgRep(s), decisions: s.decisions.slice(0, 80) };
     case "network": return { npcs: Object.values(s.npcs).map((n) => ({ ...n, client: n.relation === "client", status: relationStatus(s, n.id) })) };
     case "hr": {

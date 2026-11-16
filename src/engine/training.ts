@@ -171,7 +171,7 @@ export function answerTraining(s: GameState, index: number, input: { choice?: nu
   else markFixed(s, plain);
   let finished: TDone | undefined;
   if (tr.answers.length === tr.items.length) finished = finalize(s);
-  return { ok: true as const, data: { ok, answer: q.kind === "qcm" ? q.answer : q.answer, explain: q.explain, xp, finished } };
+  return { ok: true as const, data: { ok, answer: q.answer, explain: q.explain, xp, finished } };
 }
 type TDone = { correct: number; total: number; bonusXp: number; trust: number };
 function finalize(s: GameState): TDone {
@@ -207,7 +207,8 @@ export function trainingView(s: GameState) {
   return {
     id: tr.id, hours: tr.hours, subject: tr.subject, revision: !!tr.revision, count: tr.items.length, answered: tr.answers.length, done: tr.done ?? null, meetingActive: !!s.activeMeetingId && s.meetings.find((m) => m.id === s.activeMeetingId)?.templateId === "formation_n1",
     items: tr.items.map((it, i) => {
-      const q = buildQuestion(it)!; const a = tr.answers[i];
+      const q = buildQuestion(it); const a = tr.answers[i];
+      if (!q) return { i, label: "Question retirée", prompt: "Cette question n'existe plus après une mise à jour.", result: a ? { ok: a.ok, explain: "" } : null };
       return { i, label: q.label, prompt: q.prompt, result: a ? { ok: a.ok, explain: q.explain } : null };
     }),
   };

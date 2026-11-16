@@ -4,7 +4,7 @@ Simulateur de carrière dans la finance de marché, entièrement en français.
 **Simulation — monnaie virtuelle — aucune transaction réelle.** Toutes les sociétés, banques, personnes et cryptoactifs du jeu sont fictifs. L'application n'est pas une plateforme de courtage.
 
 Deux époques au choix :
-- **2000 → 2025, l'histoire réelle** (par défaut) : départ le 3 janvier 2000. Les vrais événements sont publiés à leur date (bulle Internet, 11 septembre, Enron, guerre d'Irak, subprimes, Lehman Brothers, crise de l'euro, Fukushima, Brexit, élections françaises et américaines, Covid, guerre en Ukraine, inflation 2022, SVB, droits de douane 2025…). Les banques centrales appliquent leurs décisions réelles. Les indices, matières premières, changes et taux suivent leurs trajectoires réelles, **reconstituées de façon approchée** (repères de fin d'année et points de retournement, voir `src/engine/data/history2000.ts`), avec la volatilité du modèle par-dessus : ce ne sont pas des cours officiels. À partir de 2026, le marché redevient simulé.
+- **2000 → 13 novembre 2026, l'histoire réelle** (par défaut) : départ le 3 janvier 2000. Les vrais événements sont publiés à leur date (bulle Internet, 11 septembre, Enron, guerre d'Irak, subprimes, Lehman Brothers, crise de l'euro, Fukushima, Brexit, élections françaises et américaines, Covid, guerre en Ukraine, inflation 2022, SVB, droits de douane 2025…). Les banques centrales appliquent leurs décisions réelles. Les indices, matières premières, changes et taux suivent leurs trajectoires réelles, **reconstituées de façon approchée** (repères de fin d'année et points de retournement, voir `src/engine/data/history2000.ts`), avec la volatilité du modèle par-dessus : ce ne sont pas des cours officiels. À partir de 2026, le marché redevient simulé.
 - **2027, monde imaginaire** : marchés, crises et événements entièrement simulés.
 
 **Écran d’accueil** : à l’arrivée sur le site, une courte introduction animée (une fois par session, passable d’un clic ou avec Entrée).
@@ -47,7 +47,7 @@ Variables d'environnement facultatives (voir `.env.example`) :
 
 **Adresse :** https://novera-agency.github.io/Site-/
 
-Le workflow `.github/workflows/pages.yml` vérifie le code (TypeScript, 37 tests), construit l'**édition navigateur** (`npm run build:static`) et la publie sur GitHub Pages à chaque push.
+Le workflow `.github/workflows/pages.yml` vérifie le code (TypeScript, 155 tests), construit l'**édition navigateur** (`npm run build:static`) et la publie sur GitHub Pages à chaque push.
 
 - GitHub Pages n'héberge que des fichiers statiques. Dans cette édition, le **même moteur** tourne dans le navigateur ; les routes `/api/*` sont servies localement (`src/lib/local-backend.ts`) avec les mêmes validations Zod et les mêmes vues. Les parties sont sauvegardées dans le navigateur (IndexedDB) ; export et import JSON sont disponibles.
 - Différences avec la version serveur : pas de comptes, pas d'autorité serveur (l'état vit chez le joueur) et dialogues des PNJ uniquement scénarisés (aucune clé d'API dans un site statique).
@@ -76,7 +76,7 @@ Le workflow `.github/workflows/pages.yml` vérifie le code (TypeScript, 37 tests
 - **Appeler vos clients** depuis l'écran Clients : sonnerie, le client décroche (ou messagerie et rappel le lendemain), et **chaque faute fait baisser l'objectif de vente** (−5 à −30 %) ; sous 30 % de l'objectif initial, il raccroche. Chaque collaborateur a sa propre voix.
 - 17 réunions jouables, 12 PNJ persistants + clients, 22 modèles de missions paramétrables, 35 modules de formation, crises à phases.
 - Création de société (6 types) avec bilan, compte de résultat, flux de trésorerie et risque de faillite.
-- **Parcours** : 8 chapitres avec objectifs, 27 succès, score de carrière ; trois fins (retraite, faillite, fortune) et tableau d'honneur local.
+- **Parcours** : 8 chapitres avec objectifs, 36 succès, score de carrière ; trois fins (retraite, faillite, fortune) et tableau d'honneur local.
 - **Vie privée complète** : salaire précis, factures, logement, jauges (santé mentale, forme, vie sociale, plaisir), rencontres, couple, mariage, enfants, histoires de collègues.
 - Investissement immobilier dans 13 villes françaises, prospection confiée par le N+1, au moins deux missions générées par jour.
 - Événements mondiaux simulés (parties fictives), notifications regroupées avec trois niveaux, petits bruits de notification synthétisés, sans musique, sans instrument et sans son de fond (réglables un par un ou coupés d'un coup : bruits de notification, bip d'appel, voix ; bouton silence 🔊 en haut de l'écran), portraits générés.
@@ -85,7 +85,7 @@ Le workflow `.github/workflows/pages.yml` vérifie le code (TypeScript, 37 tests
 - Accessibilité : texte agrandi, contraste renforcé, animations réduites, navigation au clavier ; audit automatique WCAG A/AA sans erreur.
 - Interface en anglais (menus, navigation, visite guidée, accueil) ; les dialogues et missions restent en français.
 - **Histoire réelle de 2000 au 13 novembre 2026** (guerre contre l'Iran, choc pétrolier, remontée des taux, krach de l'IA…), puis simulation libre. Les parties créées avec une ancienne version sont recommencées une fois au 3 janvier 2000.
-- **Quiz d'économie** : 2 questions par jour de jeu (soit environ 14 600 sur les 20 ans) tirées de trois sources : 330 questions rédigées (micro, macro, finance : analyse technique et fondamentale, portefeuille, entreprise, épargne et crédit, devises, risques, banques centrales, marchés, finance durable, biais ; assurance, immobilier, histoire financière), une centaine de questions tirées des vrais événements de l'histoire du jeu, et 20 familles d'exercices de calcul à chiffres générés (illimités). Révision espacée : une question réussie revient au plus tôt 30 jours plus tard. Séries libres par catégorie, explication à chaque réponse, séries quotidiennes, succès et expérience en compétences.
+- **Quiz d'économie** : 2 questions par jour de jeu (soit environ 14 600 sur les 20 ans) tirées de trois sources : 335 questions rédigées (micro, macro, finance : analyse technique et fondamentale, portefeuille, entreprise, épargne et crédit, devises, risques, banques centrales, marchés, finance durable, biais ; assurance, immobilier, histoire financière), une centaine de questions tirées des vrais événements de l'histoire du jeu, et 20 familles d'exercices de calcul à chiffres générés (illimités). Révision espacée : une question réussie revient au plus tôt 30 jours plus tard. Séries libres par catégorie, explication à chaque réponse, séries quotidiennes, succès et expérience en compétences.
 - Contenu enrichi : 25 demandes clients, 26 événements mondiaux simulés, 20 événements de vie, 15 types de missions du jour.
 - Sur les appareils lents, le calcul est limité à chaque seconde : le temps ralentit au lieu de figer l'écran.
 

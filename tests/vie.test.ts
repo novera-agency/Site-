@@ -230,7 +230,9 @@ describe("Planning, sommeil et heures supplémentaires", () => {
     expect(s.life!.training?.items.length).toBe(2); // la formation donne une séance de questions, pas de l'XP gratuite
     act(s, { type: "leave_meeting" });
     s.life!.ahead = 4; s.t = tOfDay(dayIndex(s.t), 18, 0);
-    expect(act(s, { type: "overtime", hours: 1, focus: "avance" }).message).toMatch(/réserve pleine/);
+    const full = act(s, { type: "overtime", hours: 1, focus: "avance" });
+    expect(full.ok).toBe(false); // réserve pleine : refus, aucune heure perdue
+    expect(JSON.stringify(full)).toMatch(/réserve d'avance est pleine/);
     expect(s.life!.ahead).toBe(4);
   });
   it("une journée plus longue fatigue et agace moins le responsable qu'une journée très courte ne le rassure ; la référence est neutre", () => {

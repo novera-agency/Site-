@@ -47,3 +47,15 @@ export const LESSONS: Lesson[] = [
   { id: "diversification", term: "Diversification", branch: "risque", level: 1, definition: "Répartition des investissements entre actifs imparfaitement corrélés pour réduire le risque global.", simple: "Ne pas mettre tous ses œufs dans le même panier.", example: "Deux actifs de volatilité 20 %, corrélation 0 : un portefeuille 50/50 a une volatilité ≈ 14 %.", application: "En crise, les corrélations montent : la diversification protège moins (moteur de régimes).", exercise: n("Deux actifs indépendants de volatilité 30 %, 50/50. Volatilité du portefeuille en % (≈ 30/√2) ?", 21.2, 0.5, "%", "√(0,25×0,09 + 0,25×0,09) = 21,2 %.") },
 ];
 export const LESSON_BY_ID = Object.fromEntries(LESSONS.map((l) => [l.id, l]));
+
+/** Mélange déterministe : la bonne réponse des QCM n'est plus toujours en première position (la position dépend de l'identifiant de la leçon) */
+function positionOfRight(id: string, n: number) { let x = 7; for (let i = 0; i < id.length; i++) x = (x * 31 + id.charCodeAt(i)) % 9973; return x % n; }
+for (const l of LESSONS) {
+  const ex = l.exercise;
+  if (ex.kind !== "qcm") continue;
+  const right = ex.options[ex.answer];
+  const others = ex.options.filter((_, i) => i !== ex.answer);
+  const pos = positionOfRight(l.id, ex.options.length);
+  others.splice(pos, 0, right);
+  ex.options = others; ex.answer = pos;
+}

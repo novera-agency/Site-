@@ -7,6 +7,7 @@ import { HIST_EVENTS } from "./data/history2000";
 
 const mulberry = (a: number) => () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 const hash = (s: string) => { let x = 2166136261; for (let i = 0; i < s.length; i++) x = Math.imul(x ^ s.charCodeAt(i), 16777619) >>> 0; return x; };
+const n2 = (x: number) => x.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmts = new Map<number, Intl.NumberFormat>();
 const nf = (n: number, d = 2) => { let f = fmts.get(d); if (!f) { f = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: d, minimumFractionDigits: 0 }); fmts.set(d, f); } return f.format(n); };
 const eur = (n: number, d = 0) => `${nf(n, d)} €`;
@@ -21,7 +22,7 @@ const FAMILIES: Gen[] = [
   // 0 – rendement du dividende
   (r) => { const p = pick(r, [20, 25, 30, 40, 45, 50, 60, 80, 90, 120, 150]); const d = Math.round(p * pick(r, [0.01, 0.02, 0.03, 0.04, 0.05, 0.06]) * 4) / 4; const y = (d / p) * 100; return { level: 1, q: `Une action cote ${eur(p)} et verse ${eur(d, 2)} de dividende par an. Quel est son rendement du dividende ?`, right: pct(y, 2), wrong: [pct(y * 2, 2), pct(y / 2, 2), pct(y + 1.5, 2)], explain: `Rendement = dividende ÷ cours = ${nf(d, 2)} ÷ ${p} = ${nf(y, 2)} %.` }; },
   // 1 – PER
-  (r) => { const e = pick(r, [2, 2.5, 3, 4, 5, 6, 8]); const k = pick(r, [8, 10, 12, 15, 18, 20, 25]); const p = e * k; return { level: 1, q: `Une action cote ${eur(p)} avec un bénéfice de ${eur(e, 2)} par action. Quel est son PER ?`, right: nf(k, 1), wrong: [nf(p * e, 1), nf((e / p) * 100, 1), nf(p - e, 1)], explain: `PER = cours ÷ bénéfice par action = ${p} ÷ ${nf(e, 2)} = ${k}.` }; },
+  (r) => { const e = pick(r, [2, 2.5, 3, 4, 5, 6, 8]); const k = pick(r, [8, 10, 12, 15, 18, 20, 25]); const p = e * k; return { level: 1, q: `Une action cote ${eur(p, Number.isInteger(p) ? 0 : 2)} avec un bénéfice de ${eur(e, 2)} par action. Quel est son PER ?`, right: nf(k, 1), wrong: [nf(p * e, 1), nf((e / p) * 100, 1), nf(p - e, 1)], explain: `PER = cours ÷ bénéfice par action = ${nf(p, 2)} ÷ ${nf(e, 2)} = ${k}.` }; },
   // 2 – intérêts composés
   (r) => { const c = pick(r, [1000, 2000, 5000, 10000, 20000]); const t = pick(r, [2, 3, 4, 5, 6]); const n = pick(r, [3, 5, 8, 10]); const v = c * (1 + t / 100) ** n; return { level: 2, q: `Vous placez ${eur(c)} à ${t} % par an pendant ${n} ans, intérêts réinvestis. Combien aurez-vous à peu près ?`, right: eur(Math.round(v / 10) * 10), wrong: [eur(Math.round((c * (1 + (t / 100) * n)) / 10) * 10), eur(Math.round((c * (1 + t / 100) ** (n - 1)) / 10) * 10), eur(Math.round((c * (1 + t / 100) ** (n + 1)) / 10) * 10)], explain: `${eur(c)} × (1 + ${t} %)^${n} ≈ ${eur(Math.round(v / 10) * 10)}. Le calcul simple (${eur(Math.round((c * (1 + (t / 100) * n)) / 10) * 10)}) oublie que les intérêts rapportent eux-mêmes des intérêts.` }; },
   // 3 – valeur actuelle
@@ -39,7 +40,7 @@ const FAMILIES: Gen[] = [
   // 9 – change
   (r) => { const a = pick(r, [1000, 2000, 5000, 10000, 25000]); const c = pick(r, [1.05, 1.1, 1.15, 1.2, 1.25, 1.3]); const v = a * c; return { level: 1, q: `Au cours EUR/USD de ${nf(c, 2)}, combien de dollars obtient-on pour ${eur(a)} ?`, right: `${nf(v, 0)} $`, wrong: [`${nf(Math.round(a / c), 0)} $`, `${nf(Math.round(v * 1.1), 0)} $`, `${nf(Math.round(v * 0.9), 0)} $`], explain: `EUR/USD = ${nf(c, 2)} signifie que 1 € vaut ${nf(c, 2)} $ : ${a} × ${nf(c, 2)} = ${nf(v, 0)} $.` }; },
   // 10 – marge
-  (r) => { const cost = pick(r, [20, 30, 40, 50, 60, 75]); const p = cost + pick(r, [10, 15, 20, 25, 30, 50]); const m = ((p - cost) / p) * 100; return { level: 2, q: `Un article acheté ${eur(cost)} est vendu ${eur(p)}. Quel est le taux de marge (marge ÷ prix de vente) ?`, right: pct(m, 1), wrong: [pct(((p - cost) / cost) * 100, 1), pct((cost / p) * 100, 1), pct(((p - cost) / (p + cost)) * 100, 1)], explain: `Marge = ${p} − ${cost} = ${p - cost} €. Taux de marge = ${p - cost} ÷ ${p} = ${nf(m, 1)} % (diviser par le prix d'achat donnerait le taux de marque, ${nf(((p - cost) / cost) * 100, 1)} %).` }; },
+  (r) => { const cost = pick(r, [20, 30, 40, 50, 60, 75]); const p = cost + pick(r, [10, 15, 20, 25, 30, 50]); const m = ((p - cost) / p) * 100; return { level: 2, q: `Un article acheté ${eur(cost)} est vendu ${eur(p)}. Quel est le taux de marque (marge ÷ prix de vente) ?`, right: pct(m, 1), wrong: [pct(((p - cost) / cost) * 100, 1), pct((cost / p) * 100, 1), pct(((p - cost) / (p + cost)) * 100, 1)], explain: `Marge = ${p} − ${cost} = ${p - cost} €. Taux de marque = ${p - cost} ÷ ${p} = ${nf(m, 1)} % (diviser par le prix d'achat donnerait le taux de marge, ${nf(((p - cost) / cost) * 100, 1)} %).` }; },
   // 11 – règle des 72
   (r) => { const t = pick(r, [2, 3, 4, 6, 8, 9, 12]); const y = 72 / t; return { level: 2, q: `À ${t} % par an, en combien d'années un capital double-t-il environ (règle des 72) ?`, right: `${nf(y, 1)} ans`, wrong: [`${nf(t * 2, 1)} ans`, `${nf(y * 2, 1)} ans`, `${nf(y / 2, 1)} ans`], explain: `Règle des 72 : 72 ÷ ${t} = ${nf(y, 1)} ans.` }; },
   // 12 – dette / PIB
@@ -57,12 +58,15 @@ const FAMILIES: Gen[] = [
   // 18 – seuil de rentabilité
   (r) => { const v = pick(r, [5, 8, 10, 12]); const p = v + pick(r, [5, 8, 10]); const f = pick(r, [10000, 20000, 30000, 50000]); const x = Math.ceil(f / (p - v)); return { level: 3, q: `Un artisan vend ses produits ${eur(p)} pièce, avec ${eur(v)} de coûts variables par pièce et ${eur(f)} de coûts fixes. Combien de pièces pour atteindre le seuil de rentabilité ?`, right: nf(x, 0), wrong: [nf(Math.ceil(f / p), 0), nf(Math.ceil(f / v), 0), nf(Math.ceil(f / (p + v)), 0)], explain: `Marge unitaire = ${p} − ${v} = ${p - v} €. Seuil = ${f} ÷ ${p - v} = ${nf(f / (p - v), 1)}, soit ${nf(x, 0)} pièces.` }; },
   // 19 – coût de l'écart achat/vente
-  (r) => { const bid = pick(r, [24.9, 49.9, 99.8, 19.95]); const sp = pick(r, [0.1, 0.2, 0.3]); const ask = Math.round((bid + sp) * 100) / 100; const q = pick(r, [500, 1000, 2000]); const v = Math.round(sp * q * 100) / 100; return { level: 2, q: `Un titre affiche ${nf(bid, 2)} à l'achat (bid) et ${nf(ask, 2)} à la vente (ask). Vous achetez ${nf(q, 0)} titres puis les revendez aussitôt. Quel est le coût de l'écart ?`, right: eur(v), wrong: [eur(v / 2), eur(v * 10), eur(v * 2)], explain: `Vous achetez à ${nf(ask, 2)} et revendez à ${nf(bid, 2)} : perte de ${nf(sp, 2)} € par titre × ${nf(q, 0)} = ${eur(v)}, avant même que le cours bouge.` }; },
+  (r) => { const bid = pick(r, [24.9, 49.9, 99.8, 19.95]); const sp = pick(r, [0.1, 0.2, 0.3]); const ask = Math.round((bid + sp) * 100) / 100; const q = pick(r, [500, 1000, 2000]); const v = Math.round(sp * q * 100) / 100; return { level: 2, q: `Un titre affiche un prix acheteur (bid) de ${n2(bid)} et un prix vendeur (ask) de ${n2(ask)}. Vous achetez ${nf(q, 0)} titres puis les revendez aussitôt. Quel est le coût de l'écart ?`, right: eur(v), wrong: [eur(v / 2), eur(v * 10), eur(v * 2)], explain: `Vous achetez à l'ask (${n2(ask)}) et revendez au bid (${n2(bid)}) : perte de ${n2(sp)} € par titre × ${nf(q, 0)} = ${eur(v)}, avant même que le cours bouge.` }; },
 ];
 export const GEN_FAMILIES = FAMILIES.length;
 const FAM_TITLES = ["Dividende", "PER", "Intérêts composés", "Valeur actuelle", "Rendement obligataire", "Variation", "Baisse puis hausse", "Taux réel", "Capitalisation", "Change", "Marge", "Règle des 72", "Dette/PIB", "Pouvoir d'achat", "Levier", "Option d'achat", "Rendement total", "Inflation", "Seuil de rentabilité", "Écart achat/vente"];
 
-function assemble(id: string, cat: QuizQ["cat"], g: G): QuizQ {
+/** Signe moins typographique (−) devant un nombre */
+const minus = (t: string) => t.replace(/(^|[\s(+:])-(?=\d)/g, "$1−");
+function assemble(id: string, cat: QuizQ["cat"], g0: G): QuizQ {
+  const g: G = { ...g0, q: minus(g0.q), right: minus(g0.right), wrong: g0.wrong.map(minus), explain: minus(g0.explain) };
   const wrong: string[] = [];
   for (const w of g.wrong) if (w !== g.right && !wrong.includes(w)) wrong.push(w);
   let k = 1;
@@ -72,9 +76,14 @@ function assemble(id: string, cat: QuizQ["cat"], g: G): QuizQ {
   opts.splice(pos, 0, g.right);
   return { id, cat, level: g.level, q: g.q, options: opts, correct: pos, explain: g.explain };
 }
+const distinct = (g: G) => { const seen = new Set([g.right]); let n = 0; for (const w of g.wrong) if (!seen.has(w)) { seen.add(w); n++; } return n >= 3; };
 export function genQuestion(fam: number, seed: number): QuizQ {
   const f = ((fam % FAMILIES.length) + FAMILIES.length) % FAMILIES.length;
-  return assemble(`g:${f}:${seed}`, "calcul", FAMILIES[f](mulberry(seed * 7919 + f * 104729 + 12345)));
+  // Même graine, même question : si le tirage donne deux options identiques (ou égales à la bonne réponse), on passe au tirage suivant, de façon déterministe
+  const base = seed * 7919 + f * 104729 + 12345;
+  let g = FAMILIES[f](mulberry(base));
+  for (let k = 1; k < 80 && !distinct(g); k++) g = FAMILIES[f](mulberry(base + k * 6841));
+  return assemble(`g:${f}:${seed}`, "calcul", g);
 }
 export const genTitle = (id: string) => FAM_TITLES[Number(id.split(":")[1])] ?? "Calcul";
 

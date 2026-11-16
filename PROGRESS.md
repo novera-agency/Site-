@@ -52,7 +52,7 @@ Légende : ✅ fonctionnel et relié au moteur · 🟡 partiel · ❌ non réali
 | Authentification, sessions signées, autorisations, limitation de débit, validation Zod | ✅ | Comptes locaux (fichier `data/users.json`) |
 | Réunions vocales (mode oral / écrit, voix distincte par collaborateur, « qu'est-ce que… ») | ✅ | Web Speech API du navigateur |
 | Appels clients (sonnerie, décroché ou messagerie, rappel, objectif de vente qui baisse à chaque faute) | ✅ | Le client raccroche sous 30 % de l'objectif |
-| Mode historique 2000 → 2025 (événements réels datés, décisions réelles des banques centrales, trajectoires approchées des indices, matières premières, changes et taux) | ✅ | Repères approximatifs, pas de cours officiels ; sociétés du jeu fictives ; simulation libre à partir de 2026 |
+| Mode historique 2000 → 13 novembre 2026 (événements réels datés, décisions réelles des banques centrales, trajectoires approchées des indices, matières premières, changes et taux) | ✅ | Repères approximatifs, pas de cours officiels ; sociétés du jeu fictives ; simulation libre à partir de 2026 |
 | Univers de plus de 1 200 actions fictives (13 pays, 12 secteurs, indices nationaux, ETF) | ✅ | Petites valeurs non suivies : calcul toutes les 30 min et sauvegarde compacte (clôtures seules) |
 | Vie privée : fiche de paie et impôt, logement (location/achat à crédit), factures, transport, abonnements, loisirs à temps limité, 4 jauges, événements de la vie, impayés et expulsion, négociation salariale à la demande | ✅ | Impôt : barème progressif simplifié (une part) |
 | Missions du jour (≥ 2 par jour ouvré, 11 modèles, enjeu selon appréciation et grade) | ✅ | |
@@ -109,7 +109,7 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 
 ## Quiz à grande échelle, ambiance sans musique
 - ✅ 2 questions du jour (une de culture, une de calcul), figées pour la journée ; 7 300 jours simulés sans répétition notable ni erreur.
-- ✅ 330 questions rédigées + questions tirées de la chronologie historique + 20 familles de calculs à chiffres générés.
+- ✅ 335 questions rédigées + questions tirées de la chronologie historique + 20 familles de calculs à chiffres générés.
 - ✅ Musique retirée : ambiance de nature (pluie douce, vent) synthétisée et simples tapotements pour les alertes ; plus aucune mélodie ni instrument. Les activités « concert » sont devenues « spectacle ».
 - ⚠️ Les 14 600 questions ne sont pas toutes rédigées : le renouvellement vient des exercices générés et des événements historiques ; la banque rédigée est parcourue une fois, puis les calculs prennent le relais.
 

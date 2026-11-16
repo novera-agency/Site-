@@ -94,7 +94,7 @@ function apply(s: GameState, m: number, p: number, so: number, f: number) { cons
 /** Heures de temps libre de la journée en cours */
 export function freeHours(s: GameState) {
   const l = s.life!;
-  const vac = !!s.flags["vacationUntil"] && s.t < (s.flags["vacationUntil"] as number);
+  const vac = (!!s.flags["vacationUntil"] && s.t < (s.flags["vacationUntil"] as number)) || (!!s.flags["burnoutUntil"] && s.t < (s.flags["burnoutUntil"] as number));
   const kids = l.children ?? 0;
   const shift = isWorkDay(s) ? Math.round(((18 * 60 - workWindow(s).end) / 60) * 2) / 2 : 0; // partir plus tôt libère du temps, plus tard en prend
   const total = Math.max(1, (isWeekend(s.t) || vac || !s.career.employed ? 14 - 3 * kids : (l.perks.teletravail ? 5 : HOUSING_BY_ID[l.housing.id].commute ? 3 : 4) - kids + shift));
@@ -263,6 +263,9 @@ export function moveHousing(s: GameState, id: string, buy: boolean) {
   }
   const rent = rentOf(s, id);
   const deposit = rent + Math.round(600 * priceLevel(s));
+  // On vérifie avant de vendre : un refus ne doit jamais avoir déjà vendu le logement
+  const saleNet2 = l.housing.owned ? Math.round((l.housing.value ?? 0) / 100 * 0.95 - (l.housing.mortgage?.principal ?? 0) / 100) : 0;
+  if (cash + saleNet2 < deposit) return { ok: false as const, error: `Il faut ${deposit.toLocaleString("fr-FR")} € (dépôt de garantie et déménagement).` };
   if (l.housing.owned) sellHousing(s);
   if (eurCash(s) < deposit) return { ok: false as const, error: `Il faut ${deposit.toLocaleString("fr-FR")} € (dépôt de garantie et déménagement).` };
   post(s, EXT_LIVING, cashAcc("perso"), toCents(deposit), "EUR", `Déménagement — ${h.name} : dépôt de garantie et déménageurs`);

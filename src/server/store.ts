@@ -16,6 +16,7 @@ const g = globalThis as unknown as { __fe_games?: Map<string, Runtime> };
 const games: Map<string, Runtime> = g.__fe_games ?? (g.__fe_games = new Map());
 
 import { serialize, deserialize } from "@/engine/serialize";
+import { restartLegacyGame, SAVE_GEN } from "@/engine/engine";
 export { serialize, deserialize };
 
 function atomicWrite(file: string, content: string) {
@@ -40,7 +41,10 @@ export function getRuntime(uid: string, gameId: string): Runtime | null {
     let s: GameState;
     try { s = deserialize(fs.readFileSync(f, "utf8")); } catch (e) { console.error("Sauvegarde illisible", f, e); return null; }
     s.paused = true; s.pauseReason = "Partie reprise";
-    rt = { state: s, lastTickReal: Date.now(), accMinutes: 0, dirty: false, lastSaved: Date.now() };
+    // Partie créée avec une ancienne version : recommencée une fois en 2000, avec copie de secours de l'ancienne
+    const fresh = restartLegacyGame(s);
+    if (fresh) { try { fs.copyFileSync(f, f.replace(".json", ".legacy.json")); } catch { /* */ } s = fresh; s.paused = true; s.pauseReason = "Partie recommencée en 2000"; }
+    rt = { state: s, lastTickReal: Date.now(), accMinutes: 0, dirty: !!fresh, lastSaved: Date.now() };
     games.set(gameId, rt);
   }
   if (rt.state.ownerId !== uid) return null; // autorisation : un joueur n'accède qu'à ses parties
@@ -95,6 +99,7 @@ export function loadSlot(uid: string, slot: number): string | null {
   if (!fs.existsSync(f)) return null;
   const s = deserialize(fs.readFileSync(f, "utf8"));
   if (s.ownerId !== uid) return null;
+  s.flags["gen"] = Math.max(Number(s.flags["gen"] ?? 0), SAVE_GEN); // une sauvegarde chargée volontairement n'est jamais remise à zéro
   s.paused = true; s.pauseReason = "Sauvegarde chargée";
   games.set(s.id, { state: s, lastTickReal: Date.now(), accMinutes: 0, dirty: true, lastSaved: 0, lastAccess: Date.now() });
   autosave(s.id, true);
@@ -110,6 +115,7 @@ export function deleteGame(uid: string, gameId: string) {
 export function exportGame(uid: string, gameId: string) { const rt = getRuntime(uid, gameId); return rt ? serialize(rt.state) : null; }
 export function importGame(uid: string, txt: string) {
   const s = deserialize(txt);
+  s.flags["gen"] = Math.max(Number(s.flags["gen"] ?? 0), SAVE_GEN);
   s.ownerId = uid; s.id = randomUUID(); s.paused = true;
   return registerGame(s);
 }

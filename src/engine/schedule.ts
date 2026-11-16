@@ -19,7 +19,8 @@ export const IDEAL_SLEEP_H = 7;
 export const MAX_AHEAD_H = 4;
 
 const on = (s: GameState) => !!s.life && s.mode === "carriere";
-const vacation = (s: GameState) => !!s.flags["vacationUntil"] && s.t < (s.flags["vacationUntil"] as number);
+/** Congés ou arrêt pour épuisement : pas de journée de travail */
+const vacation = (s: GameState) => (!!s.flags["vacationUntil"] && s.t < (s.flags["vacationUntil"] as number)) || (!!s.flags["burnoutUntil"] && s.t < (s.flags["burnoutUntil"] as number));
 export const hhmm = (m: number) => `${Math.floor(m / 60)} h ${String(Math.round(m % 60)).padStart(2, "0")}`;
 export const getPlan = (s: GameState) => s.life?.plan ?? DEFAULT_PLAN;
 export const plannedNetHours = (p: { start: number; end: number }) => (p.end - p.start - LUNCH_MIN) / 60;
@@ -116,6 +117,7 @@ export function doOvertime(s: GameState, hours: number, focus: OvertimeFocus, su
   if (!chk.ok) return chk;
   if (!OVERTIME_FOCUS[focus]) return { ok: false as const, error: "Choix inconnu." };
   const l = s.life!;
+  if (focus === "avance" && (l.ahead ?? 0) >= MAX_AHEAD_H) return { ok: false as const, error: `Votre réserve d'avance est pleine (${MAX_AHEAD_H} h) : elle sera utilisée demain, choisissez un autre objectif.` };
   if (focus === "formation" && subject === "erreurs" && unresolved(s).length === 0) return { ok: false as const, error: "Aucune erreur à revoir pour l'instant : choisissez une autre matière." };
   if (focus === "formation" && trainedToday(s) && !(l.training && !l.training.done)) return { ok: false as const, error: "Vous avez déjà fait votre séance de formation aujourd'hui : une seule par jour. Revenez demain." };
   if (focus === "formation" && l.training && !l.training.done) return { ok: false as const, error: "Terminez d'abord votre séance de formation en cours (ou fermez-la) avant d'en commencer une autre." };

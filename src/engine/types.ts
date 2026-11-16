@@ -316,7 +316,7 @@ export interface GameState {
   /** Parcours, succès et fin de partie */
   progress?: { chapters: string[]; objectives: string[]; achievements: string[] };
   /** Quiz de culture économique */
-  quiz?: { done: Record<string, 0 | 1>; last?: Record<string, number>; streak: number; best: number; answered: number; correct: number; today?: { day: number; ids: string[]; answered: string[] }; dailyDone?: number; dailyStreak?: number; dailyBest?: number; lastDaily?: number };
+  quiz?: { done: Record<string, 0 | 1>; last?: Record<string, number>; streak: number; best: number; answered: number; correct: number; today?: { day: number; ids: string[]; answered: string[] }; served?: string[]; dailyDone?: number; dailyStreak?: number; dailyBest?: number; lastDaily?: number };
   ended?: { id: "retraite" | "faillite" | "fortune"; t: number; score: number };
   /** Prospects à démarcher (donnés par le N+1 ou recommandés) */
   prospects?: Prospect[];

@@ -20,7 +20,7 @@ import { toCents } from "@/engine/money";
 import { closeTraining } from "@/engine/training";
 import { answerReview } from "@/engine/revision";
 import { setPlan, sleepCheck, finishSleep, doOvertime, workWindow, isWorkDay, hhmm, sleepLabel } from "@/engine/schedule";
-import { answerQuiz } from "@/engine/quiz";
+import { answerQuiz, quizServed } from "@/engine/quiz";
 
 const num = z.coerce.number().finite();
 export const ActionSchema = z.discriminatedUnion("type", [
@@ -29,7 +29,7 @@ export const ActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("skip"), to: z.enum(["next_hour", "market_open", "next_morning", "next_event", "work_end"]) }),
   z.object({ type: z.literal("order"), account: z.string().max(64), instrumentId: z.string().max(80), side: z.enum(["buy", "sell"]), orderType: z.enum(["market", "limit", "stop", "stop_limit"]), qty: num.positive(), limit: num.positive().optional(), stop: num.positive().optional(), duration: z.enum(["jour", "gtc", "date"]).optional(), expiresDays: num.int().min(1).max(90).optional(), stopLoss: num.positive().optional(), takeProfit: num.positive().optional(), clientRef: z.string().max(64).optional() }),
   z.object({ type: z.literal("cancel"), orderId: z.string().max(64) }),
-  z.object({ type: z.literal("convert"), account: z.string().max(64), from: z.enum(["EUR", "USD", "GBP", "CHF", "JPY", "CAD", "AUD", "CNY"]), to: z.enum(["EUR", "USD", "GBP", "CHF", "JPY", "CAD", "AUD", "CNY"]), amount: num.positive() }),
+  z.object({ type: z.literal("convert"), account: z.string().max(64), from: z.enum(["EUR", "USD", "GBP", "CHF", "JPY", "CAD", "AUD", "CNY"]), to: z.enum(["EUR", "USD", "GBP", "CHF", "JPY", "CAD", "AUD", "CNY"]), amount: num.positive().max(1e9) }),
   z.object({ type: z.literal("watch"), instrumentId: z.string().max(80), on: z.boolean() }),
   z.object({ type: z.literal("alert"), instrumentId: z.string().max(80), level: num.positive(), above: z.boolean() }),
   z.object({ type: z.literal("alert_delete"), id: z.string().max(64) }),
@@ -41,7 +41,7 @@ export const ActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("rebalance"), clientId: z.string().max(64), target: z.record(num.min(0).max(1)) }),
   z.object({ type: z.literal("contact_client"), clientId: z.string().max(64) }),
   z.object({ type: z.literal("call_client"), clientId: z.string().max(64) }),
-  z.object({ type: z.literal("subscribe"), productId: z.string().max(64), nominal: num.positive() }),
+  z.object({ type: z.literal("subscribe"), productId: z.string().max(64), nominal: num.positive().max(1e9) }),
   z.object({ type: z.literal("message_action"), messageId: z.string().max(64), action: z.string().max(40), payload: z.record(z.string()).optional() }),
   z.object({ type: z.literal("read"), what: z.enum(["notifications", "messages"]), id: z.string().max(64).optional() }),
   z.object({ type: z.literal("lesson"), lessonId: z.string().max(64), answer: num }),
@@ -94,6 +94,7 @@ function doSleep(s: GameState): ActionResult {
   const c = sleepCheck(s);
   if (!c.ok) return { ok: false, error: c.error };
   const t0 = s.t;
+  s.life!.sleep = { startT: t0, endT: c.target, hours: c.hours }; // la nuit en cours est reconnue à minuit (pas de pénalité de « nuit non gérée »)
   runClock(s, c.target);
   const r = finishSleep(s, t0);
   const interrupted = s.t < c.target - 5;
@@ -119,8 +120,10 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
         target = tOfDay(nextBusinessDay(day + 1), 7, 30);
       }
       else { const nx = s.agenda.find((x) => x.status === "prevu" && x.t > s.t); target = nx ? nx.t : s.t + 60; }
-      const n = advanceTo(s, Math.min(target, s.t + 4 * MIN_PER_DAY));
-      return { ok: true, message: s.paused && s.pauseReason ? `Avance interrompue : ${s.pauseReason}` : `Temps avancé (${n * 5} min simulées).` };
+      const t0 = s.t;
+      runClock(s, Math.min(target, s.t + 4 * MIN_PER_DAY));
+      const n = Math.round((s.t - t0) / 5);
+      return { ok: true, message: s.paused && s.pauseReason && s.pauseReason !== "Pause" ? `Avance interrompue : ${s.pauseReason}` : `Temps avancé (${n * 5} min simulées).` };
     }
     case "order": {
       const r = placeOrder(s, { account: a.account, instrumentId: a.instrumentId, side: a.side, type: a.orderType, qty: a.qty, limit: a.limit, stop: a.stop, duration: a.duration ?? (a.orderType === "market" ? "jour" : "gtc"), expiresT: a.expiresDays ? s.t + a.expiresDays * MIN_PER_DAY : undefined, stopLoss: a.stopLoss, takeProfit: a.takeProfit, clientRef: a.clientRef });
@@ -130,6 +133,7 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
     case "convert": {
       const acc = s.accounts[a.account];
       if (!acc || (acc.kind !== "personnel" && acc.kind !== "desk")) return { ok: false, error: "Compte non convertible." };
+      if (a.from === a.to) return { ok: false, error: "Choisissez deux devises différentes." };
       const c = toCents(a.amount);
       const bal = s.balances[`${a.account}:cash|${a.from}`] ?? 0;
       if (c > bal) return { ok: false, error: "Solde insuffisant dans la devise source." };
@@ -159,7 +163,7 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
     }
     case "answer_meeting": { const r = answerMeeting(s, a.meetingId, { choiceId: a.choiceId, value: a.value, spoken: a.spoken, timeout: a.timeout, offtopic: a.offtopic }); return r.ok ? { ok: true } : { ok: false, error: r.error }; }
     case "ask_term": { const r = explainTerm(s, a.meetingId, a.question); return r.ok ? { ok: true, data: r } : { ok: false, error: r.error }; }
-    case "leave_meeting": { if (!s.activeMeetingId) return { ok: false, error: "Aucune réunion." }; const m = s.meetings.find((x) => x.id === s.activeMeetingId); if (m) { m.done = true; m.outcome = "Vous avez quitté la réunion avant la fin."; } s.activeMeetingId = undefined; s.reputation.interne = Math.max(0, s.reputation.interne - 4); s.reputation.fiabilite = Math.max(0, s.reputation.fiabilite - 3); return { ok: true, message: "Vous quittez la réunion. Votre départ est mal perçu." }; }
+    case "leave_meeting": { if (!s.activeMeetingId) return { ok: false, error: "Aucune réunion." }; const m = s.meetings.find((x) => x.id === s.activeMeetingId); if (m) { m.done = true; m.outcome = "Vous avez quitté la réunion avant la fin."; } s.activeMeetingId = undefined; if (m && (m.templateId === "formation_n1" || m.templateId === "culture_n1")) return { ok: true, message: "Vous quittez la réunion : votre responsable vous reprendra plus tard (page Planning)." }; s.reputation.interne = Math.max(0, s.reputation.interne - 4); s.reputation.fiabilite = Math.max(0, s.reputation.fiabilite - 3); return { ok: true, message: "Vous quittez la réunion. Votre départ est mal perçu." }; }
     case "answer_mission": { const r = answerMission(s, a.missionId, { value: a.value, choice: a.choice, forecast: a.forecast }); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error }; }
     case "rebalance": { const r = rebalanceClient(s, a.clientId, a.target); return r.ok ? { ok: true, message: `Rééquilibrage transmis (${r.orders.length} ordres).${r.warnings.length ? " ⚠ " + r.warnings.join(" ") : ""}`, data: r } : { ok: false, error: r.error }; }
     case "contact_client": {
@@ -245,7 +249,10 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
       const m = startMeeting(s, "formation_n1", { resume: "1" });
       return m ? { ok: true, data: { meetingId: m.id } } : { ok: false, error: "Votre responsable n'est pas disponible." };
     }
-    case "training_close": { const r = closeTraining(s); return r.ok ? { ok: true } : { ok: false, error: r.error }; }
+    case "training_close": {
+      const act = s.activeMeetingId ? s.meetings.find((x) => x.id === s.activeMeetingId) : undefined;
+      if (act?.templateId === "formation_n1") return { ok: false, error: "Votre responsable vous interroge : terminez ou quittez d'abord la réunion." };
+      const r = closeTraining(s); return r.ok ? { ok: true } : { ok: false, error: r.error }; }
     case "set_plan": { const r = setPlan(s, { start: a.start, end: a.end, wake: a.wake }); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error }; }
     case "sleep": return doSleep(s);
     case "overtime": {
@@ -262,7 +269,8 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
       }
       return { ok: true, message: done < a.hours ? `${r.message} Interrompu après ${done} h : ${s.pauseReason ?? "événement"}.` : r.message };
     }
-    case "quiz_answer": { const r = answerQuiz(s, a.id, a.choice); return r.ok ? { ok: true, data: r.data } : { ok: false, error: r.error }; }
+    case "quiz_answer": {
+      if (a.id.startsWith("g:") && !quizServed(s, a.id)) return { ok: false, error: "Question non proposée." }; const r = answerQuiz(s, a.id, a.choice); return r.ok ? { ok: true, data: r.data } : { ok: false, error: r.error }; }
     case "tutorial_visit": if (a.page === "terminal") s.flags["visitedTerminal"] = true; return { ok: true };
   }
 }

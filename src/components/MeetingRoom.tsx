@@ -35,6 +35,18 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
   const [val, setVal] = useState("");
   const [busy, setBusy] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
+  const roomRef = useRef<HTMLDivElement>(null);
+  // Fenêtre modale accessible : focus à l'ouverture, Tab reste dans la salle, Échap quitte une réunion terminée
+  useEffect(() => { const prev = document.activeElement as HTMLElement | null; roomRef.current?.focus(); return () => prev?.focus?.(); }, []);
+  const onRoomKey = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape" && m?.done) { e.stopPropagation(); onClose(); return; }
+    if (e.key !== "Tab" || !roomRef.current) return;
+    const f = Array.from(roomRef.current.querySelectorAll<HTMLElement>("button:not([disabled]),a[href],input:not([disabled]),select,textarea,[tabindex]:not([tabindex='-1'])")).filter((x) => x.offsetParent !== null);
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1], cur = document.activeElement;
+    if (e.shiftKey && (cur === first || cur === roomRef.current)) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && cur === last) { e.preventDefault(); first.focus(); }
+  };
   const sup = useMemo(() => voiceSupport(), []);
   const difficulty = useGame((st) => st.snap?.difficulty ?? "normal");
   const limit = LIMIT[difficulty] ?? 20;
@@ -197,7 +209,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
   const warn = !m.done && m.penalties > 0 && <div data-testid="penalties" className={`rounded-full px-3 py-1 text-xs ${m.penalties >= m.maxPenalties - 1 ? "bg-red-500/20 text-red-200" : "bg-amber-500/15 text-amber-200"}`}>⚠ Avertissements : {m.penalties}/{m.maxPenalties} — {m.maxPenalties - m.penalties === 1 ? "encore un et la réunion est ratée" : "réponses hors sujet ou silences"}</div>;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/80 p-0 backdrop-blur-sm md:p-6" data-testid="meeting-room">
+    <div ref={roomRef} role="dialog" aria-modal="true" aria-label={`Réunion : ${m.type}`} tabIndex={-1} onKeyDown={onRoomKey} className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/80 p-0 outline-none backdrop-blur-sm md:p-6" data-testid="meeting-room">
       <div className="panel mx-auto flex min-h-full w-full max-w-6xl flex-col md:min-h-0 md:rounded-xl">
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-700 bg-ink-900 px-4 py-3">
           <div><div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gold">{m.location} · {m.type}{mode && <span className="ml-2 rounded bg-ink-700 px-1.5 py-0.5 text-[10px] tracking-normal text-ink-200">{mode === "oral" ? "🎙️ mode oral" : "💬 mode écrit"}</span>}</div><h2 className="text-lg font-semibold text-white">{m.phone && callee ? <>📞 {m.done ? "Appel terminé avec" : m.pickup === false ? "Messagerie de" : "En ligne avec"} {callee.name} {!m.done && <span className="num ml-2 text-sm font-normal text-ink-400">{String(Math.floor(elapsed / 60)).padStart(2, "0")}:{String(elapsed % 60).padStart(2, "0")}</span>}</> : m.title}</h2></div>

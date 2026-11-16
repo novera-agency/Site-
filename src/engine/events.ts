@@ -84,6 +84,10 @@ export function handleMessageAction(s: GameState, messageId: string, action: str
   const m = s.messages.find((x) => x.id === messageId);
   if (!m) return { ok: false as const, error: "Message introuvable." };
   if (m.handled) return { ok: false as const, error: "Déjà traité." };
+  // Seules les actions réellement proposées par ce message sont acceptées, avec leurs paramètres d'origine
+  const def = m.actions?.find((x) => x.action === action && Object.entries(x.payload ?? {}).every(([k, v]) => String(payload[k]) === String(v)));
+  if (!def) return { ok: false as const, error: "Cette action n'est pas proposée par ce message." };
+  payload = (def.payload ?? {}) as Record<string, string>;
   let result = "";
   switch (action) {
     case "take_client": { const used = new Set(s.clients.map((c) => c.name)); const idx = CLIENT_SEEDS.findIndex((c) => !used.has(c.name)); if (idx >= 0) { const c = onboardClient(s, idx); result = `Vous reprenez la relation avec ${c.name}.`; } s.career.stress += 8; changeTrust(s, "boss", 4, "A repris le portefeuille d'un collègue"); changeRep(s, "interne", 3); break; }

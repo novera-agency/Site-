@@ -175,6 +175,11 @@ export function Shell({ children }: { children: ReactNode }) {
   const [menu, setMenu] = useState(false);
   const busy = useRef(false);
   useEffect(() => {
+    const p = path.length > 1 ? path.replace(/\/$/, "") : path;
+    const it = itemOf(p);
+    document.title = `${it ? tr(it.label) : p === "/play" ? tr("Bureau") : tr("Jeu")} — FINANCIAL EMPIRE`;
+  }, [path]);
+  useEffect(() => {
     let id: string | null = null;
     try { id = localStorage.getItem("fe_game"); } catch { /* */ }
     if (!id) { router.replace("/"); return; }

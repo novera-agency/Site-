@@ -4,7 +4,7 @@
  * les mêmes validations (Zod) et les mêmes vues. Persistance dans IndexedDB.
  * Limite assumée : sans serveur, l'état réside dans le navigateur du joueur (pas d'autorité serveur).
  */
-import { createGame, advanceBudget, restartLegacyGame } from "@/engine/engine";
+import { createGame, advanceBudget, restartLegacyGame, SAVE_GEN } from "@/engine/engine";
 import { serialize, deserialize } from "@/engine/serialize";
 import { STEP_MIN } from "@/engine/time";
 import { BANK_BY_ID } from "@/engine/data/banks";
@@ -40,7 +40,7 @@ async function runtime(id: string): Promise<Runtime | null> {
     let s = deserialize(txt); s.paused = true; s.pauseReason = "Partie reprise";
     // Partie créée avec une ancienne version : recommencée une fois au 3 janvier 2000 (mode historique)
     const fresh = restartLegacyGame(s);
-    if (fresh) { s = fresh; s.paused = true; s.pauseReason = "Partie recommencée en 2000"; }
+    if (fresh) { await put(`legacy:${id}`, txt); /* copie de secours de l'ancienne partie */ s = fresh; s.paused = true; s.pauseReason = "Partie recommencée en 2000"; }
     rt = { state: s, lastTickReal: Date.now(), accMinutes: 0, dirty: !!fresh, lastSaved: Date.now() };
     games.set(id, rt);
     if (fresh) await save(rt);
@@ -67,10 +67,10 @@ export async function localApi(url: string, body?: any): Promise<unknown> {
       }
       switch (body.action) {
         case "save_slot": { const rt = await runtime(body.gameId); if (!rt || body.slot < 1 || body.slot > 3) return { ok: false, error: "Sauvegarde impossible." }; await save(rt); await put(`slot:${body.slot}`, serialize(rt.state)); await put(`slotmeta:${body.slot}`, metaOf(rt.state, body.slot)); return { ok: true, message: `Partie sauvegardée dans l'emplacement ${body.slot}.` }; }
-        case "load_slot": { const txt = await get<string>(`slot:${body.slot}`); if (!txt) return { ok: false, error: "Emplacement vide." }; const s = deserialize(txt); s.paused = true; s.pauseReason = "Sauvegarde chargée"; const rt = { state: s, lastTickReal: Date.now(), accMinutes: 0, dirty: true, lastSaved: 0 }; games.set(s.id, rt); await save(rt); return { ok: true, gameId: s.id }; }
+        case "load_slot": { const txt = await get<string>(`slot:${body.slot}`); if (!txt) return { ok: false, error: "Emplacement vide." }; const s = deserialize(txt); s.flags["gen"] = Math.max(Number(s.flags["gen"] ?? 0), SAVE_GEN); /* une sauvegarde chargée volontairement n'est jamais remise à zéro */ s.paused = true; s.pauseReason = "Sauvegarde chargée"; const rt = { state: s, lastTickReal: Date.now(), accMinutes: 0, dirty: true, lastSaved: 0 }; games.set(s.id, rt); await save(rt); return { ok: true, gameId: s.id }; }
         case "delete": games.delete(body.gameId); await del(`game:${body.gameId}`); await del(`meta:${body.gameId}`); return { ok: true };
         case "export_json": { const rt = await runtime(body.gameId); return rt ? { ok: true, data: serialize(rt.state) } : { ok: false, error: "Partie introuvable." }; }
-        case "import": { const s = deserialize(body.data); s.ownerId = OWNER; s.id = uuid(); s.paused = true; const rt = { state: s, lastTickReal: Date.now(), accMinutes: 0, dirty: true, lastSaved: 0 }; games.set(s.id, rt); await save(rt); return { ok: true, gameId: s.id }; }
+        case "import": { const s = deserialize(body.data); s.flags["gen"] = Math.max(Number(s.flags["gen"] ?? 0), SAVE_GEN); s.ownerId = OWNER; s.id = uuid(); s.paused = true; const rt = { state: s, lastTickReal: Date.now(), accMinutes: 0, dirty: true, lastSaved: 0 }; games.set(s.id, rt); await save(rt); return { ok: true, gameId: s.id }; }
       }
       return { ok: false, error: "Requête invalide." };
     }
