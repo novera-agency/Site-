@@ -19,7 +19,27 @@ export function dayIndex(t: number) { return Math.floor(t / MIN_PER_DAY); }
 export function minuteOfDay(t: number) { return ((t % MIN_PER_DAY) + MIN_PER_DAY) % MIN_PER_DAY; }
 /** 0 = dimanche … 6 = samedi */
 export function weekday(t: number) { return dateOf(t).getUTCDay(); }
-export function isWeekend(t: number) { const w = weekday(t); return w === 0 || w === 6; }
+/** Dimanche de Pâques (calendrier grégorien) : jour du mois et mois (1-12) */
+function easter(y: number): [number, number] {
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mo = Math.floor((h + l - 7 * m + 114) / 31), da = ((h + l - 7 * m + 114) % 31) + 1;
+  return [da, mo];
+}
+const holidayCache = new Map<number, Set<string>>();
+/** Jours fériés où les marchés et le bureau sont fermés : 1er janvier, vendredi saint, lundi de Pâques, 1er mai, 25 et 26 décembre */
+function holidays(y: number) {
+  let h = holidayCache.get(y);
+  if (!h) {
+    const [d, m] = easter(y), E = Date.UTC(y, m - 1, d), key = (ms: number) => { const x = new Date(ms); return `${x.getUTCMonth()}-${x.getUTCDate()}`; };
+    h = new Set(["0-1", "4-1", "11-25", "11-26", key(E - 2 * 86400000), key(E + 86400000)]);
+    holidayCache.set(y, h);
+  }
+  return h;
+}
+export function isHoliday(t: number) { const x = dateOf(t); return holidays(x.getUTCFullYear()).has(`${x.getUTCMonth()}-${x.getUTCDate()}`); }
+/** Jour non ouvré : week-end ou jour férié (marchés fermés, pas de travail) */
+export function isWeekend(t: number) { const w = weekday(t); return w === 0 || w === 6 || isHoliday(t); }
 export function dayOfMonth(t: number) { return dateOf(t).getUTCDate(); }
 export function monthIndex(t: number) { const d = dateOf(t); return (d.getUTCFullYear() - EPOCH_YEAR) * 12 + d.getUTCMonth(); }
 /** Index de jour d'une date réelle (année, mois 0-11, jour) dans l'époque courante */

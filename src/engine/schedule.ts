@@ -78,8 +78,8 @@ export function sleepCheck(s: GameState) {
   const target = nextWake(s);
   const hours = (target - s.t) / 60;
   const wake = hhmm(getPlan(s).wake);
-  if (hours < 3) return { ok: false as const, error: `Il est trop tard pour dormir : votre réveil est à ${wake}, dans ${Math.round(hours * 10) / 10} h.`, target, hours };
-  if (hours > 11.5) return { ok: false as const, error: `Trop tôt pour dormir : vous auriez ${Math.round(hours * 10) / 10} h de sommeil jusqu'à ${wake}. Couchez-vous plus tard.`, target, hours };
+  if (hours < 3) return { ok: false as const, error: `Il est trop tard pour dormir : votre réveil est à ${wake}, dans ${String(Math.round(hours * 10) / 10).replace(".", ",")} h.`, target, hours };
+  if (hours > 11.5) return { ok: false as const, error: `Trop tôt pour dormir : vous auriez ${String(Math.round(hours * 10) / 10).replace(".", ",")} h de sommeil jusqu'à ${wake}. Couchez-vous plus tard.`, target, hours };
   return { ok: true as const, target, hours };
 }
 /** Applique les effets une fois la nuit passée (heures réellement dormies, si réveil anticipé par un événement) */

@@ -6,7 +6,7 @@ import { clsChange, fmtPct } from "@/lib/format";
 
 export function Card({ title, right, children, className = "", pad = true }: { title?: ReactNode; right?: ReactNode; children: ReactNode; className?: string; pad?: boolean }) {
   return (
-    <section className={`panel fade-in ${className}`}>
+    <section className={`panel min-w-0 fade-in ${className}`}>
       {(title || right) && <header className="flex items-center justify-between gap-2 border-b border-ink-700 px-4 py-2.5"><h2 className="text-[13px] font-semibold uppercase tracking-wider text-ink-200">{title}</h2><div className="text-xs text-ink-300">{right}</div></header>}
       <div className={pad ? "p-4" : ""}>{children}</div>
     </section>

@@ -12,7 +12,7 @@ describe("Mode historique : fin 2026", () => {
     const at = (iso: string) => (Date.parse(iso + "T07:00:00Z") - EPOCH_UTC) / 60000;
     const run = async (days: number) => { s.paused = false; for (let d = 0; d < days; d++) { advance(s, 1440); s.paused = false; await new Promise((r) => setImmediate(r)); } };
     s.t = at("2026-03-25");
-    await run(22); // jusqu'au 16 avril : le S&P 500 repasse au-dessus de 7 000
+    await run(24); // mi-avril (Vendredi saint et lundi de Pâques fermés : 2 séances de moins) : le S&P 500 repasse au-dessus de 7 000
     const a = (iso: string) => Date.parse(iso + "T12:00:00Z") / 86400000;
     const target = seriesAt("EQ_US", EPOCH_UTC / 86400000 + s.t / 1440);
     const px = s.quotes["IDX-US5"].price;
