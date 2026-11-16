@@ -91,6 +91,24 @@ registerMeeting({
     const tq = c.m.nodeId.startsWith("q") ? q(c, i) : null;
     return tq?.card ? [{ title: `Fiche — ${tq.card.term}`, rows: [["Définition", tq.card.definition], ["En clair", tq.card.simple], ["Exemple", tq.card.example], ["À quoi ça sert", tq.card.application]] }] : [];
   },
+  recap: (c) => {
+    const t = session(c.s);
+    const points: string[] = [];
+    (t?.answers ?? []).forEach((a, i) => {
+      const tq = buildQuestion(t!.items[i]);
+      if (!tq) return;
+      if (tq.card) points.push(`📖 ${tq.card.term} : ${tq.card.definition}`);
+      points.push(`${a.ok ? "✔" : "✘"} ${tq.prompt} → ${tq.options?.[tq.answer] ?? ""}. ${tq.explain}`);
+    });
+    const d = t?.done;
+    const pct = d ? d.correct / d.total : 0;
+    return {
+      points,
+      tips: ["Les notions ratées sont dans votre carnet de formation (page Planning) : relisez-les.", "Une séance de formation par jour, de 2 à 5 questions."],
+      verdict: !d ? { label: "Interrompue", tone: "info" } : pct >= 0.8 ? { label: "Séance réussie", tone: "gain" } : pct >= 0.5 ? { label: "À consolider", tone: "warn" } : { label: "À retravailler", tone: "loss" },
+      skipTerms: true, skipDecisions: true,
+    };
+  },
   start: "q0", nodes,
   conclude: (c) => {
     const t = session(c.s);

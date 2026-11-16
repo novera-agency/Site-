@@ -5,11 +5,13 @@ import { useGame } from "@/lib/store";
 import { Button, Badge, inputCls } from "./ui";
 import { SoundTest } from "./SoundTest";
 import { Portrait } from "./Portrait";
+import { RecapCard } from "./RecapCard";
+import type { Recap } from "@/engine/recap";
 import { voiceSupport, voiceFor, voiceCast, ringTone, speak, stopSpeaking, listen, unlockAudio, type Listener } from "@/lib/voice";
 import { matchChoice, parseFrenchNumber } from "@/lib/voice-match";
 import { isTermQuestion } from "@/engine/glossary";
 
-interface MView { id: string; title: string; type: string; location: string; done: boolean; outcome?: string; participants: { id: string; name: string; role: string; avatar: string; trust: number }[]; agenda: string[]; objectives: string[]; tension?: string; docs: { title: string; rows: [string, string][]; note?: string }[]; log: { who: string; text: string }[]; choices: { id: string; label: string; detail?: string }[]; numeric: { prompt: string; unit: string; hint?: string } | null; score: Record<string, number>; penalties: number; maxPenalties: number; failed: boolean; sales: { initial: number; current: number; faults: number; floor: number; obtained: number | null } | null; phone: boolean; pickup: boolean | null; readChoices?: boolean; }
+interface MView { id: string; title: string; type: string; location: string; done: boolean; outcome?: string; participants: { id: string; name: string; role: string; avatar: string; trust: number }[]; agenda: string[]; objectives: string[]; tension?: string; docs: { title: string; rows: [string, string][]; note?: string }[]; log: { who: string; text: string }[]; choices: { id: string; label: string; detail?: string }[]; numeric: { prompt: string; unit: string; hint?: string } | null; score: Record<string, number>; penalties: number; maxPenalties: number; failed: boolean; sales: { initial: number; current: number; faults: number; floor: number; obtained: number | null } | null; phone: boolean; pickup: boolean | null; readChoices?: boolean; recap?: Recap | null; }
 type Mode = "oral" | "ecrit";
 
 /** Temps de réponse à l'oral selon la difficulté (secondes) */
@@ -235,7 +237,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
                 <div className="flex flex-wrap justify-center gap-4">{m.participants.map((p) => <div key={p.id} className={`flex w-36 flex-col items-center rounded-xl px-3 py-4 text-center transition ${speaker === p.id ? "bg-yellow-500/15 ring-2 ring-gold" : "bg-ink-800/80"}`}>
                   <Portrait id={p.id} size={64} active={speaker === p.id} title={p.name} /><div className="mt-2 text-sm font-medium text-white">{p.name}</div><div className="text-[11px] text-ink-400">{p.role}</div><div className="mt-1 text-[10px] text-ink-500" data-testid="voice-label">🔊 {cast.get(p.id)?.label}</div>{speaker === p.id && <div className="mt-1 text-[11px] font-semibold text-gold">parle…</div>}</div>)}</div>
                 <div className="w-full max-w-xl text-center">
-                  {m.done ? <div><Badge tone={m.failed ? "loss" : "gold"}>{m.failed ? "Réunion ratée" : "Réunion terminée"}</Badge><p className="mt-3 text-sm text-ink-200">{m.outcome}</p><button onClick={() => setMode("ecrit")} className="mt-4 rounded-full bg-ink-800 px-4 py-2 text-sm text-ink-200 hover:bg-ink-700" data-testid="show-transcript">📄 Voir le compte rendu écrit</button></div>
+                  {m.done ? <div><Badge tone={m.failed ? "loss" : "gold"}>{m.failed ? "Réunion ratée" : "Réunion terminée"}</Badge><p className="mt-3 text-sm text-ink-200">{m.outcome}</p>{m.recap && <RecapCard recap={m.recap} />}<button onClick={() => setMode("ecrit")} className="mt-4 rounded-full bg-ink-800 px-4 py-2 text-sm text-ink-200 hover:bg-ink-700" data-testid="show-transcript">📄 Voir le compte rendu écrit</button></div>
                     : phase === "speaking" ? <div className="text-ink-200"><div className="text-lg">🔊 {speakingP ? `${speakingP.name} vous parle…` : "Écoutez…"}</div><button onClick={() => { runId.current++; stopSpeaking(); setSpeaker(null); startListening(); }} className="mt-2 text-xs text-ink-400 underline">passer</button></div>
                     : phase === "listening" ? <div data-testid="voice-listening" className="rounded-xl border border-gold/50 bg-yellow-500/5 p-5">
                         <div className="mb-2 text-[11px] text-ink-500">Un mot vous échappe ? Demandez : « Qu'est-ce que… ? »</div>
@@ -259,7 +261,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
                   {sup.tts && <button data-testid="read-aloud" onClick={() => { if (readAloud) { stopVoice(); setReadAloud(false); } else { unlockAudio(); let k = 0; m.log.forEach((l, i) => { if (l.who.includes("(vous)")) k = i + 1; }); spokenUpTo.current = k; setReadAloud(true); } }} className={`shrink-0 rounded-lg px-3 py-2 text-xs ${readAloud ? "bg-gold text-ink-950" : "bg-ink-800 text-ink-200 hover:bg-ink-700"}`}>{readAloud ? "🔊 Voix activées" : "🔈 Entendre les voix"}</button>}
                   {m.participants.map((p) => <div key={p.id} className="flex min-w-[170px] items-center gap-2 rounded-lg bg-ink-800 px-3 py-2"><Portrait id={p.id} size={36} title={p.name} /><div className="min-w-0"><div className="truncate text-sm font-medium">{p.name}</div><div className="truncate text-[11px] text-ink-400">{p.role} · confiance {Math.round(p.trust)}</div></div></div>)}
                 </div>
-                <div className="scroll-thin flex-1 space-y-3 overflow-y-auto p-4" ref={logRef} style={{ maxHeight: "52vh" }} data-testid="meeting-log">
+                <div className="scroll-thin flex-1 space-y-3 overflow-y-auto p-4" ref={logRef} style={{ maxHeight: "52vh" }} data-testid="meeting-log" tabIndex={0} role="log" aria-label="Conversation de la réunion">
                   {m.log.map((l, i) => {
                     const who = m.participants.find((p) => p.name === l.who);
                     const mine = l.who.includes("(vous)"); const sys = l.who === "—" || l.who === "Correction" || l.who === "Exécution" || l.who === "Bilan";
@@ -273,7 +275,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
                   {warn && <div className="mb-3">{warn}</div>}
                   {salesBar && <div className="mb-3">{salesBar}</div>}
                   {!m.done && <form data-testid="ask-term" onSubmit={(e) => { e.preventDefault(); const q = (e.currentTarget.elements.namedItem("q") as HTMLInputElement); if (q.value.trim().length > 1) { askTerm(/\?$/.test(q.value) || isTermQuestion(q.value) ? q.value : `Qu'est-ce que ${q.value} ?`); q.value = ""; } }} className="mb-3 flex gap-2"><input name="q" className={inputCls + " py-1.5 text-xs"} placeholder="Un terme vous échappe ? Demandez : « Qu'est-ce que la duration ? »" /><Button size="sm" variant="ghost" type="submit" disabled={busy}>❓ Demander</Button></form>}
-                  {m.done ? <div className="text-sm"><Badge tone={m.failed ? "loss" : "gold"}>{m.failed ? "Réunion ratée" : "Réunion terminée"}</Badge> <span className="ml-2 text-ink-200">{m.outcome}</span></div>
+                  {m.done ? <div className="text-sm"><Badge tone={m.failed ? "loss" : "gold"}>{m.failed ? "Réunion ratée" : "Réunion terminée"}</Badge> <span className="ml-2 text-ink-200">{m.outcome}</span>{m.recap && <RecapCard recap={m.recap} />}</div>
                     : m.numeric ? <form onSubmit={(e) => { e.preventDefault(); const v = Number(val.replace(/\s/g, "").replace(",", ".")); if (Number.isFinite(v)) send({ value: v }); }} className="space-y-2">
                       <div className="text-sm text-ink-200">{m.numeric.prompt}</div>
                       {m.numeric.hint && <div className="text-xs text-ink-400">💡 {m.numeric.hint}</div>}

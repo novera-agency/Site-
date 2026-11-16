@@ -150,6 +150,23 @@ test("point culture quotidien : le N+1 pose 2 à 5 questions, corrige, et les qu
   expect(asked).toBeGreaterThanOrEqual(2);
   expect(asked).toBeLessThanOrEqual(5);
   await expect(log).toContainText("Point culture :", { timeout: 15000 });
+  // Fiche « à retenir » de fin d'entretien : visible, une ligne par question, téléchargeable en image
+  const card = room.getByTestId("recap-card");
+  await expect(card).toBeVisible();
+  await expect(card.getByTestId("recap-title")).toContainText("Point culture avec");
+  expect(await card.getByTestId("recap-points").locator("li").count()).toBe(asked);
+  await expect(card).toContainText("Fiche à retenir");
+  const ax = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+  expect(ax.violations.map((v) => `${v.id} ×${v.nodes.length}`)).toEqual([]);
+  const [dl] = await Promise.all([page.waitForEvent("download"), card.getByTestId("recap-png").click()]);
+  expect(dl.suggestedFilename()).toMatch(/^fiche-point-culture.*\.png$/);
+  const fs = await import("node:fs");
+  const buf = fs.readFileSync(await dl.path());
+  expect(buf.subarray(1, 4).toString()).toBe("PNG");
+  expect(buf.readUInt32BE(16)).toBe(1080); // largeur de l'image
+  expect(buf.readUInt32BE(20)).toBeGreaterThan(500); // hauteur
+  expect(buf.length).toBeGreaterThan(10000);
+  await expect(card).toContainText("Image enregistrée");
   // Les deux questions du jour sont comptées dans le quiz d'économie
   await go(page, "/play/culture");
   await expect(page.getByTestId("daily-count")).toHaveText("2 / 2", { timeout: 20000 });

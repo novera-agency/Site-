@@ -27,6 +27,7 @@ import { canCall } from "@/engine/prospects";
 import { CHAPTERS, ACHIEVEMENTS, currentChapter, careerScore, endingAvailable, ENDINGS } from "@/engine/progression";
 import { wealthOf } from "@/engine/wealth";
 import { isWorkDay, workWindow, getPlan, planEffects, sleepCheck, sleepLabel, overtimeCheck, OVERTIME_FOCUS, STANDARD_NET_H, MAX_AHEAD_H } from "@/engine/schedule";
+import { buildRecap } from "@/engine/recap";
 import { trainingView, notebookView, trainedToday } from "@/engine/training";
 import { quizState, quizBatch, quizToday, quizById, quizCorrectCount, QUIZ_TOTALS, QUIZ_TOTAL, type QuizCat } from "@/engine/quiz";
 import { CITIES, CITY_BY_ID, TYPE_NAME, COND_NAME, marketValue, marketRent, rentCap, rentProbability, saleProbability, cityPrice, cityRent, listings, propertiesEquity, loanBurden } from "@/engine/realestate";
@@ -212,7 +213,7 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
       return { active: active ? meetingView(s, active) : null, pending: pend, history: s.meetings.filter((m) => m.done).slice(0, 40).map((m) => ({ id: m.id, templateId: m.templateId, title: meetingView(s, m).title, startedT: m.startedT, outcome: m.outcome, score: m.score })), templates: allMeetingTemplates().map((t) => ({ id: t.id, type: t.type })) };
     }
     case "mission": { const m = s.missions.find((x) => x.id === p.id); return m ? { ...m, question: m.status === "active" ? missionQuestion(s, m) : null, guide: missionGuide(s, m), giverInfo: person(s, m.giver) } : { error: "Mission introuvable" }; }
-    case "meeting": { const m = s.meetings.find((x) => x.id === p.id); return m ? meetingView(s, m) : { error: "Réunion introuvable" }; }
+    case "meeting": { const m = s.meetings.find((x) => x.id === p.id); return m ? { ...meetingView(s, m), recap: m.done ? buildRecap(s, m) : null } : { error: "Réunion introuvable" }; }
     case "agenda": return { agenda: withPeople(s, s.agenda.slice(-80)), t: s.t };
     case "messages": return { messages: s.messages.slice(0, 100) };
     case "notifications": return { notifications: s.notifications };

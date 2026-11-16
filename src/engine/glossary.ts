@@ -42,6 +42,8 @@ const LESSON_DEFS: TermDef[] = LESSONS.map((l) => {
   return { term: l.term, aliases: [...new Set([...base, normalize(l.term)])], simple: l.simple + " " + l.definition, example: l.example };
 });
 const ALL = [...EXTRA, ...LESSON_DEFS];
+/** Toutes les notions du glossaire (pour les fiches de synthèse) */
+export function allTerms() { return ALL; }
 const extraAliases: Record<string, string[]> = { "VaR (Value at Risk)": ["var", "value at risk", "valeur a risque"], "Ratio de Sharpe": ["sharpe"], "Marge / appel de marge": ["appel de marge", "marge"], "ITM / ATM / OTM": ["itm", "atm", "otm", "dans la monnaie", "a la monnaie", "hors de la monnaie"], "Duration": ["duration", "duration modifiee"], "Sensibilité": ["sensibilite"], "Effet de levier": ["levier", "effet de levier"], "Inflation et politique monétaire": ["inflation", "politique monetaire"], "Produits structurés": ["produit structure", "produits structures", "autocall", "phoenix"], "Risque de contrepartie": ["contrepartie"], "Free cash-flow": ["free cash flow", "cash flow"] };
 for (const d of ALL) for (const a of extraAliases[d.term] ?? []) d.aliases.push(a);
 
