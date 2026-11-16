@@ -131,6 +131,23 @@ test("mode écrit : poser une question de vocabulaire ; l'avis des collaborateur
 test("appel client : sonnerie, objectif de vente qui baisse à chaque faute, versement obtenu", async ({ page }) => {
   test.setTimeout(120000);
   await page.addInitScript(fakeVoice(true));
+  // Écoute des oscillateurs créés : le début d'appel ne doit produire qu'un seul bip court (plus de sonnerie)
+  await page.addInitScript(() => {
+    const w = window as unknown as { __beeps: { freq: number; dur: number }[] };
+    w.__beeps = [];
+    const AC = (window as unknown as { AudioContext?: typeof AudioContext }).AudioContext;
+    if (AC) {
+      const orig = AC.prototype.createOscillator;
+      AC.prototype.createOscillator = function (this: AudioContext) {
+        const o = orig.call(this);
+        const rec = { freq: 0, dur: 0 }; w.__beeps.push(rec);
+        const start = o.start.bind(o), stop = o.stop.bind(o); let t0 = 0;
+        o.start = (when?: number) => { t0 = when ?? 0; rec.freq = o.frequency.value; return start(when); };
+        o.stop = (when?: number) => { rec.dur = (when ?? 0) - t0; return stop(when); };
+        return o;
+      };
+    }
+  });
   await go(page, "/");
   await page.getByTestId("new-career").click();
   await page.getByTestId("next").click();
@@ -156,6 +173,11 @@ test("appel client : sonnerie, objectif de vente qui baisse à chaque faute, ver
   await page.getByTestId("call-client").click();
   const room = page.getByTestId("meeting-room");
   await expect(room.getByTestId("ringing")).toBeVisible();
+  await expect(room.getByTestId("mode-chooser")).toBeVisible({ timeout: 10000 });
+  const beeps = await page.evaluate(() => (window as unknown as { __beeps: { freq: number; dur: number }[] }).__beeps.filter((b) => b.dur > 0));
+  expect(beeps.length).toBe(1); // un seul bip, pas de sonnerie répétée
+  expect(beeps[0].dur).toBeLessThan(0.35); // bref
+  expect(beeps[0].freq).toBe(440); // son simple et pur
   await expect(room.getByTestId("mode-chooser")).toBeVisible({ timeout: 10000 });
   const picked = await room.getByText(/décroche/).isVisible();
   console.log("CLIENT_DECROCHE=" + picked);

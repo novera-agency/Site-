@@ -88,18 +88,31 @@ export function voiceCast(people: { id: string; role?: string }[]): Map<string, 
   return out;
 }
 
-/** Sonnerie d'appel (tonalité française 425 Hz) — renvoie une promesse résolue à la fin */
-export function ringTone(rings = 2): Promise<void> {
+/**
+ * Début d'appel : un seul « bip » court et doux (plus de sonnerie répétée), simple à jouer sur iPhone (Safari) comme ailleurs.
+ * La promesse se résout après la durée habituelle de l'attente avant que le client décroche ; `audible = false` : silence complet.
+ * Le contexte audio est celui déjà débloqué par le premier toucher (voir unlockAudio) ; sur iPhone il faut qu'il l'ait été.
+ */
+export function ringTone(rings = 2, audible = true): Promise<void> {
+  const wait = rings * 1400;
   return new Promise((resolve) => {
+    if (!audible) { setTimeout(resolve, wait); return; }
     try {
       const AC = (window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext }).AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const ctx = audioCtx && audioCtx.state !== "closed" ? audioCtx : new AC();
       void ctx.resume();
-      const g = ctx.createGain(); g.gain.value = 0; g.connect(ctx.destination);
-      const o = ctx.createOscillator(); o.frequency.value = 425; o.connect(g); o.start();
-      for (let i = 0; i < rings; i++) { const t0 = ctx.currentTime + i * 1.4; g.gain.setValueAtTime(0.06, t0); g.gain.setValueAtTime(0, t0 + 0.9); }
-      setTimeout(() => { o.stop(); o.disconnect(); g.disconnect(); if (ctx !== audioCtx) void ctx.close(); resolve(); }, rings * 1400);
-    } catch { setTimeout(resolve, rings * 1400); }
+      const g = ctx.createGain(); g.connect(ctx.destination);
+      const o = ctx.createOscillator(); o.type = "sine"; o.frequency.value = 440; o.connect(g);
+      const t0 = ctx.currentTime + 0.02;
+      // attaque et chute progressives : pas de claquement, volume discret
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(0.06, t0 + 0.02);
+      g.gain.setValueAtTime(0.06, t0 + 0.18);
+      g.gain.linearRampToValueAtTime(0, t0 + 0.24);
+      o.start(t0); o.stop(t0 + 0.28);
+      o.onended = () => { try { o.disconnect(); g.disconnect(); } catch { /* */ } };
+    } catch { /* pas de son possible : l'attente reste affichée */ }
+    setTimeout(resolve, wait);
   });
 }
 

@@ -50,7 +50,7 @@ export function SoundTest() {
   return <div data-testid="sound-test" className="space-y-3 text-sm">
     <div className="flex flex-wrap gap-2">
       <Button data-testid="sound-test-run" disabled={busy || !sup.tts} onClick={run}>{busy ? "Lecture…" : "🔊 Écouter deux voix du jeu"}</Button>
-      <Button variant="ghost" onClick={() => { unlockAudio(); ringTone(1); }}>🔔 Tester un bip</Button>
+      <Button variant="ghost" onClick={() => { unlockAudio(); ringTone(1); }}>🔔 Tester le bip d'appel</Button>
       {busy && <Button variant="ghost" onClick={() => { stopSpeaking(); setBusy(false); }}>Arrêter</Button>}
     </div>
     <ul className="space-y-0.5 text-xs text-ink-300">

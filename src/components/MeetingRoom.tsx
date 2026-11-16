@@ -58,7 +58,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
   const [callStart] = useState(() => Date.now());
   const [, tick] = useState(0);
   useEffect(() => { if (!m?.phone) return; const id = setInterval(() => tick((x) => x + 1), 1000); return () => clearInterval(id); }, [m?.phone]);
-  useEffect(() => { if (!m || ringing !== null) return; if (m.phone && !m.done && m.log.length <= 1) { setRinging(true); ringTone(2).then(() => setRinging(false)); } else setRinging(false); }, [m, ringing]);
+  useEffect(() => { if (!m || ringing !== null) return; if (m.phone && !m.done && m.log.length <= 1) { setRinging(true); ringTone(2, useGame.getState().snap?.sound !== false).then(() => setRinging(false)); } else setRinging(false); }, [m, ringing]);
   useEffect(() => { try { const x = localStorage.getItem("fe_meeting_mode"); if (x === "oral" || x === "ecrit") setLastMode(x); } catch { /* */ } }, []);
   useEffect(() => { if (m?.done && mode === null) setMode("ecrit"); }, [m?.done, mode]);
   useEffect(() => { if (mode === "ecrit") logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" }); }, [m?.log.length, mode]);
