@@ -47,7 +47,7 @@ Variables d'environnement facultatives (voir `.env.example`) :
 
 **Adresse :** https://novera-agency.github.io/Site-/
 
-Le workflow `.github/workflows/pages.yml` vérifie le code (TypeScript, 155 tests), construit l'**édition navigateur** (`npm run build:static`) et la publie sur GitHub Pages à chaque push.
+Le workflow `.github/workflows/pages.yml` vérifie le code (TypeScript, 156 tests), construit l'**édition navigateur** (`npm run build:static`) et la publie sur GitHub Pages à chaque push.
 
 - GitHub Pages n'héberge que des fichiers statiques. Dans cette édition, le **même moteur** tourne dans le navigateur ; les routes `/api/*` sont servies localement (`src/lib/local-backend.ts`) avec les mêmes validations Zod et les mêmes vues. Les parties sont sauvegardées dans le navigateur (IndexedDB) ; export et import JSON sont disponibles.
 - Différences avec la version serveur : pas de comptes, pas d'autorité serveur (l'état vit chez le joueur) et dialogues des PNJ uniquement scénarisés (aucune clé d'API dans un site statique).

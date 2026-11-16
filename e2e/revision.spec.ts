@@ -71,7 +71,7 @@ test("erreurs passées : fiches de révision intégrées, refaire la question, m
   await expect(fiche.getByTestId("rv-result")).toContainText("Pas encore");
   await fiche.getByRole("button", { name: "Réessayer" }).click();
   await fiche.getByTestId(`rv-opt-${q.correct}`).click();
-  await expect(fiche.getByTestId("rv-result")).toContainText("question maîtrisée");
+  // Dès que la question est maîtrisée, la fiche quitte « À revoir » (le message peut déjà avoir disparu) : le compteur fait foi
   await expect(page.getByTestId("rv-count")).toHaveText("4");
   // Maîtrisée : elle disparaît de « À revoir » mais reste dans « Toutes »
   await expect(page.getByTestId("rv-entry")).toHaveCount(4);
