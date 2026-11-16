@@ -1,6 +1,7 @@
 /** Contenu des réunions jouables. Chaque réunion lit l'état réel de la simulation et produit des conséquences durables. */
 import type { Client, GameState } from "./types";
 import { trainingLabel } from "./trainingMeeting";
+import { cultureLabel } from "./cultureMeeting";
 import { registerMeeting, setLabelResolver, type MeetingCtx, type Doc, type MeetingNode } from "./meetingEngine";
 import { changeRep, changeTrust, gainXp, notify, toEur, multiplier, nextId, clamp, avgRep, ZONE_NAMES, logDecision } from "./core";
 import { accountEquity, positionViews, valueAtRisk, exposures, performance } from "./portfolio";
@@ -546,6 +547,7 @@ registerMeeting({
 /** Libellés dynamiques : certaines réunions construisent leurs choix à partir des variables */
 export function dynamicLabels(s: GameState, templateId: string, nodeId: string, vars: Record<string, number | string>, id: string, fallback: string): string {
   if (templateId === "formation_n1") return trainingLabel(s, nodeId, id);
+  if (templateId === "culture_n1") return cultureLabel(vars, nodeId, id);
   if (templateId === "desk_quotidien" && nodeId === "q1") { const order = Number(vars.order ?? 0); const keys = ["n0", "n1", "n2"]; const k = keys[(keys.indexOf(id) + order) % 3]; return String(vars[k]); }
   if (templateId === "desk_quotidien" && nodeId === "q2") return String(vars[id]);
   if (templateId === "comite_risques" && nodeId === "n0") return String(id === "w" ? vars.worst : id === "a1" ? vars.alt1 : vars.alt2);

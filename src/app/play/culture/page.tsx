@@ -19,7 +19,7 @@ export default function Culture() {
   // La série (5 questions) est figée au départ ; la vue se rafraîchit en arrière-plan sans la changer
   useEffect(() => { if (data && data.cat === cat && data.mode === "carriere" && queue === null) setQueue(data.batch); }, [data, cat, queue]);
   if (!data || (data.mode === "carriere" && queue === null)) return <Loading />;
-  const sub = "Deux questions par jour, plus des séries libres en micro, macro, finance, assurance, immobilier, histoire financière et calcul. Les questions réussies reviennent au bout d'un mois pour fixer vos connaissances.";
+  const sub = "Chaque jour ouvré, votre responsable vous pose 2 à 5 questions de culture au « Point culture » (vers 8 h 15) pour vérifier les bases ; vous pouvez aussi les faire ici. Deux questions par jour, plus des séries libres en micro, macro, finance, assurance, immobilier, histoire financière et calcul. Les questions réussies reviennent au bout d'un mois pour fixer vos connaissances.";
   if (data.mode !== "carriere") return <><PageTitle env="Carrière" title="Quiz d'économie" subtitle={sub} /><Card><p className="text-sm text-ink-300">Le quiz d'économie est disponible en mode carrière.</p></Card></>;
   const q = queue ? queue[seen.length] : undefined;
   const { total, done } = data.stats;

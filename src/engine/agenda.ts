@@ -35,6 +35,8 @@ export function planDay(s: GameState, rng: Rng) {
   };
   addAgendaItem(s, { t: tOfDay(day, 7, 30), durationMin: 30, title: "Revue des actualités et du calendrier", kind: "personnel" });
   if (tr !== "ib" && tr !== "entrepreneur") addAgendaItem(s, { t: tOfDay(day, 8, 30 + jitter()), durationMin: 30, title: "Réunion quotidienne du desk", kind: "reunion", meetingTemplate: "desk_quotidien" });
+  // Chaque jour ouvré, le responsable vérifie vos bases : 2 à 5 questions de culture économique et financière
+  addAgendaItem(s, { t: wStart + 45, durationMin: 15, title: "Point culture avec votre responsable", kind: "reunion", meetingTemplate: "culture_n1" });
   addAgendaItem(s, { t: tOfDay(day, 9, 0), durationMin: 0, title: "Ouverture des marchés européens", kind: "marche" });
   addAgendaItem(s, { t: tOfDay(day, 15, 30), durationMin: 0, title: "Ouverture du marché américain", kind: "marche" });
   // appels clients aléatoires

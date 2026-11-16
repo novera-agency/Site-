@@ -146,7 +146,7 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
       return m ? { ok: true, data: { meetingId: m.id } } : { ok: false, error: "Réunion indisponible." };
     }
     case "start_meeting": {
-      const allowed = ["comite_investissement", "comite_risques", "client_point_regulier", "desk_quotidien", ...(process.env.E2E_HOOKS === "1" ? ["formation_n1"] : [])];
+      const allowed = ["comite_investissement", "comite_risques", "client_point_regulier", "desk_quotidien", ...(process.env.E2E_HOOKS === "1" ? ["formation_n1", "culture_n1"] : [])];
       if (!allowed.includes(a.template)) return { ok: false, error: "Cette réunion ne peut pas être provoquée." };
       if (!s.career.employed && a.template !== "client_point_regulier") return { ok: false, error: "Vous n'êtes pas en poste." };
       const key = `manualMeeting:${a.template}:${dayIndex(s.t)}`;

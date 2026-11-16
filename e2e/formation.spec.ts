@@ -121,3 +121,36 @@ test("séance de formation à l'oral : le responsable lit la question puis les r
   await expect(room.getByTestId("meeting-log")).toContainText("interprété comme", { timeout: 10000 });
   await expect(room.getByTestId("meeting-log")).toContainText(/✔|✘/);
 });
+
+test("point culture quotidien : le N+1 pose 2 à 5 questions, corrige, et les questions du jour sont comptées", async ({ page }) => {
+  await page.addInitScript(() => { try { sessionStorage.setItem("fe_intro", "1"); } catch { /* */ } });
+  await go(page, "/");
+  await page.getByTestId("new-career").click();
+  await page.getByTestId("next").click();
+  await page.getByTestId("first-name").fill("Zoé");
+  await page.getByTestId("last-name").fill("Culture");
+  for (let i = 0; i < 4; i++) await page.getByTestId("next").click();
+  await page.getByTestId("create").click();
+  await page.waitForURL(/\/play\/?$/);
+  const started = await page.evaluate(async () => { const id = localStorage.getItem("fe_game"); const r = await fetch(`/api/game/${id}/action`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "start_meeting", template: "culture_n1", params: {} }) }); return r.json(); });
+  expect(started.ok).toBe(true);
+  const room = page.getByTestId("meeting-room");
+  await expect(room).toBeVisible({ timeout: 20000 });
+  await expect(room.getByText(/Point culture avec/).first()).toBeVisible();
+  await room.getByTestId("mode-ecrit").click();
+  const log = room.getByTestId("meeting-log");
+  await expect(log).toContainText("Point culture du jour");
+  // Il pose entre 2 et 5 questions, selon vos réponses
+  let asked = 0;
+  for (; asked < 5; asked++) {
+    if (!(await room.getByTestId("choice-c0").count())) break;
+    await room.getByTestId("choice-c0").click();
+    await expect.poll(async () => ((await log.textContent()) ?? "").match(/[✔✘]/g)?.length ?? 0, { timeout: 15000 }).toBeGreaterThan(asked);
+  }
+  expect(asked).toBeGreaterThanOrEqual(2);
+  expect(asked).toBeLessThanOrEqual(5);
+  await expect(log).toContainText("Point culture :", { timeout: 15000 });
+  // Les deux questions du jour sont comptées dans le quiz d'économie
+  await go(page, "/play/culture");
+  await expect(page.getByTestId("daily-count")).toHaveText("2 / 2", { timeout: 20000 });
+});

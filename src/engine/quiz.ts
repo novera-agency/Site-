@@ -104,6 +104,10 @@ const isDue = (st: QuizState, id: string, day: number) => st.done[id] === 1 && (
 const available = (st: QuizState, id: string, day: number) => st.done[id] !== 1 || isDue(st, id, day);
 /** 0 = jamais vue, 1 = ratée, 2 = à réviser */
 const rank = (st: QuizState, id: string) => (st.done[id] === undefined ? 0 : st.done[id] === 0 ? 1 : 2);
+/** Niveau d'une question de culture (1 = bases) ; les questions tirées de l'histoire du jeu sont de niveau 2 */
+const levelOf = (id: string) => BY_ID[id]?.level ?? 2;
+/** La question peut-elle être posée aujourd'hui (jamais réussie, ou réussie il y a 30 jours ou plus) ? */
+export const quizAvailable = (s: GameState, id: string) => available(quizState(s), id, dayIndex(s.t));
 const h32 = (str: string) => { let x = 2166136261; for (let i = 0; i < str.length; i++) x = Math.imul(x ^ str.charCodeAt(i), 16777619) >>> 0; return x; };
 /** Questions de connaissances (banque rédigée + histoire) dans un ordre propre à la partie */
 const orderCache = new Map<string, string[]>();
@@ -119,8 +123,15 @@ export function quizToday(s: GameState) {
   if (st.today && st.today.day === day) return st.today;
   const order = knowledgeOrder(s);
   let know: string | undefined;
-  for (const wanted of [0, 1, 2]) { // d'abord les questions jamais vues, puis les ratées, puis celles à réviser
-    for (let k = 0; k < order.length && !know; k++) { const id = order[(day + k) % order.length]; if (rank(st, id) === wanted && available(st, id, day)) know = id; }
+  // D'abord les questions jamais vues (les bases avant le reste), puis les ratées, puis celles à réviser (les plus anciennes d'abord)
+  for (const wanted of [0, 1, 2]) {
+    let bestKey = Infinity;
+    for (let k = 0; k < order.length; k++) {
+      const id = order[k];
+      if (rank(st, id) !== wanted || !available(st, id, day) || st.today?.ids.includes(id)) continue;
+      const key = wanted === 2 ? (st.last?.[id] ?? -1e9) : levelOf(id) * 1e6 + k; // niveau 1 avant 2 avant 3 ; l'ordre propre à la partie départage
+      if (key < bestKey) { bestKey = key; know = id; }
+    }
     if (know) break;
   }
   const calc = `g:${day % GEN_FAMILIES}:${day}`;

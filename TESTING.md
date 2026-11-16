@@ -57,3 +57,5 @@ Pour tester l'édition navigateur : `BASE_PATH=/Site- npm run build:static`, ser
 | `e2e/formation.spec.ts` | Parcours de l'écran de séance (fiche, QCM, numérique, corrections, bilan, fermeture) sur séance injectée, avec audit d'accessibilité. |
 | `tests/vie.test.ts` (réunion de formation) | « Me former » ouvre la réunion avec le N+1, qui pose la question ; réponses ✔/✘ corrigées par le responsable ; bilan ; reprise après avoir quitté ; toutes les leçons en QCM. |
 | `e2e/formation.spec.ts` | Séance complète à l'écrit (bilan et carnet sur Planning), reprise d'une séance interrompue, séance à l'oral (lecture des réponses, « la deuxième »). Le serveur de test active E2E_HOOKS pour lancer la réunion directement. |
+| `tests/culture-n1.test.ts` | Point culture dans l'agenda chaque jour ouvré (suivant les horaires, pas le week-end) ; 2 bonnes réponses = 2 questions ; rattrapage du même thème et niveau ≤ ; 5 questions maximum ; quiz du jour compté ; lecture des réponses à l'oral ; bases d'abord (niveaux croissants). |
+| `e2e/formation.spec.ts` (point culture) | Réunion du point culture : 2 à 5 questions, corrections, quiz du jour compté 2/2. |
