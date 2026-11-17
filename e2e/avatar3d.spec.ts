@@ -58,3 +58,24 @@ test("avatar : créé en 3D, enregistré avec la partie, modifiable dans la gard
   await expect(page.getByTestId("av-hair-1")).toHaveAttribute("aria-pressed", "true");
   expect(errors).toEqual([]);
 });
+
+test("accueil 3D en plein écran : l'arrivée couvre tout l'écran, puis on choisit une porte et le détail s'ouvre par-dessus", async ({ page }) => {
+  test.setTimeout(180000);
+  await intro(page);
+  await page.setViewportSize({ width: 1000, height: 700 });
+  await page.goto(BASE + "/?3d=1");
+  const stage = page.getByTestId("office-3d");
+  await expect(stage).toBeVisible();
+  const box = await stage.boundingBox();
+  expect(Math.round(box!.width)).toBe(1000); expect(Math.round(box!.height)).toBe(700); // plein écran
+  await expect(page.locator("[inert]")).toHaveCount(1); // le menu classique, derrière, est inerte (ni clavier ni lecteur d'écran)
+  await page.keyboard.press("Escape"); // passe l'arrivée
+  await expect(page.getByTestId("zone-charger")).toBeVisible({ timeout: 20000 });
+  await page.getByTestId("zone-charger").click();
+  await expect(page.getByTestId("home-panel")).toBeVisible({ timeout: 90000 });
+  await expect(page.getByTestId("home-panel")).toContainText("Charger une partie");
+  await page.getByTestId("home-panel").getByText("Retour au hall").click();
+  await expect(page.getByTestId("home-panel")).toHaveCount(0);
+  await page.getByTestId("classic-menu").click(); // retour au menu classique
+  await expect(page.getByTestId("new-career")).toBeVisible();
+});

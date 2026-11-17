@@ -7,7 +7,7 @@ import { BANK_BY_ID, TRACKS } from "@/engine/data/banks";
 import { fmtDateFor } from "@/engine/time";
 import { Button, inputCls } from "@/components/ui";
 import { Intro } from "@/components/Intro";
-import type { Room } from "@/components/OfficeScene";
+import { OfficeScene, type Room } from "@/components/OfficeScene";
 import { OfficeView } from "@/components/OfficeView";
 import { webglOK } from "@/components/Stage3D";
 import { loadDeviceAvatar } from "@/lib/avatar-pref";
@@ -84,7 +84,10 @@ export default function Home() {
   const [hall, setHall] = useState<HallEntry[]>([]);
   const [deviceAvatar, setDeviceAvatar] = useState<Avatar>(defaultAvatar());
   const [arrived, setArrived] = useState(false);
-  const [use3d, setUse3d] = useState(false);
+  const [use3d, setUse3d] = useState<boolean | null>(null);
+  const [classic, setClassic] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
+  useEffect(() => { if (!panelOpen) return; const k = (e: KeyboardEvent) => { if (e.key === "Escape") setPanelOpen(false); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [panelOpen]);
   useEffect(() => { setDeviceAvatar(loadDeviceAvatar() ?? defaultAvatar()); setUse3d(webglOK()); }, []);
   useEffect(() => { setHall(hallOfFame()); }, []);
   const [ioMsg, setIoMsg] = useState("");
@@ -142,7 +145,7 @@ export default function Home() {
     if (id === "continuer" && last) open(last.gameId);
     else if (id === "nouvelle") go("/nouvelle?mode=carriere");
     else if (id === "libre") go("/nouvelle?mode=bac_a_sable");
-    else { setSel(id); if (typeof window !== "undefined" && window.innerWidth < 768) setTimeout(() => panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }
+    else { setSel(id); setPanelOpen(true); if (typeof window !== "undefined" && window.innerWidth < 768) setTimeout(() => panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [last, session]);
   useEffect(() => {
@@ -229,19 +232,35 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#070a12]">
-      {!use3d && <Intro />}
+      {use3d === false && <Intro />}
       <Skyline />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[32vh] bg-gradient-to-b from-[#070a12] via-transparent to-transparent" />
-      <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col px-5 pb-16 pt-8 md:px-8">
+      {use3d && !classic && <OfficeView fullscreen rooms={rooms} avatar={deviceAvatar} arrival selected={sel} label={T("Plan de la banque")} onArrive={(id) => activate(id as Item)} onArrived={() => setArrived(true)} onFail={() => setUse3d(false)}>
+        <header className="pointer-events-auto absolute inset-x-0 top-0 flex items-center gap-3 bg-gradient-to-b from-black/75 to-transparent px-4 pb-6 pt-3 md:px-6">
+          <span className="flex h-9 w-9 items-center justify-center rounded-md border border-gold/60 text-sm font-black text-gold">FE</span>
+          <span className="text-sm font-semibold tracking-[0.25em] text-ink-100">FINANCIAL EMPIRE</span>
+          <span className="ml-auto flex items-center gap-2 text-[11px]">
+            <button data-testid="classic-menu" onClick={() => setClassic(true)} className="rounded border border-white/25 bg-black/50 px-2 py-1 text-ink-100 hover:bg-black/70">{T("Menu classique")}</button>
+            <span className="flex gap-1" role="group" aria-label="Langue / Language">{(["fr", "en"] as const).map((l) => <button key={l} data-testid={`lang-${l}`} aria-pressed={lang === l} onClick={() => lang !== l && setLang(l)} className={`rounded px-2 py-1 ${lang === l ? "bg-gold font-bold text-black" : "bg-black/50 text-ink-200"}`}>{l.toUpperCase()}</button>)}</span>
+          </span>
+        </header>
+        <p className="pointer-events-none absolute inset-x-0 bottom-28 px-6 text-center text-sm text-white/90 drop-shadow sm:bottom-4">{!arrived ? T("Paris, 7 h 02. Votre badge vous attend à l'accueil de la banque.") : T("Touchez une porte : votre personnage s'y rend.")}</p>
+        {arrived && panelOpen && <aside role="region" aria-label={T(sel)} data-testid="home-panel" className="pointer-events-auto absolute bottom-14 left-3 right-3 top-16 overflow-y-auto rounded-xl border border-ink-600 bg-ink-900/95 p-5 shadow-2xl backdrop-blur sm:bottom-6 sm:left-auto sm:right-6 sm:top-16 sm:w-[min(440px,90vw)] md:p-7">
+          <button onClick={() => setPanelOpen(false)} className="mb-3 text-xs text-ink-300 underline hover:text-white">← {T("Retour au hall")}</button>
+          {panels[sel]}
+        </aside>}
+      </OfficeView>}
+      <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col px-5 pb-16 pt-8 md:px-8" {...(use3d && !classic ? { inert: true } : {})}>
         <header className="flex items-center gap-3">
           <span className="flex h-9 w-9 items-center justify-center rounded-md border border-gold/60 text-sm font-black text-gold">FE</span>
           <span className="text-sm font-semibold tracking-[0.25em] text-ink-200">FINANCIAL EMPIRE</span>
           <span className="ml-auto flex gap-1 text-[11px]" role="group" aria-label="Langue / Language">{(["fr", "en"] as const).map((l) => <button key={l} data-testid={`lang-${l}`} aria-pressed={lang === l} onClick={() => lang !== l && setLang(l)} className={`rounded px-2 py-1 font-semibold uppercase ${lang === l ? "bg-gold text-black" : "bg-ink-800 text-ink-300 hover:text-white"}`}>{l}</button>)}</span>
         </header>
 
-        <div className="mt-6 md:mt-8"><OfficeView rooms={rooms} avatar={deviceAvatar} arrival selected={sel} label={T("Plan de la banque")} onArrive={(id) => activate(id as Item)} onArrived={() => setArrived(true)}>
-          <p className="mt-2 text-center text-xs text-ink-400">{use3d && !arrived ? T("Paris, 7 h 02. Votre badge vous attend à l'accueil de la banque.") : T("Touchez une pièce : votre personnage s'y rend. Le menu classique reste disponible juste en dessous.")}</p>
-        </OfficeView></div>
+        {(use3d === false || classic) && <div className="mt-6 md:mt-8"><OfficeScene rooms={rooms} selected={sel} label={T("Plan de la banque")} onArrive={(id) => activate(id as Item)}>
+          <p className="mt-2 text-center text-xs text-ink-400">{T("Touchez une pièce : votre personnage s'y rend. Le menu classique reste disponible juste en dessous.")}</p>
+          {classic && <p className="mt-1 text-center"><button onClick={() => setClassic(false)} data-testid="back-to-3d" className="text-xs text-gold underline">{T("Revenir à l'arrivée en 3D")}</button></p>}
+        </OfficeScene></div>}
 
         <div className="mt-8 grid flex-1 items-start gap-8 md:mt-16 md:grid-cols-[minmax(0,320px)_minmax(0,1fr)] md:gap-14">
           <div>

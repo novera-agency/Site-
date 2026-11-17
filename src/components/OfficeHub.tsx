@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useGame } from "@/lib/store";
 import { itemOf } from "./nav";
 import type { Room } from "./OfficeScene";
@@ -23,12 +23,14 @@ const ZONES: (Omit<Room, "badge"> & { hrefs: string[] })[] = [
 export function OfficeHub() {
   const snap = useGame((s) => s.snap);
   const [sel, setSel] = useState<string | null>(null);
+  const [full, setFull] = useState(false);
+  useEffect(() => { if (!full) return; const k = (e: KeyboardEvent) => { if (e.key === "Escape") setFull(false); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [full]);
   const badges: Record<string, number> = snap ? { bureau: snap.unreadMsgs + snap.missionsActive } : {};
   const rooms: Room[] = ZONES.map((z) => ({ ...z, label: tr(z.label), sub: tr(z.sub ?? ""), badge: badges[z.id] || undefined }));
   const zone = ZONES.find((z) => z.id === sel);
   return <section className="mb-4" aria-label={tr("Plan de la banque")} data-testid="office-hub">
-    <OfficeView rooms={rooms} avatar={snap?.player.avatar ?? defaultAvatar()} selected={sel} label={tr("Plan de la banque")} onArrive={setSel}>
-      <div className="mt-3" aria-live="polite">
+    <OfficeView rooms={rooms} avatar={snap?.player.avatar ?? defaultAvatar()} selected={sel} label={tr("Plan de la banque")} onArrive={setSel} fullscreen={full} onToggleFullscreen={() => setFull((f) => !f)}>
+      <div className={full ? "pointer-events-auto absolute inset-x-3 bottom-14 max-h-[42vh] overflow-y-auto sm:bottom-4 sm:left-auto sm:right-4 sm:w-[min(520px,92vw)]" : "mt-3"} aria-live="polite">
         {zone ? <div className="rounded-xl border border-gold/40 bg-ink-850 p-3" data-testid="room-panel">
           <div className="mb-2 flex items-center justify-between gap-2"><h2 className="text-sm font-semibold text-gold">{zone.icon} {tr(zone.label)}</h2><button onClick={() => setSel(null)} className="text-xs text-ink-400 underline hover:text-white">{tr("Fermer")}</button></div>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{zone.hrefs.map((h) => { const it = itemOf(h); return it ? <Link key={h} href={h} className="flex items-center gap-3 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 hover:border-gold"><span className="text-xl" aria-hidden>{it.icon}</span><span className="min-w-0"><span className="block text-sm font-medium text-white">{tr(it.label)}</span><span className="block truncate text-[11px] text-ink-400">{tr(it.desc)}</span></span></Link> : null; })}</div>
