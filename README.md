@@ -91,3 +91,5 @@ Le workflow `.github/workflows/pages.yml` vérifie le code (TypeScript, 162 test
 - Sur les appareils lents, le calcul est limité à chaque seconde : le temps ralentit au lieu de figer l'écran.
 
 Voir `ARCHITECTURE.md`, `FINANCIAL_MODELS.md`, `TESTING.md` et l'état exact dans `PROGRESS.md`.
+
+- **Code de carrière** : dans Paramètres (et Sauvegardes), « Générer mon code » produit un texte (partie compressée + somme de contrôle) à copier ou à télécharger ; sur l'autre appareil, « J'ai un code de carrière » (accueil, onglet Charger) ou le même panneau des Paramètres recrée la carrière à l'identique. Le code est long (≈ 1 Mo de texte) : il se colle, il ne se tape pas. Seul l'historique de cours très ancien est raccourci.

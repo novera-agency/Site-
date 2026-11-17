@@ -9,7 +9,7 @@ import { RigSlot } from "./rigslot";
 import type { GestureId } from "./character/animator";
 import { buildBank, buildTailor, skyMesh, DOOR_X, DOOR_Z, ENTRY, EL, HALL, OBSTACLES, type BankWorld } from "./world";
 
-export interface StageRoom { id: string; slot: number; locked?: boolean }
+export interface StageRoom { id: string; slot: number; locked?: boolean; label?: string; sub?: string; icon?: string; hint?: string }
 export interface LabelPoint { id: string; x: number; y: number; visible: boolean }
 export type View = "full" | "threeQuarter" | "front" | "profile" | "back" | "bust" | "portrait";
 /** ancien nom (onglets de personnalisation) */
@@ -160,7 +160,7 @@ export class Stage {
     const sun = new THREE.DirectionalLight("#ffd8a8", 1.6); sun.position.set(14, 24, 26); sun.castShadow = true;
     sun.shadow.mapSize.set(this.quality === "low" ? 1024 : 4096, this.quality === "low" ? 1024 : 4096); const sc = sun.shadow.camera; sc.left = -24; sc.right = 24; sc.top = 24; sc.bottom = -24; sc.near = 1; sc.far = 90; sun.shadow.bias = -0.0004;
     this.scene.add(sun);
-    this.bank = buildBank(this.scene, { reflect: this.quality === "high" });
+    this.bank = buildBank(this.scene, { reflect: this.quality === "high" }); this.applyPlaques();
     // collègues qui circulent et réceptionniste
     const looks: Partial<Avatar>[] = [
       { skin: 2, hair: 1, hairColor: 0, suit: 1, tie: 2, beard: 0 }, { skin: 4, hair: 0, hairColor: 0, suit: 2, tie: 0, beard: 3, glasses: 2 },
@@ -277,7 +277,10 @@ export class Stage {
   state(): string { return this.rig.character?.animator.state ?? "IDLE"; }
   /** Retour à la pose initiale : geste interrompu, debout, regard libre, vue d'ensemble */
   resetPose() { const c = this.rig.character; c?.animator.stopGesture(); c?.sit(false); this.faceCam = false; this.treadmill = 0; c?.lookAt(null); c?.setExpression("neutral"); this.setView("full"); this.auto = true; }
-  setRooms(r: StageRoom[]) { this.rooms = r; }
+  setRooms(r: StageRoom[]) { this.rooms = r; this.applyPlaques(); }
+  /** Écrit sur chaque enseigne l'icône, le nom et la description de l'option : on sait où mène chaque ascenseur */
+  private applyPlaques() { if (!this.bank) return; for (const r of this.rooms) this.bank.setPlaque(r.slot, { icon: r.icon ?? "", label: r.label ?? "", sub: r.sub, hint: r.hint }); }
+  highlight(id: string | null) { const r = this.rooms.find((x) => x.id === id); this.bank?.highlight(r ? r.slot : null); }
   resize() {
     const c = this.o.canvas, w = c.clientWidth || 800, h = c.clientHeight || 500;
     this.renderer.setSize(w, h, false); this.composer?.setSize(w, h); this.bloom?.setSize(w, h); this.camera.aspect = w / h; this.camera.updateProjectionMatrix();

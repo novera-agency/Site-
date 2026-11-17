@@ -5,7 +5,7 @@
  * Limite assumée : sans serveur, l'état réside dans le navigateur du joueur (pas d'autorité serveur).
  */
 import { createGame, advanceBudget, restartLegacyGame, SAVE_GEN } from "@/engine/engine";
-import { serialize, deserialize } from "@/engine/serialize";
+import { serialize, serializeCompact, deserialize } from "@/engine/serialize";
 import { STEP_MIN } from "@/engine/time";
 import { BANK_BY_ID } from "@/engine/data/banks";
 import { scriptedReply } from "@/engine/dialogue";
@@ -69,6 +69,7 @@ export async function localApi(url: string, body?: any): Promise<unknown> {
         case "save_slot": { const rt = await runtime(body.gameId); if (!rt || body.slot < 1 || body.slot > 3) return { ok: false, error: "Sauvegarde impossible." }; await save(rt); await put(`slot:${body.slot}`, serialize(rt.state)); await put(`slotmeta:${body.slot}`, metaOf(rt.state, body.slot)); return { ok: true, message: `Partie sauvegardée dans l'emplacement ${body.slot}.` }; }
         case "load_slot": { const txt = await get<string>(`slot:${body.slot}`); if (!txt) return { ok: false, error: "Emplacement vide." }; const s = deserialize(txt); s.flags["gen"] = Math.max(Number(s.flags["gen"] ?? 0), SAVE_GEN); /* une sauvegarde chargée volontairement n'est jamais remise à zéro */ s.paused = true; s.pauseReason = "Sauvegarde chargée"; const rt = { state: s, lastTickReal: Date.now(), accMinutes: 0, dirty: true, lastSaved: 0 }; games.set(s.id, rt); await save(rt); return { ok: true, gameId: s.id }; }
         case "delete": games.delete(body.gameId); await del(`game:${body.gameId}`); await del(`meta:${body.gameId}`); return { ok: true };
+        case "export_code": { const rt = await runtime(body.gameId); return rt ? { ok: true, data: serializeCompact(rt.state) } : { ok: false, error: "Partie introuvable." }; }
         case "export_json": { const rt = await runtime(body.gameId); return rt ? { ok: true, data: serialize(rt.state) } : { ok: false, error: "Partie introuvable." }; }
         case "import": { const s = deserialize(body.data); s.flags["gen"] = Math.max(Number(s.flags["gen"] ?? 0), SAVE_GEN); s.ownerId = OWNER; s.id = uuid(); s.paused = true; const rt = { state: s, lastTickReal: Date.now(), accMinutes: 0, dirty: true, lastSaved: 0 }; games.set(s.id, rt); await save(rt); return { ok: true, gameId: s.id }; }
       }

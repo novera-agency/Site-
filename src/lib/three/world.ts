@@ -68,6 +68,24 @@ function signTexture(text: string, sub?: string) {
   });
 }
 
+/** Couleur d'accent de chaque ascenseur : on reconnaît une option du premier coup d'œil */
+const ACCENT = ["#d4af37", "#3b82f6", "#ef4444", "#22c55e", "#a855f7", "#f59e0b", "#06b6d4"];
+function plaqueTexture(p: { icon: string; label: string; sub?: string; hint?: string; accent: string }) {
+  const cv = document.createElement("canvas"); cv.width = 1184; cv.height = 372; const c = cv.getContext("2d")!;
+  const bg = c.createLinearGradient(0, 0, 0, 372); bg.addColorStop(0, "#0d1226"); bg.addColorStop(1, "#050813"); c.fillStyle = bg; c.fillRect(0, 0, 1184, 372);
+  const glow = c.createRadialGradient(170, 186, 10, 170, 186, 220); glow.addColorStop(0, p.accent + "aa"); glow.addColorStop(1, p.accent + "00"); c.fillStyle = glow; c.fillRect(0, 0, 420, 372);
+  c.strokeStyle = "#c9a24a"; c.lineWidth = 7; c.strokeRect(10, 10, 1164, 352); c.strokeStyle = p.accent; c.lineWidth = 3; c.strokeRect(24, 24, 1136, 324);
+  c.beginPath(); c.arc(170, 186, 108, 0, Math.PI * 2); c.fillStyle = "#0a0f1f"; c.fill(); c.lineWidth = 6; c.strokeStyle = p.accent; c.stroke();
+  c.textAlign = "center"; c.textBaseline = "middle"; c.font = "132px 'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif"; c.fillStyle = "#fff"; c.fillText(p.icon, 170, 196);
+  c.textAlign = "left";
+  const g = c.createLinearGradient(0, 80, 0, 180); g.addColorStop(0, "#fff3c4"); g.addColorStop(0.55, "#e6c15a"); g.addColorStop(1, "#9a742a");
+  let fs = 96; c.font = `800 ${fs}px 'Times New Roman', Georgia, serif`; while (c.measureText(p.label).width > 780 && fs > 40) { fs -= 4; c.font = `800 ${fs}px 'Times New Roman', Georgia, serif`; }
+  c.fillStyle = g; c.fillText(p.label, 330, p.sub ? 128 : 186);
+  if (p.sub) { c.font = "600 44px 'Times New Roman', Georgia, serif"; c.fillStyle = p.accent; c.fillText(p.sub, 332, 214); }
+  if (p.hint) { c.font = "400 36px Georgia, serif"; c.fillStyle = "#d9d2bf"; let h = p.hint; while (c.measureText(h).width > 800 && h.length > 6) h = h.slice(0, -2); c.fillText(h === p.hint ? h : h + "…", 332, 276); }
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+}
+
 export interface BankWorld {
   group: THREE.Group;
   /** Mur de façade (retiré une fois à l'intérieur pour la vue en coupe) */
@@ -79,6 +97,10 @@ export interface BankWorld {
   setDoor(slot: number, open: number): void;
   /** Coupe le reflet du sol (appareil lent) */
   disableMirror(): void;
+  /** Enseigne lumineuse au-dessus de l'ascenseur : icône, nom et description de l'option */
+  setPlaque(slot: number, p: { icon: string; label: string; sub?: string; hint?: string }): void;
+  /** Met en valeur un ascenseur (survol ou sélection) */
+  highlight(slot: number | null): void;
   doorAt(slot: number): number;
   dispose(): void;
   receptionist: THREE.Vector3;
@@ -138,6 +160,8 @@ export function buildBank(scene: THREE.Scene, opts: { reflect?: boolean } = {}):
   /* ───── 7 ascenseurs : chacun mène à une option ───── */
   const labelAnchors: THREE.Vector3[] = [];
   const leaves: [THREE.Mesh, THREE.Mesh][] = [];
+  const plaques: { mat: THREE.MeshBasicMaterial; glow: THREE.Mesh; accent: string; x: number }[] = [];
+  let hot: number | null = null;
   const openNow: number[] = DOOR_X.map(() => 0), openGoal: number[] = DOOR_X.map(() => 0);
   const brushed = reg(new THREE.MeshStandardMaterial({ color: "#c9a85a", roughness: 0.28, metalness: 1 }));
   const champagne = reg(new THREE.MeshStandardMaterial({ color: "#d8c7a0", roughness: 0.35, metalness: 0.85 }));
@@ -172,7 +196,14 @@ export function buildBank(scene: THREE.Scene, opts: { reflect?: boolean } = {}):
     box(0.2, 0.42, 0.06, bronze, x + EL.w / 2 + 0.55, 1.3, zb + 0.07);
     for (const dy of [0.08, -0.08]) { const b = new THREE.Mesh(reg(new THREE.SphereGeometry(0.035, 12, 8)), reg(new THREE.MeshStandardMaterial({ color: "#fff3cf", emissive: "#ffd98a", emissiveIntensity: 2 }))); b.position.set(x + EL.w / 2 + 0.55, 1.3 + dy, zb + 0.12); group.add(b); }
     box(EL.w + 1.2, 0.04, 1.6, reg(std("#7a1d2b", 0.9)), x, 0.02, zb + 1.2);   // tapis devant l'ascenseur
-    labelAnchors.push(new THREE.Vector3(x, EL.h + (i % 2 ? 2.4 : 1.2), zb + 0.5));
+    // enseigne : grand panneau rétro-éclairé, couleur d'accent propre à chaque option
+    const pm = reg(new THREE.MeshBasicMaterial({ map: plaqueTexture({ icon: "", label: "", accent: ACCENT[i] }), toneMapped: false, transparent: true }));
+    const plaque = new THREE.Mesh(reg(new THREE.PlaneGeometry(3.7, 1.16)), pm); plaque.position.set(x, EL.h + 1.2, zb + 0.34); group.add(plaque);
+    const frame = new THREE.Mesh(reg(new THREE.BoxGeometry(3.86, 1.32, 0.08)), reg(std("#2a2012", 0.4, 0.8))); frame.position.set(x, EL.h + 1.2, zb + 0.3); group.add(frame);
+    const glow = new THREE.Mesh(reg(new THREE.BoxGeometry(3.7, 0.07, 0.07)), reg(new THREE.MeshBasicMaterial({ color: ACCENT[i], toneMapped: false })));
+    glow.position.set(x, EL.h + 0.5, zb + 0.4); group.add(glow);
+    plaques.push({ mat: pm, glow, accent: ACCENT[i], x });
+    labelAnchors.push(new THREE.Vector3(x, EL.h + 1.2, zb + 0.6));
   });
 
   /* ───── mobilier : globe d'or, accueil, salon ───── */
@@ -233,12 +264,29 @@ export function buildBank(scene: THREE.Scene, opts: { reflect?: boolean } = {}):
     box(ww, hh, ww, tMat(Math.max(1, Math.round(ww / 3)), Math.max(1, Math.round(hh / 8))), x, hh / 2, z, group);
   }
 
+  // fenêtres hautes sur les murs latéraux et rayons de lumière qui traversent le hall
+  const winMat = reg(new THREE.MeshBasicMaterial({ color: "#ffe2a8", toneMapped: false }));
+  const beamMat = reg(new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, uniforms: { t: { value: 0 } },
+    vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
+    fragmentShader: "varying vec2 vUv; uniform float t; void main(){ float edge = smoothstep(0.0,0.35,vUv.x) * smoothstep(1.0,0.65,vUv.x); float fall = pow(1.0 - vUv.y, 1.4); float shimmer = 0.85 + 0.15 * sin(t * 0.6 + vUv.y * 6.0); gl_FragColor = vec4(1.0, 0.86, 0.6, edge * fall * 0.16 * shimmer); }",
+  }));
+  for (const sx of [-1, 1]) for (const z of [-5.5, 0.5, 6]) {
+    const w = new THREE.Mesh(reg(new THREE.PlaneGeometry(1.5, 4.4)), winMat); w.position.set(sx * (HALL.x1 - 0.12), 6.1, z); w.rotation.y = -sx * Math.PI / 2; group.add(w);
+    const beam = new THREE.Mesh(reg(new THREE.PlaneGeometry(2.2, 12)), beamMat); beam.position.set(sx * (HALL.x1 - 4.6), 3.2, z); beam.rotation.set(0.0, -sx * Math.PI / 2, 0); beam.rotateX(0); beam.rotation.z = sx * -0.62; group.add(beam);
+  }
+  const dn = 260, dpos = new Float32Array(dn * 3); for (let i = 0; i < dn; i++) { dpos[i * 3] = HALL.x0 + Math.random() * (HALL.x1 - HALL.x0); dpos[i * 3 + 1] = Math.random() * 8; dpos[i * 3 + 2] = HALL.zBack + Math.random() * (HALL.zFront - HALL.zBack); }
+  const dgeo = reg(new THREE.BufferGeometry()); dgeo.setAttribute("position", new THREE.BufferAttribute(dpos, 3));
+  const sprite = (() => { const c2 = document.createElement("canvas"); c2.width = c2.height = 32; const x2 = c2.getContext("2d")!; const g2 = x2.createRadialGradient(16, 16, 0, 16, 16, 16); g2.addColorStop(0, "rgba(255,236,190,1)"); g2.addColorStop(1, "rgba(255,236,190,0)"); x2.fillStyle = g2; x2.fillRect(0, 0, 32, 32); return new THREE.CanvasTexture(c2); })();
+  const dust = new THREE.Points(dgeo, reg(new THREE.PointsMaterial({ map: sprite, size: 0.07, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending, color: "#ffe9c0" }))); group.add(dust);
   const labelMat = null; void labelMat;
   const receptionist = new THREE.Vector3(11.2, 0, 4.1);
   let t = 0;
   return {
     group, front, labelAnchors, receptionist,
     setDoor(slot, open) { openGoal[slot] = open; },
+    setPlaque(slot, pl) { const q = plaques[slot]; if (!q) return; const old = q.mat.map; q.mat.map = plaqueTexture({ ...pl, accent: q.accent }); q.mat.needsUpdate = true; old?.dispose(); },
+    highlight(slot) { hot = slot; },
     disableMirror() { if (mirror) { mirror.visible = false; mirror = null; } (floor.material as THREE.MeshStandardMaterial).opacity = 1; (floor.material as THREE.MeshStandardMaterial).transparent = false; (floor.material as THREE.MeshStandardMaterial).needsUpdate = true; },
     doorAt(slot) { return openNow[slot]; },
     update(dt, p) {
@@ -249,6 +297,12 @@ export function buildBank(scene: THREE.Scene, opts: { reflect?: boolean } = {}):
       const open = near ? 1.9 : 0;
       leafL.position.x += ((-1.3 - open) - leafL.position.x) * Math.min(1, dt * 4);
       leafR.position.x += ((1.3 + open) - leafR.position.x) * Math.min(1, dt * 4);
+      // atmosphère : poussière dorée, rayons de lumière, pulsation de l'ascenseur mis en valeur
+      const pa = dust.geometry.attributes.position as THREE.BufferAttribute;
+      for (let k = 0; k < pa.count; k++) { let y = pa.getY(k) + dt * (0.04 + (k % 5) * 0.012); if (y > 8) y = 0.3; pa.setY(k, y); pa.setX(k, pa.getX(k) + Math.sin(t * 0.3 + k) * dt * 0.05); }
+      pa.needsUpdate = true;
+      beamMat.uniforms.t.value = t;
+      plaques.forEach((q, i) => { const on = hot === i; (q.glow.material as THREE.MeshBasicMaterial).color.set(q.accent).multiplyScalar(on ? 1.8 + 0.6 * Math.sin(t * 5) : 0.9); q.mat.opacity = on ? 1 : 0.94; });
       DOOR_X.forEach((x, i) => { openNow[i] += (openGoal[i] - openNow[i]) * Math.min(1, dt * 3.2); const o = openNow[i] * EL.w * 0.23; leaves[i][0].position.x = x - EL.w / 4 - o; leaves[i][1].position.x = x + EL.w / 4 + o; });
       void t;
     },

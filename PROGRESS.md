@@ -147,3 +147,7 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 - ✅ Animation procédurale : machine à états (IDLE, WALK, RUN, TURN, SIT, STAND_UP, INTERACT, GESTURE), jambes par cinématique inverse (pas de glissement), 12 gestes, regard (yeux + tête), clignements, sourire / surprise, assise sur chaise, pivot vers l'utilisateur.
 - ✅ Atelier : 7 angles de vue, rotation, zoom molette / pincement, recentrage, éclairage de studio (principale, remplissage, deux contre-jours), ombre de contact, rideau.
 - ⚠️ Limites : seulement deux cibles de morphing sur ce modèle (sourire, bouche ouverte) : pas de mouvement de sourcils ; mouvements secondaires (cravate, cheveux, veste) non simulés ; pas de niveaux de détail ni de textures compressées ; fluidité sur appareil réel non mesurée (tests en rendu logiciel).
+
+## Code de carrière
+- ✅ Paramètres, Sauvegardes et accueil : génération d'un code (gzip + base64 url-safe + somme de contrôle `FE1.<crc>.<données>`), copie / fichier .txt, reprise sur un autre appareil ou une autre session ; erreurs explicites (code tronqué, modifié, autre version) ; tests unitaires (aller-retour, tolérance aux retours à la ligne, altération) et test Playwright à deux navigateurs.
+- ⚠️ Un code ≈ 0,8 à 1,5 Mo de texte (l'état complet de 1 200 titres) : il se colle, il ne se tape pas à la main.

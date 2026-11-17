@@ -3,11 +3,17 @@ import { A11yPrefs } from "@/components/A11yPrefs";
 import { SoundTest } from "@/components/SoundTest";
 import { SoundPrefsPanel } from "@/components/SoundPrefsPanel";
 import { useView, useAction } from "@/lib/hooks";
+import { useRouter } from "next/navigation";
+import { useGame } from "@/lib/store";
+import { CareerCode } from "@/components/CareerCode";
 import { Card, PageTitle, Loading, Field, inputCls, Badge } from "@/components/ui";
 
 export default function Parametres() {
   const { data, reload } = useView<any>("settings", {}, 60000);
   const act = useAction();
+  const router = useRouter();
+  const gameId = useGame((s) => s.gameId);
+  const openGame = (id: string) => { try { localStorage.setItem("fe_game", id); } catch { /* */ } router.push("/play"); if (typeof window !== "undefined" && window.location.pathname.startsWith("/play")) window.location.reload(); };
   if (!data) return <Loading />;
   const s = data.settings;
   const set = async (patch: Record<string, unknown>) => { await act({ type: "settings", ...patch }); reload(); };
@@ -18,6 +24,7 @@ export default function Parametres() {
       <Card title="Temps simulé"><Field label="Minutes simulées par seconde réelle à x1" hint="x1 = 1 min/s par défaut. Les vitesses x2…x100 multiplient ce ratio. Le moteur avance par pas fixes de 5 minutes : la vitesse ne change jamais le résultat économique."><input type="number" min={0.25} max={60} step={0.25} defaultValue={s.minutesPerSecond} onBlur={(e) => set({ minutesPerSecond: Number(e.target.value) })} className={inputCls} /></Field><div className="mt-3"><Toggle k="autoPauseImportant" label="Pause automatique sur événement important" hint="Décisions surprises des banques centrales, crises, appels de marge, réunions." /></div></Card>
       <Card title="Jeu"><div className="space-y-2"><Toggle k="explanations" label="Explications pédagogiques" hint="Affiche des conseils avant les opérations complexes et des indices en réunion." /><Toggle k="livingExpenses" label="Dépenses de vie fictives" hint="Loyer, transport et alimentation prélevés chaque mois (mode carrière)." disabled={data.mode !== "carriere"} /><Toggle k="allowShort" label="Vente à découvert sur le compte personnel" hint="Soumise à marge initiale (50 %) et de maintenance. Indisponible en difficulté Débutant." disabled={data.difficulty === "debutant"} /><Toggle k="aiEnabled" label="Dialogues IA des personnages" hint="Utilisés seulement si une clé API est configurée sur le serveur ; sinon dialogues scénarisés." /></div></Card>
       <Card title="Informations"><div className="space-y-1 text-sm"><div>Personnage : {data.profile.firstName} {data.profile.lastName} ({data.profile.nationality}, {data.profile.age} ans)</div><div>Formation : {data.profile.education}</div><div>Graine de simulation : <Badge>{data.seed}</Badge></div><div>Créée le {new Date(data.created).toLocaleString("fr-FR")} · date de jeu : {data.date}</div></div><Field label="Nom de la partie"><input defaultValue={data.name} onBlur={(e) => e.target.value && set({ name: e.target.value })} className={inputCls} /></Field></Card>
+      <Card title="🔑 Code de carrière (changer d'appareil)" className="xl:col-span-2"><CareerCode gameId={gameId} onImported={openGame} /></Card>
       <Card title="🔇 Sons et bruits"><SoundPrefsPanel /></Card>
       <Card title="🔔 Notifications"><Field label="Notifications affichées" hint="Les notifications répétées du même type sont regroupées (×3…)."><select data-testid="notif-level" defaultValue={s.notifLevel ?? "importantes"} onChange={(e) => set({ notifLevel: e.target.value })} className={inputCls}><option value="toutes">Toutes</option><option value="importantes">Importantes seulement (alertes, réussites, urgences)</option><option value="critiques">Urgences seulement</option></select></Field></Card>
       <Card title="♿ Aide, accessibilité et langue"><A11yPrefs /></Card>

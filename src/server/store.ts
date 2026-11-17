@@ -15,7 +15,7 @@ interface Runtime { state: GameState; lastTickReal: number; accMinutes: number; 
 const g = globalThis as unknown as { __fe_games?: Map<string, Runtime> };
 const games: Map<string, Runtime> = g.__fe_games ?? (g.__fe_games = new Map());
 
-import { serialize, deserialize } from "@/engine/serialize";
+import { serialize, deserialize, serializeCompact } from "@/engine/serialize";
 import { restartLegacyGame, SAVE_GEN } from "@/engine/engine";
 export { serialize, deserialize };
 
@@ -113,6 +113,7 @@ export function deleteGame(uid: string, gameId: string) {
   games.delete(gameId);
 }
 export function exportGame(uid: string, gameId: string) { const rt = getRuntime(uid, gameId); return rt ? serialize(rt.state) : null; }
+export function exportGameCompact(uid: string, gameId: string) { const rt = getRuntime(uid, gameId); return rt ? serializeCompact(rt.state) : null; }
 export function importGame(uid: string, txt: string) {
   const s = deserialize(txt);
   s.flags["gen"] = Math.max(Number(s.flags["gen"] ?? 0), SAVE_GEN);

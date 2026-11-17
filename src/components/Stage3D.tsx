@@ -44,7 +44,7 @@ export function LobbyStage({ rooms, avatar, arrival, selected, onArrive, label, 
         if (dead || !canvas.current) return;
         const st = new Stage({
           canvas: canvas.current, mode: "lobby", avatar, arrival, reduced: reducedMotion(),
-          rooms: cbs.current.rooms.map((r) => ({ id: r.id, slot: r.slot, locked: r.locked })),
+          rooms: cbs.current.rooms.map((r) => ({ id: r.id, slot: r.slot, locked: r.locked, label: r.label, sub: r.sub, icon: r.icon, hint: r.hint })),
           onArrived: () => { setReady(true); setStatus(`${label} : vous êtes dans le hall de la banque.`); cbs.current.onArrived?.(); },
           onWalkEnd: (id) => { const r = cbs.current.rooms.find((x) => x.id === id); setStatus(`Vous êtes arrivé : ${r?.label ?? ""}.`); cbs.current.onArrive(id); },
           onLabels: (pts) => { for (const p of pts) { const b = btns.current[p.id]; if (!b) continue; b.style.display = p.visible ? "" : "none"; b.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%)`; } },
@@ -60,7 +60,7 @@ export function LobbyStage({ rooms, avatar, arrival, selected, onArrive, label, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => { stage.current?.setAvatar(avatar); }, [avatarKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { stage.current?.setRooms(rooms.map((r) => ({ id: r.id, slot: r.slot, locked: r.locked }))); }, [rooms]);
+  useEffect(() => { stage.current?.setRooms(rooms.map((r) => ({ id: r.id, slot: r.slot, locked: r.locked, label: r.label, sub: r.sub, icon: r.icon, hint: r.hint }))); }, [rooms]);
 
   // plein écran : pas de défilement derrière ; Espace, Entrée ou Échap passent l'arrivée
   useEffect(() => { if (!fullscreen) return; const o = document.body.style.overflow; document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = o; }; }, [fullscreen]);

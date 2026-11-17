@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { Button, Card, Empty, Badge } from "./ui";
 import { fmtDateFor } from "@/engine/time";
+import { CareerCode } from "./CareerCode";
 
 interface Meta { gameId: string; name: string; mode: string; bank: string; t: number; updatedAt: string; slot?: number; difficulty: string; epochYear?: number; rank?: string; }
 export function SavesManager({ currentGameId }: { currentGameId?: string | null }) {
@@ -28,6 +29,7 @@ export function SavesManager({ currentGameId }: { currentGameId?: string | null 
     <Card title="Emplacements manuels">
       <div className="grid gap-2 md:grid-cols-3">{[1, 2, 3].map((n) => { const s = d.slots.find((x) => x.slot === n); return <div key={n} className="rounded-md border border-ink-700 bg-ink-900 p-3"><div className="text-xs uppercase tracking-wider text-ink-400">Emplacement {n}</div>{s ? <><div className="font-medium">{s.name}</div><div className="text-xs text-ink-400">Jeu : {fmtDateFor(s.t, s.epochYear, false)}</div><Button size="sm" className="mt-2" onClick={async () => { const r = await post({ action: "load_slot", slot: n }); if (r.ok && r.gameId) open(r.gameId); }}>Charger</Button></> : <div className="text-sm text-ink-500">Vide</div>}</div>; })}</div>
     </Card>
+    <Card title="🔑 Code de carrière (changer d'appareil)"><CareerCode gameId={currentGameId} onImported={open} /></Card>
     <Card title="Importer une sauvegarde"><input type="file" aria-label="Choisir un fichier de sauvegarde (.json)" accept="application/json" onChange={(e) => e.target.files?.[0] && importGame(e.target.files[0])} className="w-full max-w-full text-sm" /><p className="mt-1 text-xs text-ink-400">Les sauvegardes sont versionnées et migrées automatiquement vers la version courante du jeu.</p></Card>
   </div>;
 }

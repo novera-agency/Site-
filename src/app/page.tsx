@@ -7,6 +7,7 @@ import { BANK_BY_ID, TRACKS } from "@/engine/data/banks";
 import { fmtDateFor } from "@/engine/time";
 import { Button, inputCls } from "@/components/ui";
 import { Intro } from "@/components/Intro";
+import { CareerCode } from "@/components/CareerCode";
 import { OfficeScene, type Room } from "@/components/OfficeScene";
 import { OfficeView } from "@/components/OfficeView";
 import { webglOK } from "@/components/Stage3D";
@@ -196,6 +197,10 @@ export default function Home() {
         <div className="mt-2 flex flex-wrap gap-2"><Button size="sm" data-testid="export-all" onClick={exportAll}>📤 Télécharger toutes mes parties</Button><label className="cursor-pointer rounded-md border border-ink-600 px-3 py-1.5 text-xs text-ink-200 hover:border-gold">📥 Restaurer depuis un fichier<input type="file" accept="application/json,.json" className="hidden" data-testid="import-all" onChange={(e) => { const f = e.target.files?.[0]; if (f) importAll(f); }} /></label></div>
         {ioMsg && <p className="mt-2 text-xs text-gold">{ioMsg}</p>}
       </div>
+      <details className="mt-4 rounded-lg border border-ink-700 bg-ink-950/60 p-3 text-sm" data-testid="home-career-code">
+        <summary className="cursor-pointer font-medium text-white">🔑 {T("J'ai un code de carrière")}</summary>
+        <div className="mt-3"><CareerCode importOnly gameId={null} onImported={(id) => open(id)} /></div>
+      </details>
       <Link href="/sauvegardes" className="mt-4 inline-block text-sm text-ink-300 underline-offset-4 hover:underline">Gérer les sauvegardes (emplacements, export, import)</Link>
     </>,
     libre: <>

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
 import { requireSession, json, err } from "@/server/http";
-import { listSaves, saveToSlot, loadSlot, deleteGame, exportGame, importGame } from "@/server/store";
+import { listSaves, saveToSlot, loadSlot, deleteGame, exportGame, exportGameCompact, importGame } from "@/server/store";
 
 export async function GET() {
   const s = await requireSession();
@@ -14,6 +14,7 @@ const Body = z.discriminatedUnion("action", [
   z.object({ action: z.literal("delete"), gameId: z.string().max(64) }),
   z.object({ action: z.literal("export"), gameId: z.string().max(64) }),
   z.object({ action: z.literal("export_json"), gameId: z.string().max(64) }),
+  z.object({ action: z.literal("export_code"), gameId: z.string().max(64) }),
   z.object({ action: z.literal("import"), data: z.string().max(40_000_000) }),
 ]);
 export async function POST(req: Request) {
@@ -28,6 +29,7 @@ export async function POST(req: Request) {
       case "load_slot": { const id = loadSlot(s.uid, b.slot); return id ? json({ ok: true, gameId: id }) : err("Emplacement vide."); }
       case "delete": deleteGame(s.uid, b.gameId); return json({ ok: true });
       case "export": { const d = exportGame(s.uid, b.gameId); return d ? new NextResponse(d, { headers: { "Content-Type": "application/json", "Content-Disposition": `attachment; filename="financial-empire-${b.gameId.slice(0, 8)}.json"` } }) : err("Partie introuvable.", 404); }
+      case "export_code": { const d = exportGameCompact(s.uid, b.gameId); return d ? json({ ok: true, data: d }) : err("Partie introuvable.", 404); }
       case "export_json": { const d = exportGame(s.uid, b.gameId); return d ? json({ ok: true, data: d }) : err("Partie introuvable.", 404); }
       case "import": return json({ ok: true, gameId: importGame(s.uid, b.data) });
     }

@@ -42,6 +42,18 @@ export function serialize(s: GameState) {
   for (const [k, d] of Object.entries(s.instruments)) if (!d.lite) instruments[k] = d;
   return JSON.stringify({ ...s, quotes, instruments, liteFromCatalog: true });
 }
+/**
+ * Version allégée pour le « code de carrière » : l'historique de cours très ancien est tronqué (150 séances pour les titres principaux
+ * , 40 pour les autres) ; tout le reste de la partie (compte, carrière, relations, vie privée,
+ * positions, progression…) est conservé à l'identique.
+ */
+export function serializeCompact(s: GameState, keepDaily = 150, keepIntraday = 100, keepLite = 40) {
+  const lite = { ...s, quotes: Object.fromEntries(Object.entries(s.quotes).map(([k, q]) => {
+    const marginal = s.instruments[k]?.lite && !s.watchlist.includes(k) && !Object.values(s.accounts).some((a) => a.positions[k]);
+    return [k, { ...q, daily: q.daily.slice(marginal ? -keepLite : -keepDaily), intraday: marginal ? q.intraday : q.intraday.slice(-keepIntraday) }];
+  })) } as GameState;
+  return serialize(lite);
+}
 export function deserialize(txt: string): GameState {
   const raw = JSON.parse(txt) as GameState & { liteFromCatalog?: boolean };
   if (raw.liteFromCatalog) {
