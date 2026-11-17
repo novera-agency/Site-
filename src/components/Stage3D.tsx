@@ -19,10 +19,12 @@ export function webglOK(): boolean {
 const reducedMotion = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 /** Hall de la banque en 3D : on y voit l'avatar du joueur arriver, puis marcher jusqu'à la pièce touchée */
-export function LobbyStage({ rooms, avatar, arrival, selected, onArrive, label, onFail, onArrived, fullscreen = false, onToggleFullscreen, children }: {
+export function LobbyStage({ rooms, avatar, arrival, selected, onArrive, label, onFail, onArrived, fullscreen = false, onToggleFullscreen, inRoom = false, children }: {
   rooms: Room[]; avatar: Avatar; arrival: boolean; selected?: string | null; onArrive: (id: string) => void; label: string; onFail?: () => void; onArrived?: () => void;
   /** Occupe tout l'écran (accueil, ou hall agrandi en jeu) ; les enfants forment alors des calques posés sur la scène */
-  fullscreen?: boolean; onToggleFullscreen?: () => void; children?: ReactNode;
+  fullscreen?: boolean; onToggleFullscreen?: () => void;
+  /** Vrai tant que l'avatar est dans l'ascenseur (écran de l'option ouvert) ; repasser à faux le fait ressortir */
+  inRoom?: boolean; children?: ReactNode;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const stage = useRef<Stage | null>(null);
@@ -66,6 +68,12 @@ export function LobbyStage({ rooms, avatar, arrival, selected, onArrive, label, 
     const k = (e: KeyboardEvent) => { if (e.key === "Escape" || ((e.key === "Enter" || e.key === " ") && !(e.target as HTMLElement)?.closest?.("button,a,input,select,textarea"))) { e.preventDefault(); stage.current?.skip(); } };
     window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
   }, [ready]);
+  const wasIn = useRef(false);
+  useEffect(() => { if (wasIn.current && !inRoom) stage.current?.leaveElevator(); wasIn.current = inRoom; }, [inRoom]);
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if ((e.target as HTMLElement)?.closest?.("input,select,textarea")) return; if (e.key === "ArrowLeft") stage.current?.pan(-1); if (e.key === "ArrowRight") stage.current?.pan(1); };
+    window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
+  }, []);
   const go = (r: Room) => { if (r.locked) return; setStatus(`${label} : vous marchez vers ${r.label}.`); stage.current?.walkTo(r.id); };
   return <div ref={root} className={fullscreen ? "fixed inset-0 z-[60] select-none bg-[#070a12]" : "mx-auto w-full max-w-5xl select-none"} data-testid="office-3d" {...(fullscreen ? { role: "dialog", "aria-modal": true, "aria-label": label } : {})}>
     <div className={fullscreen ? "absolute inset-0" : "relative overflow-hidden rounded-2xl border border-gold/40 bg-[#0a0f1d] shadow-[0_0_60px_-20px_rgba(201,162,74,0.45)]"}>
@@ -80,8 +88,12 @@ export function LobbyStage({ rooms, avatar, arrival, selected, onArrive, label, 
         {onToggleFullscreen && <button type="button" data-testid="fullscreen-toggle" onClick={onToggleFullscreen} aria-pressed={fullscreen} className="absolute right-3 top-3 z-20 rounded-full border border-white/30 bg-black/55 px-3 py-1.5 text-xs text-white backdrop-blur hover:bg-black/75">{fullscreen ? "✕ Fermer le plein écran" : "⛶ Plein écran"}</button>}
       </div>
     </div>
-    {/* sur téléphone, les pièces sont listées sous la scène */}
-    <div className={`flex flex-wrap justify-center gap-1.5 sm:hidden ${fullscreen ? "absolute inset-x-0 bottom-2 z-20 px-2" : "mt-2"}`} role="group" aria-label={label}>
+    {/* défilement du hall (téléphone) et liste accessible : invisible, elle n'apparaît qu'au clavier */}
+    {fullscreen && <>
+      <button type="button" aria-label="Voir les ascenseurs de gauche" onClick={() => stage.current?.pan(-1)} className="absolute left-1 top-1/2 z-20 rounded-full bg-black/45 px-2.5 py-3 text-lg text-white backdrop-blur hover:bg-black/70 sm:hidden">‹</button>
+      <button type="button" aria-label="Voir les ascenseurs de droite" onClick={() => stage.current?.pan(1)} className="absolute right-1 top-1/2 z-20 rounded-full bg-black/45 px-2.5 py-3 text-lg text-white backdrop-blur hover:bg-black/70 sm:hidden">›</button>
+    </>}
+    <div className="sr-only focus-within:not-sr-only focus-within:absolute focus-within:bottom-2 focus-within:left-2 focus-within:right-2 focus-within:z-30 focus-within:flex focus-within:flex-wrap focus-within:gap-1.5 focus-within:rounded-lg focus-within:bg-black/80 focus-within:p-2" role="group" aria-label={label}>
       {rooms.map((r) => <button key={r.id} type="button" data-testid={`chip-${r.id}`} disabled={r.locked || !ready} onClick={() => go(r)} aria-pressed={selected === r.id} className={`rounded-full border px-2.5 py-1 text-[11px] ${selected === r.id ? "border-gold bg-gold/20 text-white" : "border-ink-600 bg-ink-850/90 text-ink-200"} disabled:opacity-50`}><span aria-hidden>{r.icon} </span>{r.label}</button>)}
     </div>
     <p className="sr-only" role="status" aria-live="polite">{status}</p>

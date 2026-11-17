@@ -235,7 +235,7 @@ export default function Home() {
       {use3d === false && <Intro />}
       <Skyline />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[32vh] bg-gradient-to-b from-[#070a12] via-transparent to-transparent" />
-      {use3d && !classic && <OfficeView fullscreen rooms={rooms} avatar={deviceAvatar} arrival selected={sel} label={T("Plan de la banque")} onArrive={(id) => activate(id as Item)} onArrived={() => setArrived(true)} onFail={() => setUse3d(false)}>
+      {use3d && !classic && <OfficeView fullscreen rooms={rooms} avatar={deviceAvatar} arrival selected={sel} label={T("Plan de la banque")} onArrive={(id) => activate(id as Item)} onArrived={() => setArrived(true)} inRoom={panelOpen} onFail={() => setUse3d(false)}>
         <header className="pointer-events-auto absolute inset-x-0 top-0 flex items-center gap-3 bg-gradient-to-b from-black/75 to-transparent px-4 pb-6 pt-3 md:px-6">
           <span className="flex h-9 w-9 items-center justify-center rounded-md border border-gold/60 text-sm font-black text-gold">FE</span>
           <span className="text-sm font-semibold tracking-[0.25em] text-ink-100">FINANCIAL EMPIRE</span>
@@ -244,7 +244,7 @@ export default function Home() {
             <span className="flex gap-1" role="group" aria-label="Langue / Language">{(["fr", "en"] as const).map((l) => <button key={l} data-testid={`lang-${l}`} aria-pressed={lang === l} onClick={() => lang !== l && setLang(l)} className={`rounded px-2 py-1 ${lang === l ? "bg-gold font-bold text-black" : "bg-black/50 text-ink-200"}`}>{l.toUpperCase()}</button>)}</span>
           </span>
         </header>
-        <p className="pointer-events-none absolute inset-x-0 bottom-28 px-6 text-center text-sm text-white/90 drop-shadow sm:bottom-4">{!arrived ? T("Paris, 7 h 02. Votre badge vous attend à l'accueil de la banque.") : T("Touchez une porte : votre personnage s'y rend.")}</p>
+        <p className="pointer-events-none absolute inset-x-0 bottom-4 px-6 text-center text-sm text-white/90 drop-shadow">{!arrived ? T("Paris, 7 h 02. Votre badge vous attend à l'accueil de la banque.") : T("Touchez un ascenseur : votre personnage y monte. Faites glisser pour parcourir le hall.")}</p>
         {arrived && panelOpen && <aside role="region" aria-label={T(sel)} data-testid="home-panel" className="pointer-events-auto absolute bottom-14 left-3 right-3 top-16 overflow-y-auto rounded-xl border border-ink-600 bg-ink-900/95 p-5 shadow-2xl backdrop-blur sm:bottom-6 sm:left-auto sm:right-6 sm:top-16 sm:w-[min(440px,90vw)] md:p-7">
           <button onClick={() => setPanelOpen(false)} className="mb-3 text-xs text-ink-300 underline hover:text-white">← {T("Retour au hall")}</button>
           {panels[sel]}

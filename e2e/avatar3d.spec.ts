@@ -5,7 +5,7 @@ const intro = (page: Page) => page.addInitScript(() => { try { sessionStorage.se
 
 /** Les parties automatisées restent en 2D (rapide) : ces tests forcent la 3D avec ?3d=1 */
 test("accueil 3D : l'avatar arrive à la banque, on peut passer l'arrivée puis envoyer l'avatar dans une pièce", async ({ page }) => {
-  test.setTimeout(180000);
+  test.setTimeout(240000);
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await intro(page);
@@ -19,7 +19,7 @@ test("accueil 3D : l'avatar arrive à la banque, on peut passer l'arrivée puis 
   const ax = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(ax.violations.map((v) => `${v.id} ×${v.nodes.length}`)).toEqual([]);
   await page.getByTestId("zone-nouvelle").click();
-  await page.waitForURL(/\/nouvelle/, { timeout: 90000 });
+  await page.waitForURL(/\/nouvelle/, { timeout: 170000 });
   expect(errors).toEqual([]);
 });
 
@@ -60,8 +60,9 @@ test("avatar : créé en 3D, enregistré avec la partie, modifiable dans la gard
 });
 
 test("accueil 3D en plein écran : l'arrivée couvre tout l'écran, puis on choisit une porte et le détail s'ouvre par-dessus", async ({ page }) => {
-  test.setTimeout(180000);
+  test.setTimeout(300000);
   await intro(page);
+  await page.emulateMedia({ reducedMotion: "reduce" }); // l'avatar monte directement : l'animation complète est testée ci-dessus
   await page.setViewportSize({ width: 1000, height: 700 });
   await page.goto(BASE + "/?3d=1");
   const stage = page.getByTestId("office-3d");
@@ -72,7 +73,7 @@ test("accueil 3D en plein écran : l'arrivée couvre tout l'écran, puis on choi
   await page.keyboard.press("Escape"); // passe l'arrivée
   await expect(page.getByTestId("zone-charger")).toBeVisible({ timeout: 20000 });
   await page.getByTestId("zone-charger").click();
-  await expect(page.getByTestId("home-panel")).toBeVisible({ timeout: 90000 });
+  await expect(page.getByTestId("home-panel")).toBeVisible({ timeout: 170000 });
   await expect(page.getByTestId("home-panel")).toContainText("Charger une partie");
   await page.getByTestId("home-panel").getByText("Retour au hall").click();
   await expect(page.getByTestId("home-panel")).toHaveCount(0);

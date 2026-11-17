@@ -29,7 +29,7 @@ export function OfficeHub() {
   const rooms: Room[] = ZONES.map((z) => ({ ...z, label: tr(z.label), sub: tr(z.sub ?? ""), badge: badges[z.id] || undefined }));
   const zone = ZONES.find((z) => z.id === sel);
   return <section className="mb-4" aria-label={tr("Plan de la banque")} data-testid="office-hub">
-    <OfficeView rooms={rooms} avatar={snap?.player.avatar ?? defaultAvatar()} selected={sel} label={tr("Plan de la banque")} onArrive={setSel} fullscreen={full} onToggleFullscreen={() => setFull((f) => !f)}>
+    <OfficeView rooms={rooms} avatar={snap?.player.avatar ?? defaultAvatar()} selected={sel} label={tr("Plan de la banque")} onArrive={setSel} fullscreen={full} onToggleFullscreen={() => setFull((f) => !f)} inRoom={!!sel}>
       <div className={full ? "pointer-events-auto absolute inset-x-3 bottom-14 max-h-[42vh] overflow-y-auto sm:bottom-4 sm:left-auto sm:right-4 sm:w-[min(520px,92vw)]" : "mt-3"} aria-live="polite">
         {zone ? <div className="rounded-xl border border-gold/40 bg-ink-850 p-3" data-testid="room-panel">
           <div className="mb-2 flex items-center justify-between gap-2"><h2 className="text-sm font-semibold text-gold">{zone.icon} {tr(zone.label)}</h2><button onClick={() => setSel(null)} className="text-xs text-ink-400 underline hover:text-white">{tr("Fermer")}</button></div>

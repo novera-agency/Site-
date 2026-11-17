@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+import { Reflector } from "three/examples/jsm/objects/Reflector.js";
 
 /** Décors 3D construits par code : parvis et hall de la banque, atelier du tailleur. */
 
@@ -7,6 +8,8 @@ export const HALL = { x0: -16, x1: 16, zBack: -10, zFront: 8, h: 9.5 };
 /** Portes des 7 pièces, alignées sur le mur du fond (x) ; le personnage s'arrête en (x, DOOR_Z) face à la porte */
 export const DOOR_X = [-13.5, -9, -4.5, 0, 4.5, 9, 13.5];
 export const DOOR_Z = -7.6;
+/** Baie d'ascenseur : largeur, hauteur, profondeur de la cabine (derrière le mur du fond) */
+export const EL = { w: 3.1, h: 4.5, d: 2.8 };
 export const ENTRY = { x: 0, z: 5.6 };
 export const OBSTACLES = [{ x: 0, z: 0.8, r: 2.9 }, { x: 11.2, z: 2.6, r: 2.7 }, { x: -11.2, z: 2.6, r: 2.7 }, { x: 7.2, z: 5.6, r: 1.2 }];
 
@@ -31,6 +34,20 @@ function marbleTexture(repeat: [number, number]) {
       for (let k = 0; k < 4; k++) { c.beginPath(); const x = i * sz + rnd() * sz, y = j * sz + rnd() * sz; c.moveTo(x, y); c.bezierCurveTo(x + 30, y + 40, x - 40, y + 70, x + 20, y + sz * 0.6); c.stroke(); }
     }
     c.strokeStyle = "#c9a24a"; c.lineWidth = 3; for (let i = 0; i <= n; i++) { c.beginPath(); c.moveTo(i * sz, 0); c.lineTo(i * sz, 1024); c.stroke(); c.beginPath(); c.moveTo(0, i * sz); c.lineTo(1024, i * sz); c.stroke(); }
+  }, repeat);
+}
+/** Marbre veiné (murs) : grandes veines grises et dorées sur fond ivoire */
+function veinedMarble(repeat: [number, number]) {
+  return canvasTex(1024, 1024, (c) => {
+    c.fillStyle = "#e8dfcf"; c.fillRect(0, 0, 1024, 1024);
+    for (let i = 0; i < 1500; i++) { c.fillStyle = `rgba(${rnd() < 0.5 ? "120,105,85" : "255,255,255"},${rnd() * 0.05})`; c.fillRect(rnd() * 1024, rnd() * 1024, 6 + rnd() * 30, 6 + rnd() * 30); }
+    c.filter = "blur(1.2px)";
+    for (let v = 0; v < 26; v++) {
+      c.strokeStyle = rnd() < 0.25 ? `rgba(190,150,70,${0.18 + rnd() * 0.2})` : `rgba(95,88,80,${0.12 + rnd() * 0.22})`; c.lineWidth = 0.8 + rnd() * 2.6;
+      c.beginPath(); let x = rnd() * 1024, y = rnd() * 1024; c.moveTo(x, y);
+      for (let s = 0; s < 14; s++) { x += (rnd() - 0.35) * 120; y += (rnd() - 0.5) * 120; c.lineTo(x, y); }
+      c.stroke();
+    }
   }, repeat);
 }
 function towerTexture() {
@@ -58,11 +75,16 @@ export interface BankWorld {
   /** Anime les portes coulissantes, le globe et le lustre */
   update(dt: number, avatarPos: THREE.Vector3): void;
   labelAnchors: THREE.Vector3[];
+  /** Ouvre (1) ou ferme (0) les portes de l'ascenseur `slot` ; renvoie l'ouverture actuelle (0 à 1) */
+  setDoor(slot: number, open: number): void;
+  /** Coupe le reflet du sol (appareil lent) */
+  disableMirror(): void;
+  doorAt(slot: number): number;
   dispose(): void;
   receptionist: THREE.Vector3;
 }
 
-export function buildBank(scene: THREE.Scene): BankWorld {
+export function buildBank(scene: THREE.Scene, opts: { reflect?: boolean } = {}): BankWorld {
   const group = new THREE.Group(); scene.add(group);
   const disposables: { dispose(): void }[] = [];
   const reg = <T extends { dispose(): void }>(x: T) => { disposables.push(x); return x; };
@@ -71,16 +93,28 @@ export function buildBank(scene: THREE.Scene): BankWorld {
   };
   const gold = reg(std("#e0b84a", 0.28, 0.9));
   const goldDim = reg(std("#a8832f", 0.35, 0.85));
-  const wallM = reg(std("#d9cfba", 0.55, 0.05));
+  const wallM = reg(new THREE.MeshStandardMaterial({ map: reg(veinedMarble([3, 1.2])), color: "#f2e6d0", roughness: 0.22, metalness: 0.05 }));
   const wallDark = reg(std("#2a2230", 0.6, 0.1));
   const wood = reg(std("#3b2414", 0.5, 0.1));
 
   /* ───── sol, murs ───── */
   const floorTex = reg(marbleTexture([4, 2.25]));
-  const floor = new THREE.Mesh(reg(new THREE.PlaneGeometry(HALL.x1 - HALL.x0, HALL.zFront - HALL.zBack)), reg(new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.22, metalness: 0.15 })));
+  const floor = new THREE.Mesh(reg(new THREE.PlaneGeometry(HALL.x1 - HALL.x0, HALL.zFront - HALL.zBack)), reg(new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.1, metalness: 0.1, ...(opts.reflect ? { transparent: true, opacity: 0.8 } : {}) })));
   floor.rotation.x = -Math.PI / 2; floor.position.set(0, 0, (HALL.zFront + HALL.zBack) / 2); floor.receiveShadow = true; group.add(floor);
+  // reflet du sol poli : une 2e vue de la scène, vue à travers le marbre légèrement transparent
+  let mirror: Reflector | null = null;
+  if (opts.reflect) {
+    mirror = new Reflector(new THREE.PlaneGeometry(HALL.x1 - HALL.x0, HALL.zFront - HALL.zBack), { clipBias: 0.003, textureWidth: 768, textureHeight: 512, color: 0x8a8578 });
+    mirror.rotation.x = -Math.PI / 2; mirror.position.set(0, -0.004, (HALL.zFront + HALL.zBack) / 2); group.add(mirror);
+    floor.renderOrder = 1;
+  }
   const W = HALL.x1 - HALL.x0, cz = (HALL.zFront + HALL.zBack) / 2;
-  box(W + 1, HALL.h, 0.6, wallM, 0, HALL.h / 2, HALL.zBack - 0.3);                  // fond
+  // mur du fond percé de 7 baies d'ascenseur : piliers pleins entre les baies, linteau au-dessus
+  {
+    const edges = [HALL.x0 - 0.5, ...DOOR_X.flatMap((x) => [x - EL.w / 2, x + EL.w / 2]), HALL.x1 + 0.5];
+    for (let i = 0; i < edges.length; i += 2) { const x0 = edges[i], x1 = edges[i + 1]; if (x1 - x0 > 0.01) box(x1 - x0, HALL.h, 0.6, wallM, (x0 + x1) / 2, HALL.h / 2, HALL.zBack - 0.3); }
+    box(W + 1, HALL.h - EL.h, 0.6, wallM, 0, EL.h + (HALL.h - EL.h) / 2, HALL.zBack - 0.3);
+  }
   box(0.6, HALL.h, HALL.zFront - HALL.zBack, wallM, HALL.x0 - 0.3, HALL.h / 2, cz);   // gauche
   box(0.6, HALL.h, HALL.zFront - HALL.zBack, wallM, HALL.x1 + 0.3, HALL.h / 2, cz);   // droite
   // lambris dorés
@@ -96,25 +130,49 @@ export function buildBank(scene: THREE.Scene): BankWorld {
   const chandelier = new THREE.Group(); chandelier.position.set(0, 6.6, 0.8); group.add(chandelier);
   for (const [r, n] of [[1.8, 18], [1.0, 10]] as [number, number][]) {
     const ring = new THREE.Mesh(reg(new THREE.TorusGeometry(r, 0.06, 8, 40)), gold); ring.rotation.x = Math.PI / 2; chandelier.add(ring);
-    for (let i = 0; i < n; i++) { const b = new THREE.Mesh(reg(new THREE.SphereGeometry(0.1, 10, 8)), reg(new THREE.MeshStandardMaterial({ color: "#fff3cf", emissive: "#ffd98a", emissiveIntensity: 2.2 }))); const a = (i / n) * Math.PI * 2; b.position.set(Math.cos(a) * r, -0.05, Math.sin(a) * r); chandelier.add(b); }
+    for (let i = 0; i < n; i++) { const b = new THREE.Mesh(reg(new THREE.SphereGeometry(0.1, 10, 8)), reg(new THREE.MeshStandardMaterial({ color: "#fff3cf", emissive: "#ffd98a", emissiveIntensity: 1.4 }))); const a = (i / n) * Math.PI * 2; b.position.set(Math.cos(a) * r, -0.05, Math.sin(a) * r); chandelier.add(b); }
   }
   const chain = new THREE.Mesh(reg(new THREE.CylinderGeometry(0.03, 0.03, 2.4, 6)), gold); chain.position.y = 1.2; chandelier.add(chain);
-  const lamp = new THREE.PointLight("#ffe2a8", 90, 34, 1.6); lamp.position.set(0, 6.3, 0.8); lamp.castShadow = false; group.add(lamp);
+  const lamp = new THREE.PointLight("#ffe2a8", 45, 34, 1.7); lamp.position.set(0, 6.3, 0.8); lamp.castShadow = false; group.add(lamp);
 
-  /* ───── portes des 7 pièces ───── */
+  /* ───── 7 ascenseurs : chacun mène à une option ───── */
   const labelAnchors: THREE.Vector3[] = [];
-  const glow = reg(new THREE.MeshStandardMaterial({ color: "#2a1d12", emissive: "#ffcf8a", emissiveIntensity: 0.55, roughness: 0.9 }));
+  const leaves: [THREE.Mesh, THREE.Mesh][] = [];
+  const openNow: number[] = DOOR_X.map(() => 0), openGoal: number[] = DOOR_X.map(() => 0);
+  const brushed = reg(new THREE.MeshStandardMaterial({ color: "#c9a85a", roughness: 0.28, metalness: 1 }));
+  const champagne = reg(new THREE.MeshStandardMaterial({ color: "#d8c7a0", roughness: 0.35, metalness: 0.85 }));
+  const bronze = reg(std("#3a2a16", 0.4, 0.8));
+  const cabLight = reg(new THREE.MeshStandardMaterial({ color: "#fff1cf", emissive: "#ffe2a8", emissiveIntensity: 2.6 }));
+  const cabFloor = reg(std("#1c1c22", 0.15, 0.2));
   DOOR_X.forEach((x, i) => {
-    const wd = 3.0, hd = 4.6;
-    box(wd, hd, 0.1, glow, x, hd / 2, HALL.zBack + 0.05);
-    box(0.22, hd + 0.3, 0.3, gold, x - wd / 2 - 0.11, (hd + 0.3) / 2, HALL.zBack + 0.15); box(0.22, hd + 0.3, 0.3, gold, x + wd / 2 + 0.11, (hd + 0.3) / 2, HALL.zBack + 0.15);
-    box(wd + 0.66, 0.3, 0.34, gold, x, hd + 0.15, HALL.zBack + 0.17);
-    // battants de porte entrouverts
-    box(wd / 2 - 0.1, hd - 0.2, 0.08, wood, x - wd / 4 - 0.35, hd / 2, HALL.zBack + 0.3, group, 0.02).rotation.y = 0.85;
-    box(wd / 2 - 0.1, hd - 0.2, 0.08, wood, x + wd / 4 + 0.35, hd / 2, HALL.zBack + 0.3, group, 0.02).rotation.y = -0.85;
-    box(wd + 1.2, 0.08, 1.6, reg(std("#7a1d2b", 0.9)), x, 0.04, HALL.zBack + 1.2);   // tapis devant la porte
-    labelAnchors.push(new THREE.Vector3(x, hd + (i % 2 ? 2.7 : 1.1), HALL.zBack + 0.5));
-    void i;
+    const zb = HALL.zBack;
+    // encadrement bronze et or
+    box(0.3, EL.h + 0.3, 0.42, bronze, x - EL.w / 2 - 0.15, (EL.h + 0.3) / 2, zb + 0.18);
+    box(0.3, EL.h + 0.3, 0.42, bronze, x + EL.w / 2 + 0.15, (EL.h + 0.3) / 2, zb + 0.18);
+    box(EL.w + 0.9, 0.34, 0.46, bronze, x, EL.h + 0.17, zb + 0.2);
+    box(EL.w + 0.2, 0.06, 0.5, gold, x, EL.h + 0.36, zb + 0.2);
+    // cabine : sol, parois miroir doré, plafond lumineux
+    box(EL.w, 0.1, EL.d, cabFloor, x, 0.05, zb - EL.d / 2);
+    box(EL.w, EL.h, 0.1, brushed, x, EL.h / 2, zb - EL.d);
+    box(0.1, EL.h, EL.d, champagne, x - EL.w / 2, EL.h / 2, zb - EL.d / 2); box(0.1, EL.h, EL.d, champagne, x + EL.w / 2, EL.h / 2, zb - EL.d / 2);
+    box(EL.w, 0.1, EL.d, champagne, x, EL.h, zb - EL.d / 2);
+    box(EL.w - 0.4, 0.04, EL.d - 0.4, cabLight, x, EL.h - 0.07, zb - EL.d / 2).castShadow = false;
+    box(EL.w - 0.5, 0.06, 0.1, gold, x, 1.05, zb - EL.d + 0.1); // main courante
+    // vantaux coulissants : or brossé avec rainures
+    const mk = (sx: number) => {
+      const g = new THREE.Group(); g.position.set(x + sx * EL.w / 4, EL.h / 2, zb + 0.04); group.add(g);
+      const leaf = new THREE.Mesh(reg(new RoundedBoxGeometry(EL.w / 2 - 0.02, EL.h - 0.04, 0.08, 2, 0.01)), brushed); leaf.castShadow = true; leaf.receiveShadow = true; g.add(leaf);
+      for (let k = -2; k <= 2; k++) { const r = new THREE.Mesh(reg(new THREE.BoxGeometry(0.012, EL.h - 0.3, 0.012)), goldDim); r.position.set(k * 0.28, 0, 0.045); g.add(r); }
+      return g as unknown as THREE.Mesh;
+    };
+    leaves.push([mk(-1), mk(1)]);
+    // afficheur d'étage et bouton d'appel
+    const disp = new THREE.Mesh(reg(new THREE.PlaneGeometry(0.9, 0.34)), reg(new THREE.MeshBasicMaterial({ map: signTexture(String(i + 1), undefined) })));
+    disp.position.set(x, EL.h + 0.17, zb + 0.43); group.add(disp);
+    box(0.2, 0.42, 0.06, bronze, x + EL.w / 2 + 0.55, 1.3, zb + 0.07);
+    for (const dy of [0.08, -0.08]) { const b = new THREE.Mesh(reg(new THREE.SphereGeometry(0.035, 12, 8)), reg(new THREE.MeshStandardMaterial({ color: "#fff3cf", emissive: "#ffd98a", emissiveIntensity: 2 }))); b.position.set(x + EL.w / 2 + 0.55, 1.3 + dy, zb + 0.12); group.add(b); }
+    box(EL.w + 1.2, 0.04, 1.6, reg(std("#7a1d2b", 0.9)), x, 0.02, zb + 1.2);   // tapis devant l'ascenseur
+    labelAnchors.push(new THREE.Vector3(x, EL.h + (i % 2 ? 2.4 : 1.2), zb + 0.5));
   });
 
   /* ───── mobilier : globe d'or, accueil, salon ───── */
@@ -180,6 +238,9 @@ export function buildBank(scene: THREE.Scene): BankWorld {
   let t = 0;
   return {
     group, front, labelAnchors, receptionist,
+    setDoor(slot, open) { openGoal[slot] = open; },
+    disableMirror() { if (mirror) { mirror.visible = false; mirror = null; } (floor.material as THREE.MeshStandardMaterial).opacity = 1; (floor.material as THREE.MeshStandardMaterial).transparent = false; (floor.material as THREE.MeshStandardMaterial).needsUpdate = true; },
+    doorAt(slot) { return openNow[slot]; },
     update(dt, p) {
       t += dt;
       globe.rotation.y += dt * 0.25; chandelier.rotation.y += dt * 0.05;
@@ -188,6 +249,7 @@ export function buildBank(scene: THREE.Scene): BankWorld {
       const open = near ? 1.9 : 0;
       leafL.position.x += ((-1.3 - open) - leafL.position.x) * Math.min(1, dt * 4);
       leafR.position.x += ((1.3 + open) - leafR.position.x) * Math.min(1, dt * 4);
+      DOOR_X.forEach((x, i) => { openNow[i] += (openGoal[i] - openNow[i]) * Math.min(1, dt * 3.2); const o = openNow[i] * EL.w * 0.23; leaves[i][0].position.x = x - EL.w / 4 - o; leaves[i][1].position.x = x + EL.w / 4 + o; });
       void t;
     },
     dispose() { disposables.forEach((d) => d.dispose()); scene.remove(group); },
