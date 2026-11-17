@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { game } from "./helpers";
 import { applyAction } from "@/server/actions";
-import { defaultAvatar, parseAvatar, lockedParts, clampToRank, SUITS, TIES } from "@/engine/avatar";
+import { defaultAvatar, parseAvatar, lockedParts, clampToRank, normalizeForModel, SUITS, TIES } from "@/engine/avatar";
 import { snapshot } from "@/server/views";
 
 const act = (s: ReturnType<typeof game>, a: object) => applyAction(s, a as never);
@@ -32,5 +32,10 @@ describe("Avatar du joueur", () => {
     s.career.rank = 5;
     expect(act(s, { type: "set_avatar", avatar: rich }).ok).toBe(true);
     expect(act(s, { type: "set_avatar", avatar: { ...rich, skin: 40 } }).ok).toBe(false);
+  });
+  it("le modèle 3D ne gère que quelques coiffures et la moustache : les anciens choix sont ramenés à une valeur prise en charge", () => {
+    expect(normalizeForModel({ ...defaultAvatar(), hair: 2, beard: 4 })).toMatchObject({ hair: 3, beard: 0 });
+    expect(normalizeForModel({ ...defaultAvatar(), hair: 5, beard: 3 })).toMatchObject({ hair: 5, beard: 3 });
+    expect(normalizeForModel({ ...defaultAvatar(), hair: 0 }).hair).toBe(0);
   });
 });

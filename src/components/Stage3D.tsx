@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import type { Avatar } from "@/engine/avatar";
 import type { Room } from "./OfficeScene";
-import type { Focus, Stage } from "@/lib/three/stage";
+import type { Focus, Stage, View } from "@/lib/three/stage";
+import type { GestureId } from "@/lib/three/character/animator";
 
 let glOK: boolean | null = null;
 /** Le navigateur sait-il afficher de la 3D (WebGL) ? Sinon on garde les décors 2D.
@@ -101,19 +102,27 @@ export function LobbyStage({ rooms, avatar, arrival, selected, onArrive, label, 
   </div>;
 }
 
-/** Atelier du tailleur : l'avatar tourne sur un podium pendant qu'on le personnalise */
-export function CreatorStage({ avatar, focus, onFail }: { avatar: Avatar; focus: Focus; onFail?: () => void }) {
+/** Commandes de l'atelier : gestes, assise, regard, expressions, retour à la pose initiale */
+export interface CreatorHandle {
+  play(id: GestureId): void; sit(on: boolean): void; lookAtMe(on: boolean): void; turnToMe(on: boolean): void; treadmill(speed: number): void; expression(e: "neutral" | "smile" | "surprise" | "focus" | "displeased"): void; reset(): void; state(): string;
+}
+/** Atelier du tailleur : l'avatar tourne sur un podium (glisser pour tourner, molette ou pincement pour zoomer, double toucher pour recentrer) */
+export const CreatorStage = forwardRef<CreatorHandle, { avatar: Avatar; focus?: Focus; view?: View; onFail?: () => void }>(function CreatorStage({ avatar, focus = "body", view, onFail }, ref) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const stage = useRef<Stage | null>(null);
   const fail = useRef(onFail); fail.current = onFail;
   const key = JSON.stringify(avatar);
+  useImperativeHandle(ref, () => ({
+    play: (id) => stage.current?.play(id), sit: (on) => stage.current?.setSit(on), lookAtMe: (on) => stage.current?.lookAtCamera(on), turnToMe: (on) => stage.current?.faceCamera(on), treadmill: (s) => stage.current?.setTreadmill(s),
+    expression: (e) => stage.current?.setExpression(e), reset: () => stage.current?.resetPose(), state: () => stage.current?.state() ?? "IDLE",
+  }), []);
   useEffect(() => {
     let dead = false;
     (async () => {
       try {
         const { Stage } = await import("@/lib/three/stage");
         if (dead || !canvas.current) return;
-        stage.current = new Stage({ canvas: canvas.current, mode: "tailor", avatar, focus, reduced: reducedMotion() });
+        stage.current = new Stage({ canvas: canvas.current, mode: "tailor", avatar, focus, view, reduced: reducedMotion() });
       } catch { fail.current?.(); }
     })();
     const onResize = () => stage.current?.resize();
@@ -122,9 +131,9 @@ export function CreatorStage({ avatar, focus, onFail }: { avatar: Avatar; focus:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => { stage.current?.setAvatar(avatar); }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { stage.current?.setFocus(focus); }, [focus]);
-  return <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl border border-gold/40 bg-[#150f14] sm:aspect-[5/4]" data-testid="creator-3d" style={{ touchAction: "pan-y" }}>
+  useEffect(() => { if (view) stage.current?.setView(view); else stage.current?.setFocus(focus); }, [focus, view]);
+  return <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl border border-gold/40 bg-[#14101a] sm:aspect-[5/4]" data-testid="creator-3d" style={{ touchAction: "pan-y" }}>
     <canvas ref={canvas} data-testid="creator-canvas" className="absolute inset-0 h-full w-full" role="img" aria-label="Aperçu 3D de votre personnage, qui tourne sur un podium" />
-    <span className="pointer-events-none absolute bottom-2 left-2 rounded bg-black/50 px-2 py-0.5 text-[10px] text-ink-200">Glissez pour tourner</span>
+    <span className="pointer-events-none absolute bottom-2 left-2 rounded bg-black/50 px-2 py-0.5 text-[10px] text-ink-200">Glissez pour tourner · molette ou pincement pour zoomer · double toucher pour recentrer</span>
   </div>;
-}
+});

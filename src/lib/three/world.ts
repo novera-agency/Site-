@@ -212,7 +212,7 @@ export function buildBank(scene: THREE.Scene, opts: { reflect?: boolean } = {}):
   // perron
   for (let i = 0; i < 4; i++) box(14, 0.18, 1.0, reg(std("#e6dfcf", 0.35, 0.05)), 0, 0.09 + (3 - i) * 0.0, HALL.zFront + 1.5 + i * 0.9, front).scale.y = 1 + (3 - i) * 0.6;
   // parvis
-  const plazaTex = reg(canvasTex(512, 512, (c) => { c.fillStyle = "#222a3a"; c.fillRect(0, 0, 512, 512); c.strokeStyle = "#323c52"; c.lineWidth = 3; for (let i = 0; i <= 8; i++) { c.beginPath(); c.moveTo(i * 64, 0); c.lineTo(i * 64, 512); c.stroke(); c.beginPath(); c.moveTo(0, i * 64); c.lineTo(512, i * 64); c.stroke(); } c.strokeStyle = "#c9a24a"; c.lineWidth = 6; c.strokeRect(0, 0, 512, 512); }, [20, 14]));
+  const plazaTex = reg(canvasTex(512, 512, (c) => { c.fillStyle = "#6f6a64"; c.fillRect(0, 0, 512, 512); c.strokeStyle = "#8a847b"; c.lineWidth = 3; for (let i = 0; i <= 8; i++) { c.beginPath(); c.moveTo(i * 64, 0); c.lineTo(i * 64, 512); c.stroke(); c.beginPath(); c.moveTo(0, i * 64); c.lineTo(512, i * 64); c.stroke(); } c.strokeStyle = "#c9a24a"; c.lineWidth = 6; c.strokeRect(0, 0, 512, 512); }, [20, 14]));
   const plaza = new THREE.Mesh(reg(new THREE.PlaneGeometry(120, 80)), reg(new THREE.MeshStandardMaterial({ map: plazaTex, roughness: 0.4, metalness: 0.1 }))); plaza.rotation.x = -Math.PI / 2; plaza.position.set(0, -0.005, HALL.zFront + 40); plaza.receiveShadow = true; group.add(plaza);
   const hole = new THREE.Mesh(reg(new THREE.PlaneGeometry(200, 120)), reg(std("#10141f", 1))); hole.rotation.x = -Math.PI / 2; hole.position.set(0, -0.02, -30); group.add(hole);
   // tapis rouge du perron à la porte
@@ -279,6 +279,10 @@ export function buildTailor(scene: THREE.Scene) {
   const cols = ["#1c2a4a", "#34383f", "#8d939c", "#3d1620", "#b7a083", "#121c36"];
   cols.forEach((c, i) => { const r = new THREE.Mesh(reg(new THREE.CylinderGeometry(0.17, 0.17, 1.5, 20)), reg(std(c, 0.9))); r.position.set(-4.9 + (i % 3) * 0.42, 0.9 + Math.floor(i / 3) * 0.4, -3 + (i % 2) * 0.05); r.rotation.z = Math.PI / 2; r.rotation.y = Math.PI / 2; r.castShadow = true; group.add(r); });
   box(1.4, 0.9, 1.0, wood, 4.5, 0.45, -2.6, 0.04); box(1.5, 0.06, 1.1, gold, 4.5, 0.93, -2.6);
+  // rideau de velours qui referme l'atelier (arrière-plan sobre, sans vide visible)
+  const cvv = document.createElement("canvas"); cvv.width = 512; cvv.height = 64; { const c = cvv.getContext("2d")!; for (let x = 0; x < 512; x++) { const k = 0.5 + 0.5 * Math.sin((x / 512) * Math.PI * 2 * 26); const v = 18 + k * 34; c.fillStyle = `rgb(${v + 14},${v * 0.55},${v * 0.6 + 6})`; c.fillRect(x, 0, 1, 64); } }
+  const curtainTex = new THREE.CanvasTexture(cvv); curtainTex.colorSpace = THREE.SRGBColorSpace; curtainTex.wrapS = THREE.RepeatWrapping;
+  const curtain = new THREE.Mesh(reg(new THREE.CylinderGeometry(7, 7, 7, 64, 1, true)), reg(new THREE.MeshStandardMaterial({ map: curtainTex, roughness: 0.95, side: THREE.BackSide }))); curtain.position.y = 3.5; group.add(curtain);
   // luminaires
   const l1 = new THREE.SpotLight("#fff1d2", 140, 20, 0.55, 0.5, 1.2); l1.position.set(1.5, 6, 4); l1.target.position.set(0, 1.1, 0); l1.castShadow = true; l1.shadow.mapSize.set(1024, 1024); group.add(l1, l1.target);
   const l2 = new THREE.PointLight("#ffb77a", 14, 14, 1.5); l2.position.set(-4, 3.2, 1); group.add(l2);

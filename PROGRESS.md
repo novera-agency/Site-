@@ -140,3 +140,10 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 - ✅ Rendu 3D temps réel (Three.js, modèles construits par code) : atelier de tailleur (création et garde-robe), parvis et hall de la banque (arrivée du joueur, portes coulissantes, globe d'or, réceptionniste, collègues), caméra qui suit l'avatar.
 - ✅ Accueil et hub du jeu : le joueur marche jusqu'à la pièce touchée ; étiquettes cliquables (clavier, lecteur d'écran) ; plan 2D de repli sans WebGL ; navigateurs automatisés en 2D sauf `?3d=1`.
 - ✅ Portrait 2D de l'avatar dans le menu, les réunions et la garde-robe.
+
+## Refonte du personnage 3D
+- ✅ Modèle humanoïde réel (GLB Ready Player Me, 67 os) remplaçant l'ancien assemblage de formes ; avatar procédural conservé comme secours si le fichier ne charge pas.
+- ✅ Habillage : costume trois pièces recoloré en conservant le relief du tissu, matériaux distincts (laine, coton, soie, cuir, peau), cheveux en mèches, cravate modélisée, lunettes, montre, chapeau/fleur/nœud papillon d'origine retirés.
+- ✅ Animation procédurale : machine à états (IDLE, WALK, RUN, TURN, SIT, STAND_UP, INTERACT, GESTURE), jambes par cinématique inverse (pas de glissement), 12 gestes, regard (yeux + tête), clignements, sourire / surprise, assise sur chaise, pivot vers l'utilisateur.
+- ✅ Atelier : 7 angles de vue, rotation, zoom molette / pincement, recentrage, éclairage de studio (principale, remplissage, deux contre-jours), ombre de contact, rideau.
+- ⚠️ Limites : seulement deux cibles de morphing sur ce modèle (sourire, bouche ouverte) : pas de mouvement de sourcils ; mouvements secondaires (cravate, cheveux, veste) non simulés ; pas de niveaux de détail ni de textures compressées ; fluidité sur appareil réel non mesurée (tests en rendu logiciel).

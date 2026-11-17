@@ -28,19 +28,31 @@ test("avatar : créé en 3D, enregistré avec la partie, modifiable dans la gard
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await intro(page);
+  const glb = page.waitForResponse((r) => r.url().includes("/models/avatar.glb") && r.ok(), { timeout: 60000 });
   await page.goto(BASE + "/nouvelle?mode=carriere&3d=1");
   await page.getByTestId("next").click();
   await page.getByTestId("first-name").fill("Louis");
   await page.getByTestId("last-name").fill("Tailleur");
   await expect(page.getByTestId("creator-3d")).toBeVisible();
   await expect(page.getByTestId("creator-canvas")).toBeVisible();
+  expect((await glb).status()).toBe(200); // le modèle humanoïde se charge réellement
+  // vues, gestes, assise, marche : aucune erreur, boutons opérants
+  await page.getByTestId("av-view-profile").click();
+  await page.getByTestId("av-gesture-salut").click();
+  await page.getByTestId("av-gesture-cravate").click();
+  await page.getByTestId("av-walk").click();
+  await page.getByTestId("av-run").click();
+  await page.getByTestId("av-stop").click();
+  await page.getByTestId("av-sit").click();
+  await expect(page.getByTestId("av-sit")).toHaveAttribute("aria-pressed", "true");
+  await page.getByTestId("av-reset").click();
+  await expect(page.getByTestId("av-sit")).toHaveAttribute("aria-pressed", "false");
   await page.getByTestId("av-skin-4").click();
   await page.getByTestId("av-tab-cheveux").click();
   await page.getByTestId("av-hair-3").click();
   await page.getByTestId("av-beard-3").click();
   await page.getByTestId("av-tab-tenue").click();
   await expect(page.getByTestId("av-suit-7")).toBeDisabled(); // « Sable » : grade 5 requis
-  await expect(page.getByTestId("av-pocket")).toBeDisabled();
   await page.getByTestId("av-suit-1").click();
   for (let i = 0; i < 4; i++) await page.getByTestId("next").click();
   await page.getByTestId("create").click();

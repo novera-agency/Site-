@@ -32,7 +32,7 @@ export const HAIR_COLORS: Opt[] = [
   { label: "Noir", color: "#15110e" }, { label: "Brun foncé", color: "#2d1d12" }, { label: "Châtain", color: "#5a3d26" }, { label: "Blond", color: "#b8924f" },
   { label: "Roux", color: "#8a3f1d" }, { label: "Poivre et sel", color: "#7d7d80" }, { label: "Argent", color: "#c9ccd2" },
 ];
-export const BEARDS: Opt[] = [{ label: "Rasé de près" }, { label: "Barbe de trois jours" }, { label: "Bouc" }, { label: "Barbe courte" }, { label: "Barbe fournie" }];
+export const BEARDS: Opt[] = [{ label: "Rasé de près" }, { label: "Barbe de trois jours" }, { label: "Bouc" }, { label: "Moustache" }, { label: "Barbe fournie" }];
 export const BUILDS: Opt[] = [{ label: "Mince" }, { label: "Athlétique" }, { label: "Costaud" }];
 export const HEIGHTS: Opt[] = [{ label: "Moyen" }, { label: "Grand" }, { label: "Très grand" }];
 export const SUITS: Opt[] = [
@@ -57,7 +57,7 @@ const RANGES: Record<string, number> = {
 export const POCKET_UNLOCK = 1, CUFFLINKS_UNLOCK = 2;
 
 export const defaultAvatar = (): Avatar => ({
-  skin: 1, face: 0, nose: 0, eyes: 0, brows: 1, age: 1, hair: 2, hairColor: 1, beard: 0, build: 1, height: 1,
+  skin: 1, face: 0, nose: 0, eyes: 0, brows: 1, age: 1, hair: 3, hairColor: 1, beard: 0, build: 1, height: 1,
   suit: 0, shirt: 0, tie: 1, pocket: false, glasses: 0, watch: 0, cufflinks: false,
 });
 
@@ -91,5 +91,13 @@ export function clampToRank(a: Avatar, rank: number): Avatar {
   for (const [k, l] of [["suit", SUITS], ["shirt", SHIRTS], ["tie", TIES], ["glasses", GLASSES], ["watch", WATCHES]] as const) if ((l[r[k]]?.unlock ?? 0) > rank) r[k] = d[k];
   if (rank < POCKET_UNLOCK) r.pocket = false;
   if (rank < CUFFLINKS_UNLOCK) r.cufflinks = false;
+  return r;
+}
+
+/** Le modèle 3D gère une seule base de visage et trois familles de coiffure : ramène les anciens choix à une valeur prise en charge */
+export function normalizeForModel(a: Avatar): Avatar {
+  const r = { ...a };
+  if (![0, 1, 3, 5].includes(r.hair)) r.hair = r.hair === 6 || r.hair === 2 || r.hair === 4 ? 3 : 3;
+  if (r.beard !== 0 && r.beard !== 3) r.beard = 0;
   return r;
 }

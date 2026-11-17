@@ -9,6 +9,7 @@ const basePath = process.env.BASE_PATH || "";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  env: { NEXT_PUBLIC_BASE_PATH: basePath },
   ...(isStatic ? { output: "export" as const, trailingSlash: true, basePath, assetPrefix: basePath || undefined, images: { unoptimized: true } } : {}),
 };
 export default nextConfig;
