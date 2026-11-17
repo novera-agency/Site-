@@ -1,7 +1,7 @@
 # Tests
 
 ```bash
-npm test         # Vitest : 156 tests (finance, simulation, carrière) — ~10 s
+npm test         # Vitest : 162 tests (finance, simulation, carrière) — ~10 s
 npm run e2e      # Playwright : parcours de validation en 20 étapes — ~50 s (build + serveur sur le port 3100)
 npm run lint     # TypeScript strict
 ```

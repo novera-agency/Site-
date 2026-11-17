@@ -1,11 +1,14 @@
 "use client";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { BANKS, TRACKS, BASE_SALARY } from "@/engine/data/banks";
 import { Button, Field, inputCls, Badge, Disclaimer } from "@/components/ui";
 import type { Track } from "@/engine/types";
+import { AvatarEditor } from "@/components/AvatarEditor";
+import { defaultAvatar, parseAvatar, type Avatar } from "@/engine/avatar";
+import { saveDeviceAvatar, loadDeviceAvatar } from "@/lib/avatar-pref";
 
 const KNOW = [
   { id: "debutant", label: "Débutant", desc: "Explications progressives, aucune connaissance requise.", max: 2 },
@@ -37,6 +40,8 @@ function Wizard() {
   const [challenge, setChallenge] = useState(sp.get("defi") ?? "survivre_krach");
   const [p, setP] = useState({ firstName: "", lastName: "", nationality: "Française", age: 24, education: "Master en finance de marché", knowledge: "etudiant" as (typeof KNOW)[number]["id"], goal: "Devenir Managing Director", specialization: "Marchés actions", riskProfile: "equilibre" as "prudent" | "equilibre" | "dynamique" | "agressif" });
   const [track, setTrack] = useState<Track>("trader");
+  const [avatar, setAvatar] = useState<Avatar>(defaultAvatar());
+  useEffect(() => { const a = loadDeviceAvatar(); if (a) setAvatar(a); }, []);
   const [bankId, setBankId] = useState("lutece");
   const [capitalMode, setCapitalMode] = useState<"standard" | "1000" | "10000" | "100000" | "libre">("standard");
   const [free, setFree] = useState(25000);
@@ -58,7 +63,7 @@ function Wizard() {
     setBusy(true); setErr("");
     await api("/api/auth", { action: "guest" });
     let mps = 1; try { mps = Number(localStorage.getItem("fe_mps") || 1); } catch { /* */ }
-    const r = await api<{ ok: boolean; gameId?: string; error?: string }>("/api/game/new", { mode, difficulty, bankId: mode === "carriere" ? bankId : "lutece", track: mode === "carriere" ? track : "trader", startingCapital: mode === "defi" ? 10000 : capital, profile: p, seed: seed || undefined, challengeId: mode === "defi" ? challenge : undefined, minutesPerSecond: mps, historical: mode !== "defi" && historical });
+    const r = await api<{ ok: boolean; gameId?: string; error?: string }>("/api/game/new", { mode, difficulty, bankId: mode === "carriere" ? bankId : "lutece", track: mode === "carriere" ? track : "trader", startingCapital: mode === "defi" ? 10000 : capital, profile: { ...p, avatar }, seed: seed || undefined, challengeId: mode === "defi" ? challenge : undefined, minutesPerSecond: mps, historical: mode !== "defi" && historical });
     if (!r.ok || !r.gameId) { setErr(r.error ?? "Création impossible"); setBusy(false); return; }
     try { localStorage.setItem("fe_game", r.gameId); } catch { /* */ }
     router.push("/play");
@@ -97,6 +102,7 @@ function Wizard() {
               <Field label="Spécialisation"><input className={inputCls} value={p.specialization} onChange={(e) => setP({ ...p, specialization: e.target.value })} /></Field>
             </div>
             <div><div className="mb-2 text-[11px] font-medium uppercase tracking-wider text-ink-400">Niveau de connaissances financières</div><div className="grid gap-2 md:grid-cols-3">{KNOW.map((k) => <button key={k.id} onClick={() => setP({ ...p, knowledge: k.id })} className={`rounded-lg border p-3 text-left ${p.knowledge === k.id ? "border-accent bg-blue-500/10" : "border-ink-700 bg-ink-850"}`}><div className="text-sm font-semibold">{k.label}</div><div className="text-xs text-ink-300">{k.desc}</div></button>)}</div></div>
+            <div><div className="mb-2 text-[11px] font-medium uppercase tracking-wider text-ink-400">Votre apparence</div><AvatarEditor avatar={avatar} onChange={(a) => { setAvatar(a); saveDeviceAvatar(a); }} /></div>
           </div>}
           {cur === "Métier" && <div className="space-y-3"><h2 className="text-xl font-semibold">Parcours professionnel</h2><div className="grid gap-3 md:grid-cols-2">{(Object.values(TRACKS)).map((t) => <button key={t.id} data-testid={`track-${t.id}`} onClick={() => setTrack(t.id)} className={`rounded-lg border p-4 text-left ${track === t.id ? "border-accent bg-blue-500/10" : "border-ink-700 bg-ink-850 hover:border-ink-500"}`}><div className="font-semibold">{t.name}</div><div className="mt-1 text-xs text-ink-300">{t.description}</div><div className="mt-2 text-[11px] text-ink-400">Missions : {t.missions.join(", ")}</div><div className="text-[11px] text-gold">Objectif de carrière : {t.win}</div></button>)}</div></div>}
           {cur === "Banque" && <div className="space-y-3"><h2 className="text-xl font-semibold">Choix de l'établissement</h2><p className="text-xs text-ink-400">Votre profil vous donne accès aux établissements de difficulté ≤ {maxDiff}. Les plus prestigieux exigent un meilleur bagage.</p><div className="grid gap-3 md:grid-cols-2">{BANKS.map((b) => { const locked = b.difficulty > maxDiff; const noTrack = !b.tracks.includes(track); return <button key={b.id} data-testid={`bank-${b.id}`} disabled={locked || noTrack} onClick={() => setBankId(b.id)} className={`rounded-lg border p-4 text-left disabled:opacity-40 ${bankId === b.id ? "border-accent" : "border-ink-700"}`} style={{ background: `linear-gradient(135deg, ${b.color}55, #0e131c 70%)` }}>

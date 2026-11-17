@@ -53,6 +53,7 @@ export const CATEGORIES: NavCategory[] = [
       { href: "/play/remuneration", label: "Salaire", icon: "💶", desc: "Fiche de paie, bonus, grille salariale" },
       { href: "/play/immobilier", label: "Investissement immobilier", icon: "🏘️", desc: "Acheter, louer, revendre dans 13 villes" },
       { href: "/play/patrimoine", label: "Patrimoine", icon: "🏦", desc: "Épargne, placements, immobilier" },
+      { href: "/play/garde-robe", label: "Garde-robe", icon: "🤵", desc: "Votre apparence, costumes débloqués avec le grade" },
     ] }],
   },
   {

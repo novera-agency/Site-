@@ -16,6 +16,8 @@ import { Badge, Disclaimer } from "./ui";
 import type { Snapshot } from "@/server/views";
 import { sfx, setSoundEnabled } from "@/lib/sound";
 import { hasStoredSoundPrefs, setSoundPrefs, useSoundPrefs } from "@/lib/sound-prefs";
+import { AvatarPortrait } from "./AvatarPortrait";
+import { saveDeviceAvatar } from "@/lib/avatar-pref";
 import { CATEGORIES, categoryOf, itemOf, type NavCategory } from "./nav";
 
 
@@ -174,6 +176,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const path = usePathname();
   const [menu, setMenu] = useState(false);
   const busy = useRef(false);
+  useEffect(() => { if (snap?.player.avatar) saveDeviceAvatar(snap.player.avatar); }, [snap?.player.avatar]);
   useEffect(() => {
     const p = path.length > 1 ? path.replace(/\/$/, "") : path;
     const it = itemOf(p);
@@ -213,7 +216,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <div className="hidden md:block"><Ticker snap={snap} /></div>
       <div className="flex">
         <nav className={`${menu ? "block" : "hidden"} scroll-thin fixed inset-y-0 left-0 z-40 w-64 overflow-y-auto overscroll-contain border-r border-ink-700 bg-ink-950 p-3 pb-24 pt-4 lg:pb-3 lg:sticky lg:top-[88px] lg:block lg:h-[calc(100vh-88px-64px)]`}>
-          <div className="mb-3 rounded-lg bg-ink-850 p-3"><div className="text-sm font-semibold">{snap.player.name}</div><div className="text-xs text-ink-300">{snap.player.title}</div>{snap.player.bank && <div className="mt-1 text-[11px]" style={{ color: snap.player.bankColor }}>{snap.player.bank}</div>}</div>
+          <div className="mb-3 flex items-center gap-3 rounded-lg bg-ink-850 p-3"><AvatarPortrait avatar={snap.player.avatar} size={44} title={snap.player.name} /><div className="min-w-0"><div className="text-sm font-semibold">{snap.player.name}</div><div className="text-xs text-ink-300">{snap.player.title}</div>{snap.player.bank && <div className="mt-1 text-[11px]" style={{ color: snap.player.bankColor }}>{snap.player.bank}</div>}</div></div>
           <SideNav snap={snap} path={path} />
         </nav>
         {menu && <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setMenu(false)} />}

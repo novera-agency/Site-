@@ -1,3 +1,4 @@
+import { parseAvatar, lockedParts } from "@/engine/avatar";
 /** Mutations validées (Zod) : toute modification de l'état passe par ici, côté serveur. */
 import { z } from "zod";
 import type { GameState } from "@/engine/types";
@@ -66,6 +67,7 @@ export const ActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("tutorial_visit"), page: z.string().max(40) }),
   z.object({ type: z.literal("set_plan"), start: z.number().int(), end: z.number().int(), wake: z.number().int() }),
   z.object({ type: z.literal("sleep") }),
+  z.object({ type: z.literal("set_avatar"), avatar: z.record(z.string().max(20), z.union([z.number(), z.boolean()])) }),
   z.object({ type: z.literal("overtime"), hours: z.number().int().min(1).max(4), focus: z.enum(["avance", "dossiers", "formation"]), subject: z.enum(["auto", "marches", "analyse", "maths", "macro", "risque", "erreurs"]).optional() }),
   z.object({ type: z.literal("review_answer"), key: z.string().max(80), choice: z.number().int().min(0).max(5) }),
   z.object({ type: z.literal("training_resume") }),
@@ -255,6 +257,14 @@ function applyActionInner(s: GameState, a: Action): ActionResult {
       const r = closeTraining(s); return r.ok ? { ok: true } : { ok: false, error: r.error }; }
     case "set_plan": { const r = setPlan(s, { start: a.start, end: a.end, wake: a.wake }); return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.error }; }
     case "sleep": return doSleep(s);
+    case "set_avatar": {
+      const av = parseAvatar(a.avatar);
+      if (!av) return { ok: false, error: "Apparence invalide." };
+      const rank = s.career.employed ? s.career.rank : 0, locked = lockedParts(av, rank);
+      if (locked.length) return { ok: false, error: `Pas encore débloqué : ${locked.join(", ")}.` };
+      s.profile.avatar = av;
+      return { ok: true, message: "👔 Nouvelle apparence enregistrée." };
+    }
     case "overtime": {
       const r = doOvertime(s, a.hours, a.focus, a.subject ?? "auto");
       if (!r.ok) return { ok: false, error: r.error };

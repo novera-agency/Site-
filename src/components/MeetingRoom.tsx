@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useView, useAction } from "@/lib/hooks";
 import { useGame } from "@/lib/store";
+import { AvatarPortrait } from "./AvatarPortrait";
 import { Button, Badge, inputCls } from "./ui";
 import { SoundTest } from "./SoundTest";
 import { Portrait } from "./Portrait";
@@ -49,6 +50,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
   };
   const sup = useMemo(() => voiceSupport(), []);
   const difficulty = useGame((st) => st.snap?.difficulty ?? "normal");
+  const myAvatar = useGame((st) => st.snap?.player.avatar);
   const limit = LIMIT[difficulty] ?? 20;
   const [mode, setMode] = useState<Mode | null>(null);
   const [lastMode, setLastMode] = useState<Mode>("ecrit");
@@ -283,7 +285,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
                     const who = m.participants.find((p) => p.name === l.who);
                     const mine = l.who.includes("(vous)"); const sys = l.who === "—" || l.who === "Correction" || l.who === "Exécution" || l.who === "Bilan";
                     return <div key={i} className={`fade-in ${mine ? "ml-auto max-w-[80%] text-right" : "max-w-[90%]"}`}>
-                      <div className={`text-[11px] ${sys ? "text-gold" : "text-ink-400"}`}>{who ? <>{who.avatar} <b className="text-ink-200">{who.name}</b> · {who.role}{readAloud && speaker === who.id && <span className="ml-1 text-gold">🔊 parle…</span>}</> : l.who}</div>
+                      <div className={`text-[11px] ${sys ? "text-gold" : "text-ink-400"}`}>{mine && myAvatar ? <span className="inline-flex items-center gap-1.5"><AvatarPortrait avatar={myAvatar} size={22} /><b className="text-ink-200">{l.who}</b></span> : who ? <>{who.avatar} <b className="text-ink-200">{who.name}</b> · {who.role}{readAloud && speaker === who.id && <span className="ml-1 text-gold">🔊 parle…</span>}</> : l.who}</div>
                       <div className={`mt-0.5 inline-block rounded-lg px-3 py-2 text-sm leading-relaxed ${mine ? "bg-accent/20 text-blue-100" : sys ? "border border-ink-600 bg-ink-850 text-ink-200" : "bg-ink-800 text-ink-100"}`}>{l.text}</div>
                     </div>;
                   })}

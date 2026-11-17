@@ -1,3 +1,4 @@
+import type { Avatar } from "./avatar";
 import type { RngState } from "./rng";
 import type { SessionId, Speed } from "./time";
 import type { Cents } from "./money";
@@ -182,6 +183,8 @@ export interface Profile {
   firstName: string; lastName: string; nationality: string; age: number; education: string;
   knowledge: "debutant" | "etudiant" | "analyste" | "trader" | "entrepreneur" | "expert";
   goal: string; specialization: string; riskProfile: "prudent" | "equilibre" | "dynamique" | "agressif";
+  /** Apparence 3D du joueur (voir avatar.ts) */
+  avatar?: Avatar;
 }
 export interface Review { t: number; kind: "hebdo" | "trimestrielle" | "annuelle"; score: number; details: Record<string, number>; outcome: string; bonus?: Cents; promoted?: boolean; comment: string; }
 export interface Career {

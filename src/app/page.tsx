@@ -7,7 +7,11 @@ import { BANK_BY_ID, TRACKS } from "@/engine/data/banks";
 import { fmtDateFor } from "@/engine/time";
 import { Button, inputCls } from "@/components/ui";
 import { Intro } from "@/components/Intro";
-import { OfficeScene, type Room } from "@/components/OfficeScene";
+import type { Room } from "@/components/OfficeScene";
+import { OfficeView } from "@/components/OfficeView";
+import { webglOK } from "@/components/Stage3D";
+import { loadDeviceAvatar } from "@/lib/avatar-pref";
+import { defaultAvatar, type Avatar } from "@/engine/avatar";
 import { hallOfFame, type HallEntry } from "@/lib/hall";
 import { useT, setLang, getLang } from "@/lib/i18n";
 import { setSoundPrefs, useSoundPrefs } from "@/lib/sound-prefs";
@@ -78,6 +82,10 @@ export default function Home() {
   const [mps, setMps] = useState(1);
   const panelRef = useRef<HTMLElement>(null);
   const [hall, setHall] = useState<HallEntry[]>([]);
+  const [deviceAvatar, setDeviceAvatar] = useState<Avatar>(defaultAvatar());
+  const [arrived, setArrived] = useState(false);
+  const [use3d, setUse3d] = useState(false);
+  useEffect(() => { setDeviceAvatar(loadDeviceAvatar() ?? defaultAvatar()); setUse3d(webglOK()); }, []);
   useEffect(() => { setHall(hallOfFame()); }, []);
   const [ioMsg, setIoMsg] = useState("");
   const exportAll = async () => {
@@ -221,7 +229,7 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#070a12]">
-      <Intro />
+      {!use3d && <Intro />}
       <Skyline />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[32vh] bg-gradient-to-b from-[#070a12] via-transparent to-transparent" />
       <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col px-5 pb-16 pt-8 md:px-8">
@@ -231,9 +239,9 @@ export default function Home() {
           <span className="ml-auto flex gap-1 text-[11px]" role="group" aria-label="Langue / Language">{(["fr", "en"] as const).map((l) => <button key={l} data-testid={`lang-${l}`} aria-pressed={lang === l} onClick={() => lang !== l && setLang(l)} className={`rounded px-2 py-1 font-semibold uppercase ${lang === l ? "bg-gold text-black" : "bg-ink-800 text-ink-300 hover:text-white"}`}>{l}</button>)}</span>
         </header>
 
-        <div className="mt-6 md:mt-8"><OfficeScene rooms={rooms} selected={sel} label={T("Plan de la banque")} onArrive={(id) => activate(id as Item)}>
-          <p className="mt-2 text-center text-xs text-ink-400">{T("Touchez une pièce : votre personnage s'y rend. Le menu classique reste disponible juste en dessous.")}</p>
-        </OfficeScene></div>
+        <div className="mt-6 md:mt-8"><OfficeView rooms={rooms} avatar={deviceAvatar} arrival selected={sel} label={T("Plan de la banque")} onArrive={(id) => activate(id as Item)} onArrived={() => setArrived(true)}>
+          <p className="mt-2 text-center text-xs text-ink-400">{use3d && !arrived ? T("Paris, 7 h 02. Votre badge vous attend à l'accueil de la banque.") : T("Touchez une pièce : votre personnage s'y rend. Le menu classique reste disponible juste en dessous.")}</p>
+        </OfficeView></div>
 
         <div className="mt-8 grid flex-1 items-start gap-8 md:mt-16 md:grid-cols-[minmax(0,320px)_minmax(0,1fr)] md:gap-14">
           <div>

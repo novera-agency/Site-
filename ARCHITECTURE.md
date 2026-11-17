@@ -43,6 +43,7 @@ src/engine/        Moteur pur, déterministe, sans dépendance au navigateur ni 
   agenda.ts        Cycle quotidien (agenda, rendez-vous)
   life.ts          Vie privée : paie et impôt, logement et crédit, factures, loisirs, jauges, événements, niveau des prix
   history.ts       Pré-historique de marché (≈ 1 an) au même modèle
+  avatar.ts        Apparence du joueur (indices validés, déblocages par grade)
   historical.ts    Mode historique 2000 → 13 novembre 2026 : guidage des cours vers des trajectoires approchées
                    (avance de la cible + rappel, correction collective par zone pour que l'indice suive),
                    décisions réelles des banques centrales, régimes et événements datés, réémission des obligations

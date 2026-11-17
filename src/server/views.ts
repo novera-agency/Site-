@@ -1,3 +1,4 @@
+import { defaultAvatar } from "@/engine/avatar";
 /** Modèles de lecture envoyés au navigateur (le client n'a jamais accès à l'état complet ni au grand livre brut entier). */
 import { histActive } from "@/engine/historical";
 import type { GameState } from "@/engine/types";
@@ -97,7 +98,7 @@ export function snapshot(s: GameState, aiAvailable = false) {
     activeMeetingId: s.activeMeetingId ?? null, pendingMeeting: pend ? { template: pend.template, title: pend.title, info: meetingInfo(s, pend.template, (pend as { params?: Record<string, string> }).params ?? {}) } : null,
     nextAgenda: nextAgenda ? { t: nextAgenda.t, title: nextAgenda.title } : null,
     tutorial: s.mode === "carriere" && !s.tutorial.done ? tutorialChecklist(s) : null,
-    player: { name: `${s.profile.firstName} ${s.profile.lastName}`, title: s.career.employed ? rankTitle(s) : s.company ? `Fondateur — ${s.company.name}` : s.mode === "carriere" ? "Sans emploi" : "Investisseur", bank: s.career.employed ? BANK_BY_ID[s.career.bankId]?.short : null, bankColor: BANK_BY_ID[s.career.bankId]?.accent, stress: Math.round(s.career.stress) },
+    player: { name: `${s.profile.firstName} ${s.profile.lastName}`, avatar: s.profile.avatar ?? defaultAvatar(), rank: s.career.employed ? s.career.rank : 0, title: s.career.employed ? rankTitle(s) : s.company ? `Fondateur — ${s.company.name}` : s.mode === "carriere" ? "Sans emploi" : "Investisseur", bank: s.career.employed ? BANK_BY_ID[s.career.bankId]?.short : null, bankColor: BANK_BY_ID[s.career.bankId]?.accent, stress: Math.round(s.career.stress) },
     vix: vixLike(s), crisisActive: s.crises.some((c) => !c.resolved && c.phase > 0),
     explanations: s.settings.explanations, aiAvailable,
   };

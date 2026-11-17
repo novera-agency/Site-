@@ -1,3 +1,4 @@
+import { parseAvatar, clampToRank, defaultAvatar } from "./avatar";
 /**
  * SimulationClock + orchestration. Ordre de traitement déterministe à chaque pas de 5 minutes :
  * 1. horloge → 2. traitements de début de journée → 3. calendrier (banques centrales, statistiques, résultats, échéances)
@@ -80,7 +81,7 @@ export function createGame(o: NewGameOptions): GameState {
     version: SAVE_VERSION, ...(hist ? { epochYear: HIST_EPOCH, historical: true } : {}), id: "", ownerId: o.ownerId, name: o.name || `${o.profile.firstName} ${o.profile.lastName}`, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     mode: o.mode, difficulty, challengeId: o.challengeId, seed, rng: rngState, t: T0, speed: 1, paused: true, pauseReason: "Bienvenue",
     settings: { minutesPerSecond: 1, autoPauseImportant: true, livingExpenses: o.mode === "carriere", allowShort: difficulty !== "debutant", aiEnabled: true, explanations: difficulty === "debutant" || difficulty === "normal", ...o.settings },
-    profile: o.profile,
+    profile: { ...o.profile, avatar: parseAvatar(o.profile.avatar) ? clampToRank(parseAvatar(o.profile.avatar)!, 0) : defaultAvatar() },
     career: { track: o.track, bankId: bank.id, rank: 1, salaryAnnual: toCents(salaryFor(bank.id, 1)), hiredT: T0, employed: o.mode === "carriere", deskLimitVaR: 0, deskMaxPosition: 0.25, objectives: [], reviews: [], warnings: 0, stress: 15, energy: 90, missionsDone: 0, missionsFailed: 0, breaches: 0, pendingOffers: [], history: [], ytdBonusPool: 0, weekStartEquity: 0, quarterStartEquity: 0, yearStartEquity: 0 },
     skills: { analyse: 0, marches: 0, maths: 0, macro: 0, risque: 0, client: 0, management: 0, entrepreneuriat: 0 },
     skillLog: [],
