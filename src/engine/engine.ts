@@ -4,6 +4,7 @@
  * 4. taux → 5. marchés → 6. ordres → 7. crises → 8. marges/alertes → 9. missions → 10. clôtures → 11. agenda → 12. tutoriel.
  * Les vitesses x1…x100 ne changent que le nombre de pas exécutés par seconde réelle, jamais le résultat économique.
  */
+import { sleepReminder, nightCheck, getPlan } from "./schedule";
 import type { Currency, Difficulty, GameMode, GameSettings, GameState, Profile, Track } from "./types";
 import { SAVE_VERSION } from "./types";
 import { Rng, seedRng } from "./rng";
@@ -371,6 +372,7 @@ export function step(s: GameState) {
   if (m % 60 === 0) checkMissions(s);
   if (m === 17 * 60 + 30 && !isWeekend(s.t)) { dailyFuturesSettlement(s); processExpiries(s); }
   if (m === 22 * 60 + 5 && !isWeekend(s.t)) endOfDay(s);
+  if (s.life && s.mode === "carriere") { if (m === 22 * 60 + 30) sleepReminder(s); if (m === getPlan(s).wake) nightCheck(s); }
   if (m === 18 * 60 && weekday(s.t) === 5 && day !== s.flags["startDay"]) weeklyReview(s);
   const pend = s.flags["pendingMeeting"];
   if (typeof pend === "string" && !s.activeMeetingId) {

@@ -7,7 +7,9 @@ import { buildView } from "@/server/views";
 
 const act = (s: ReturnType<typeof game>, a: object) => applyAction(s, a as never);
 
-import { isHoliday, isWeekend, tOfDay, dayOfDate } from "@/engine/time";
+import { nightCheck, sleepReminder, getPlan } from "@/engine/schedule";
+import { advance } from "@/engine/engine";
+import { isHoliday, isWeekend, tOfDay, dayOfDate, dayIndex } from "@/engine/time";
 
 describe("Correctifs d'audit", () => {
   it("jours fériés : marchés et bureau fermés (1er janvier, vendredi saint, lundi de Pâques, 1er mai, Noël)", () => {
@@ -40,5 +42,37 @@ describe("Correctifs d'audit", () => {
     const s = game();
     const v = JSON.stringify(buildView(s, "learning", {}) ?? {});
     expect(v).not.toMatch(/"answer"/);
+  });
+  it("sommeil obligatoire : nuit blanche pénalisée, dormir remet le compteur à zéro, trois nuits blanches = épuisement", () => {
+    const s = game("carriere", "sommeil-ob");
+    s.paused = true;
+    const wake = getPlan(s).wake;
+    const at = () => { s.t = tOfDay(dayIndex(s.t) + 1, Math.floor(wake / 60), wake % 60); };
+    s.life!.physique = 80; s.career.stress = 30; s.life!.mental = 80;
+    at(); nightCheck(s);
+    expect(s.life!.sleepDebt).toBe(1);
+    expect(s.life!.physique).toBeLessThan(80);
+    expect(s.career.stress).toBeGreaterThan(30);
+    at(); nightCheck(s);
+    expect(s.life!.sleepDebt).toBe(2);
+    s.life!.sleep = { startT: s.t - 480, endT: s.t, hours: 8 };
+    at(); s.life!.sleep = { startT: s.t - 480, endT: s.t, hours: 8 }; nightCheck(s);
+    expect(s.life!.sleepDebt).toBe(0);
+    for (let i = 0; i < 3; i++) { at(); nightCheck(s); }
+    expect(s.life!.sleepDebt).toBe(3);
+    expect(s.career.stress).toBeGreaterThanOrEqual(93);
+  });
+  it("rappel du soir : une notification tant que le personnage n'est pas couché", () => {
+    const s = game("carriere", "sommeil-rappel");
+    const n0 = s.notifications.length;
+    s.t = tOfDay(dayIndex(s.t), 22, 30);
+    sleepReminder(s);
+    expect(s.notifications.length).toBe(n0 + 1);
+  });
+  it("sommeil obligatoire dans la simulation : sans dormir, la première nuit blanche est comptée au réveil", () => {
+    const s = game("carriere", "sommeil-sim");
+    const t0 = s.t;
+    for (let i = 0; i < 80 && s.t - t0 < 26 * 60; i++) { s.paused = false; s.activeMeetingId = undefined; advance(s, 60); }
+    expect(s.life!.sleepDebt ?? 0).toBeGreaterThanOrEqual(1);
   });
 });

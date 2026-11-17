@@ -94,7 +94,7 @@ function doSleep(s: GameState): ActionResult {
   const c = sleepCheck(s);
   if (!c.ok) return { ok: false, error: c.error };
   const t0 = s.t;
-  s.life!.sleep = { startT: t0, endT: c.target, hours: c.hours }; // la nuit en cours est reconnue à minuit (pas de pénalité de « nuit non gérée »)
+  s.life!.sleep = { startT: t0, endT: c.target, hours: c.hours }; // la nuit est reconnue dès le coucher (sinon « nuit blanche » au réveil)
   runClock(s, c.target);
   const r = finishSleep(s, t0);
   const interrupted = s.t < c.target - 5;

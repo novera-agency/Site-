@@ -292,6 +292,8 @@ export interface LifeState {
   plan?: { start: number; end: number; wake: number };
   /** Dernier sommeil */
   sleep?: { startT: number; endT: number; hours: number };
+  /** Nuits consécutives sans sommeil (le sommeil est obligatoire : 3 nuits blanches de suite = arrêt pour épuisement) */
+  sleepDebt?: number;
   /** Heures d'avance prises sur le lendemain (heures supplémentaires « pour demain ») */
   ahead?: number;
   /** Départ anticipé du jour grâce à l'avance */

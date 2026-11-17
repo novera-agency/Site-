@@ -145,7 +145,7 @@ export default function Planning() {
 
       <Card title="😴 Sommeil">
         <div className="space-y-3 text-sm">
-          <p className="text-ink-200">Réveil prévu à <b className="num text-white">{hm(d.plan.wake)}</b>. Dormir fait avancer l'horloge jusqu'au réveil : 7 à 9 h de sommeil restaurent la forme, le moral et réduisent le stress.</p>
+          <p className="text-ink-200">Réveil prévu à <b className="num text-white">{hm(d.plan.wake)}</b>. Dormir fait avancer l'horloge jusqu'au réveil : 7 à 9 h de sommeil restaurent la forme, le moral et réduisent le stress. <b className="text-amber-200">Le sommeil est obligatoire</b> : une nuit sans dormir coûte cher en forme, en moral et en stress, et trois nuits blanches de suite mènent à l'arrêt pour épuisement.</p>
           {d.sleep.ok
             ? <div data-testid="sleep-info" className="rounded-md bg-ink-900 p-2 text-xs">Si vous vous couchez maintenant : <b className="num text-white">{fr(d.sleep.hours)} h</b> de sommeil <Badge tone={TONE[d.sleep.label]}>{d.sleep.label}</Badge></div>
             : <div data-testid="sleep-block" className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-100">{d.sleep.error}</div>}

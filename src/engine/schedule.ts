@@ -158,6 +158,29 @@ export function doOvertime(s: GameState, hours: number, focus: OvertimeFocus, su
   return { ok: true as const, hours, weekend, message: `⏱️ ${hours} h supplémentaire${hours > 1 ? "s" : ""}. ${msg}` };
 }
 
+/** Le sommeil est obligatoire : rappel le soir, tant que le personnage n'est pas couché */
+export function sleepReminder(s: GameState) {
+  if (!on(s)) return;
+  const l = s.life!;
+  if (l.sleep && l.sleep.endT > s.t) return;
+  notify(s, "info", "🌙 Il est temps de dormir", `Votre réveil est à ${hhmm(getPlan(s).wake)}. Le sommeil est obligatoire : une nuit blanche coûte cher en forme, en moral et en stress, et trois de suite mènent à l'arrêt pour épuisement.`, "/play/planning");
+}
+/** À l'heure du réveil : la nuit a-t-elle été dormie ? Sinon, nuit blanche (pénalités lourdes, épuisement au bout de trois) */
+export function nightCheck(s: GameState) {
+  if (!on(s)) return;
+  const l = s.life!;
+  if (l.sleep && l.sleep.endT > s.t - 12 * 60) { l.sleepDebt = 0; return; }
+  l.sleepDebt = (l.sleepDebt ?? 0) + 1;
+  l.physique = clamp(l.physique - 10, 0, 100);
+  l.mental = clamp(l.mental - 7, 0, 100);
+  s.career.stress = clamp(s.career.stress + 9, 0, 100);
+  if (isWorkDay(s)) changeTrust(s, "boss", -0.3);
+  if (l.sleepDebt >= 3) {
+    s.career.stress = Math.max(s.career.stress, 93); // déclenche l'arrêt pour épuisement
+    notify(s, "alerte", "😵 Épuisement", "Trois nuits blanches de suite : votre corps lâche. Vous allez devoir vous arrêter.", "/play/planning");
+  } else notify(s, "alerte", "😵 Nuit blanche", `Vous n'avez pas dormi (${l.sleepDebt} nuit${l.sleepDebt > 1 ? "s" : ""} de suite) : forme, moral et stress en pâtissent. Dormez dès ce soir.`, "/play/planning");
+}
+
 // ───────── Chaque jour (à minuit) ─────────
 export function dailySchedule(s: GameState) {
   if (!on(s)) return;
@@ -170,17 +193,6 @@ export function dailySchedule(s: GameState) {
     l.ahead = Math.round((l.ahead! - h) * 10) / 10;
     l.early = { day, hours: h };
     notify(s, "info", `Vous partez ${h} h plus tôt aujourd'hui`, `Grâce à vos heures d'avance, votre journée se termine à ${hhmm(Math.max(getPlan(s).start + 240, getPlan(s).end - h * 60))}.`, "/play/planning");
-  }
-  // Nuit non gérée par le joueur : sommeil automatique, qui ne pénalise qu'un réveil trop matinal (moins de 6 h 30 de sommeil)
-  const slept = !!l.sleep && l.sleep.endT > s.t - 12 * 60;
-  if (!slept) {
-    const hours = getPlan(s).wake / 60;
-    const deficit = Math.max(0, 6.5 - hours) / 2;
-    if (deficit > 0) {
-      l.physique = clamp(l.physique - 1.0 * deficit, 0, 100);
-      l.mental = clamp(l.mental - 0.8 * deficit, 0, 100);
-      s.career.stress = clamp(s.career.stress + 1.2 * deficit, 0, 100);
-    }
   }
   // Journée plus longue ou plus courte que la référence
   if (work) {
