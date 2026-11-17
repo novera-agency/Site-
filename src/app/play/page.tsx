@@ -11,6 +11,7 @@ import { HelpButton } from "@/components/MissionHelp";
 import { Button } from "@/components/ui";
 import { CategoryHub } from "@/components/CategoryHub";
 import { Portrait } from "@/components/Portrait";
+import { OfficeHub } from "@/components/OfficeHub";
 
 export default function Bureau() {
   const { data } = useView<any>("dashboard");
@@ -22,6 +23,7 @@ export default function Bureau() {
   const desk = data.accounts.find((a: any) => a.id === "desk");
   return <>
     <PageTitle env="Bureau personnel" title={`Bonjour ${snap.player.name.split(" ")[0]}`} subtitle={data.career ? `${data.career.title} — ${data.career.bank.name}` : snap.mode === "defi" ? "Mode défi" : "Investisseur indépendant"} right={<div className="flex gap-2"><Link href="/play/terminal" className="rounded-md bg-accent px-3 py-2 text-sm font-medium">Ouvrir le terminal</Link><Link href="/play/agenda" className="rounded-md bg-ink-700 px-3 py-2 text-sm">Agenda</Link></div>} />
+    <OfficeHub />
     <CategoryHub id="bureau" compact />
     {snap.chapter && <Link href="/play/parcours" data-testid="chapter-card" className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-gold/40 bg-gradient-to-r from-yellow-900/20 to-transparent p-3 hover:border-gold">
       <span className="text-2xl">🧭</span>

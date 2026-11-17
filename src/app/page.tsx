@@ -7,6 +7,7 @@ import { BANK_BY_ID, TRACKS } from "@/engine/data/banks";
 import { fmtDateFor } from "@/engine/time";
 import { Button, inputCls } from "@/components/ui";
 import { Intro } from "@/components/Intro";
+import { OfficeScene, type Room } from "@/components/OfficeScene";
 import { hallOfFame, type HallEntry } from "@/lib/hall";
 import { useT, setLang, getLang } from "@/lib/i18n";
 import { setSoundPrefs, useSoundPrefs } from "@/lib/sound-prefs";
@@ -119,6 +120,16 @@ export default function Home() {
     { id: "options", label: "Options", hint: STATIC ? "Vitesse du temps" : "Vitesse du temps, compte" },
   ];
   const visible = items.filter((i) => !i.hidden);
+  const ROOMS: Omit<Room, "locked">[] = [
+    { id: "continuer", slot: 0, kind: "directeur", icon: "🗝️", label: "Continuer", sub: "Bureau du directeur" },
+    { id: "nouvelle", slot: 1, kind: "marches", icon: "📈", label: "Nouvelle carrière", sub: "Salle des marchés" },
+    { id: "defis", slot: 2, kind: "conseil", icon: "🎯", label: "Défis", sub: "Salle du conseil" },
+    { id: "charger", slot: 3, kind: "archives", icon: "🗄️", label: "Charger", sub: "Archives" },
+    { id: "libre", slot: 4, kind: "openspace", icon: "💼", label: "Partie libre", sub: "Open space" },
+    { id: "honneur", slot: 5, kind: "honneur", icon: "🏅", label: "Tableau d'honneur", sub: "Salon d'honneur" },
+    { id: "options", slot: 6, kind: "conciergerie", icon: "🛎️", label: "Options", sub: "Conciergerie" },
+  ];
+  const rooms: Room[] = ROOMS.map((r) => ({ ...r, label: T(r.label), sub: T(r.sub ?? ""), locked: r.id === "continuer" && !last, hint: r.id === "continuer" && !last ? T("aucune partie à reprendre") : items.find((i) => i.id === r.id)?.hint }));
   const activate = useCallback((id: Item) => {
     if (id === "continuer" && last) open(last.gameId);
     else if (id === "nouvelle") go("/nouvelle?mode=carriere");
@@ -220,7 +231,11 @@ export default function Home() {
           <span className="ml-auto flex gap-1 text-[11px]" role="group" aria-label="Langue / Language">{(["fr", "en"] as const).map((l) => <button key={l} data-testid={`lang-${l}`} aria-pressed={lang === l} onClick={() => lang !== l && setLang(l)} className={`rounded px-2 py-1 font-semibold uppercase ${lang === l ? "bg-gold text-black" : "bg-ink-800 text-ink-300 hover:text-white"}`}>{l}</button>)}</span>
         </header>
 
-        <div className="mt-10 grid flex-1 items-start gap-8 md:mt-16 md:grid-cols-[minmax(0,320px)_minmax(0,1fr)] md:gap-14">
+        <div className="mt-6 md:mt-8"><OfficeScene rooms={rooms} selected={sel} label={T("Plan de la banque")} onArrive={(id) => activate(id as Item)}>
+          <p className="mt-2 text-center text-xs text-ink-400">{T("Touchez une pièce : votre personnage s'y rend. Le menu classique reste disponible juste en dessous.")}</p>
+        </OfficeScene></div>
+
+        <div className="mt-8 grid flex-1 items-start gap-8 md:mt-16 md:grid-cols-[minmax(0,320px)_minmax(0,1fr)] md:gap-14">
           <div>
             <h1 className="text-4xl font-black leading-[1.05] text-white md:text-5xl">{T("De stagiaire")}<br />{T("à patron")}<br />{T("de banque.")}</h1>
             <nav className="mt-8 space-y-1" aria-label="Menu principal">

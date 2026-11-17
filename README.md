@@ -76,6 +76,7 @@ Le workflow `.github/workflows/pages.yml` vérifie le code (TypeScript, 156 test
 - **Appeler vos clients** depuis l'écran Clients : sonnerie, le client décroche (ou messagerie et rappel le lendemain), et **chaque faute fait baisser l'objectif de vente** (−5 à −30 %) ; sous 30 % de l'objectif initial, il raccroche. Chaque collaborateur a sa propre voix.
 - 17 réunions jouables, 12 PNJ persistants + clients, 22 modèles de missions paramétrables, 35 modules de formation, crises à phases.
 - Création de société (6 types) avec bilan, compte de résultat, flux de trésorerie et risque de faillite.
+- **Accueil et hub en forme de bureau** : une banque d'investissement fastueuse vue de dessus ; un personnage marche jusqu'à la pièce touchée (couloir, portes), puis ouvre l'écran correspondant (accueil : carrière, reprise, sauvegardes, options ; en jeu : 7 pièces regroupant tous les écrans). Chaque pièce est un vrai bouton (clavier, lecteur d'écran) et l'animation est coupée avec « réduire les animations ».
 - **Parcours** : 8 chapitres avec objectifs, 36 succès, score de carrière ; trois fins (retraite, faillite, fortune) et tableau d'honneur local.
 - **Vie privée complète** : salaire précis, factures, logement, jauges (santé mentale, forme, vie sociale, plaisir), rencontres, couple, mariage, enfants, histoires de collègues.
 - Investissement immobilier dans 13 villes françaises, prospection confiée par le N+1, au moins deux missions générées par jour.
