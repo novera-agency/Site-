@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { game } from "./helpers";
+import { advance } from "@/engine/engine";
 import { serialize, serializeCompact, deserialize } from "@/engine/serialize";
 import { makeCareerCode, readCareerCode, CareerCodeError } from "@/lib/career-code";
 
@@ -34,6 +35,17 @@ describe("Code de carrière", () => {
   });
   it("le code compact est nettement plus court que la sauvegarde complète", () => {
     const s = game("carriere", "code-4");
-    expect(serializeCompact(s).length).toBeLessThan(serialize(s).length * 0.6);
+    expect(serializeCompact(s).length).toBeLessThan(serialize(s).length * 0.3);
+  });
+  it("code court : le code reste sous 80 000 caractères et la partie relue continue de tourner", async () => {
+    const s = game("carriere", "code-5"); s.paused = false;
+    for (let i = 0; i < 10; i++) advance(s, 1440);
+    const code = await makeCareerCode(serializeCompact(s));
+    expect(code.length).toBeLessThan(80_000);
+    const back = deserialize(await readCareerCode(code)); back.paused = false;
+    expect(Object.keys(back.quotes).length).toBe(Object.keys(s.quotes).length);
+    expect(back.quotes["XWLD"].price).toBeCloseTo(s.quotes["XWLD"].price, 1);
+    const t = back.t; advance(back, 1440 * 3);
+    expect(back.t).toBeGreaterThan(t);
   });
 });

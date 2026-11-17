@@ -40,7 +40,7 @@ export function CareerCode({ gameId, onImported, importOnly = false }: { gameId?
   return <div className="space-y-5" data-testid="career-code">
     {!importOnly && <section aria-labelledby="cc-gen">
       <h3 id="cc-gen" className="text-sm font-semibold text-white">Passer sur un autre appareil</h3>
-      <p className="mt-1 text-xs text-ink-400">Générez un code, collez-le sur l&apos;autre appareil : vous y retrouvez exactement la même carrière (positions, relations, planning, progression). Le code contient toute la partie, nom du personnage compris : ne le partagez avec personne. Seul l&apos;historique de cours très ancien est raccourci.</p>
+      <p className="mt-1 text-xs text-ink-400">Générez un code, collez-le sur l&apos;autre appareil : vous y retrouvez exactement la même carrière (positions, relations, planning, progression). Le code contient toute la partie, nom du personnage compris : ne le partagez avec personne. Le code est court : l&apos;historique de cours ancien n&apos;y figure pas et se reconstitue au fil des séances.</p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <Button data-testid="cc-generate" disabled={!gameId || busy} onClick={generate}>{busy && !code ? "Génération…" : "🔑 Générer mon code"}</Button>
         {code && <><Button size="sm" data-testid="cc-copy" onClick={copy}>📋 Copier</Button><Button size="sm" variant="outline" data-testid="cc-download" onClick={download}>⬇️ Télécharger (.txt)</Button><span className="text-xs text-ink-400">{info}</span></>}

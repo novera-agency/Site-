@@ -1,5 +1,5 @@
 /** Sérialisation compacte des parties (séries de prix empaquetées), commune au serveur et à l'édition navigateur. */
-import type { Bar, GameState } from "./types";
+import type { Bar, GameState, InstrumentDef } from "./types";
 import { migrate } from "./engine";
 import { buildCatalog } from "./data/catalog";
 
@@ -43,22 +43,55 @@ export function serialize(s: GameState) {
   return JSON.stringify({ ...s, quotes, instruments, liteFromCatalog: true });
 }
 /**
- * Version allégée pour le « code de carrière » : l'historique de cours très ancien est tronqué (150 séances pour les titres principaux
- * , 40 pour les autres) ; tout le reste de la partie (compte, carrière, relations, vie privée,
- * positions, progression…) est conservé à l'identique.
+ * Version minimale pour le « code de carrière » (code court) : on ne garde que ce qui ne peut pas être reconstruit.
+ * - cours : prix et clôture veille (6 chiffres significatifs) ; les titres suivis ou détenus gardent en plus 30 clôtures journalières ;
+ *   le reste (historique ancien, intraday, ouverture/haut/bas du jour) est perdu et se reconstitue au fil des séances ;
+ * - définitions d'instruments identiques au catalogue : non écrites, reconstruites au chargement.
+ * Tout le reste de la partie (compte, carrière, relations, vie privée, positions, progression…) est conservé à l'identique.
  */
-export function serializeCompact(s: GameState, keepDaily = 150, keepIntraday = 100, keepLite = 40) {
-  const lite = { ...s, quotes: Object.fromEntries(Object.entries(s.quotes).map(([k, q]) => {
-    const marginal = s.instruments[k]?.lite && !s.watchlist.includes(k) && !Object.values(s.accounts).some((a) => a.positions[k]);
-    return [k, { ...q, daily: q.daily.slice(marginal ? -keepLite : -keepDaily), intraday: marginal ? q.intraday : q.intraday.slice(-keepIntraday) }];
-  })) } as GameState;
-  return serialize(lite);
+const MINI_KEEP = 30;
+export function serializeCompact(s: GameState) {
+  const catalog = Object.fromEntries(buildCatalog().defs.map((d) => [d.id, JSON.stringify(d)]));
+  const quotes: Record<string, unknown> = {};
+  for (const [k, q] of Object.entries(s.quotes)) {
+    const key = s.watchlist.includes(k) || Object.values(s.accounts).some((a) => a.positions[k]);
+    // Titre ni suivi ni détenu : seul le prix compte (un simple nombre) ; les autres champs repartent de ce prix
+    if (!key) { quotes[k] = Number(q.price.toPrecision(5)); continue; }
+    quotes[k] = { price: p6(q.price), prevClose: p6(q.prevClose), rv: p6(q.rv), ivBump: p6(q.ivBump), stress: p6(q.stress), daily: packLite(q.daily.slice(-MINI_KEEP)) };
+  }
+  const instruments: Record<string, unknown> = {};
+  for (const [k, d] of Object.entries(s.instruments)) {
+    if (catalog[k] === JSON.stringify(d)) continue;
+    // Paniers du catalogue : seules les pondérations (calculées à la création) changent → on n'écrit qu'elles
+    if (catalog[k] && d.basket) {
+      const ref = JSON.parse(catalog[k]) as InstrumentDef;
+      if (ref.basket && ref.basket.length === d.basket.length && JSON.stringify({ ...ref, basket: ref.basket.map((m) => m.id) }) === JSON.stringify({ ...d, basket: d.basket.map((m) => m.id) })) { instruments[k] = { __w: d.basket.map((m) => Number(m.w.toPrecision(6))) }; continue; }
+    }
+    instruments[k] = d;
+  }
+  // Agenda : les événements déjà passés depuis plus de 2 jours ne servent plus
+  const today = Math.floor(s.t / 1440);
+  return JSON.stringify({ ...s, quotes, instruments, calendar: s.calendar.filter((e) => e.day >= today - 2), catalogFill: true });
 }
+const p6 = (x: number) => (x ? Number(x.toPrecision(6)) : 0);
 export function deserialize(txt: string): GameState {
-  const raw = JSON.parse(txt) as GameState & { liteFromCatalog?: boolean };
+  const raw = JSON.parse(txt) as GameState & { liteFromCatalog?: boolean; catalogFill?: boolean };
   if (raw.liteFromCatalog) {
     for (const d of buildCatalog().defs) if (d.lite && raw.quotes[d.id] && !raw.instruments[d.id]) raw.instruments[d.id] = d;
     delete raw.liteFromCatalog;
+  }
+  if (raw.catalogFill) {
+    for (const d of buildCatalog().defs) {
+      const cur = raw.instruments[d.id] as unknown as { __w?: number[] } | undefined;
+      if (!raw.quotes[d.id]) continue;
+      if (!cur) raw.instruments[d.id] = d;
+      else if (cur.__w && d.basket) { d.basket.forEach((m, i) => { m.w = cur.__w![i]; }); raw.instruments[d.id] = d; }
+    }
+    for (const [k, q] of Object.entries(raw.quotes)) {
+      const price = typeof q === "number" ? q : (q as { price: number }).price;
+      raw.quotes[k] = { price, prevClose: price, dayOpen: price, dayHigh: price, dayLow: price, dayVolume: 0, ivBump: 0, stress: 0, pending: 0, rv: 0, lastBarDay: -1, intraday: [], ...(typeof q === "number" ? { daily: [] } : (q as object)) } as unknown as typeof raw.quotes[string];
+    }
+    delete raw.catalogFill;
   }
   for (const q of Object.values(raw.quotes)) {
     const dl = q.daily as unknown as { lc?: number[] } | number[];

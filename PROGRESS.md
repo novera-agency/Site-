@@ -150,4 +150,5 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 
 ## Code de carrière
 - ✅ Paramètres, Sauvegardes et accueil : génération d'un code (gzip + base64 url-safe + somme de contrôle `FE1.<crc>.<données>`), copie / fichier .txt, reprise sur un autre appareil ou une autre session ; erreurs explicites (code tronqué, modifié, autre version) ; tests unitaires (aller-retour, tolérance aux retours à la ligne, altération) et test Playwright à deux navigateurs.
-- ⚠️ Un code ≈ 0,8 à 1,5 Mo de texte (l'état complet de 1 200 titres) : il se colle, il ne se tape pas à la main.
+- Code « court » : cours réduits au prix (historique conservé seulement pour les titres suivis/détenus, 30 clôtures), définitions d'instruments reconstruites depuis le catalogue ; ≈ 50 000 caractères mesurés après 20 jours (≈ 16× moins qu'avant).
+- ⚠️ Un code de quelques dizaines de caractères est impossible sans serveur : il se colle, il ne se tape pas à la main.
