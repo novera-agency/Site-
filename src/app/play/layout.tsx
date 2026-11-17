@@ -1,2 +1,3 @@
 import { Shell } from "@/components/Shell";
-export default function PlayLayout({ children }: { children: React.ReactNode }) { return <Shell>{children}</Shell>; }
+import { CloudSync } from "@/components/CloudSync";
+export default function PlayLayout({ children }: { children: React.ReactNode }) { return <Shell><CloudSync />{children}</Shell>; }
