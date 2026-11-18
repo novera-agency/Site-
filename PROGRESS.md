@@ -154,3 +154,5 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 - ⚠️ Un code de quelques dizaines de caractères est impossible sans serveur : il se colle, il ne se tape pas à la main.
 
 - Code de carrière court en base (Supabase) : `src/lib/career-cloud.ts`, `src/components/CloudSync.tsx`, `supabase/careers.sql` ; tests unitaires avec base simulée. Non vérifié contre une vraie base (aucun identifiant fourni) ni en navigateur.
+
+- Introduction cinématographique AAA (nouvelle partie) : scène 3D dédiée réutilisant le hall et le personnage du jeu ; rue, tours de verre, voitures, passants, portes automatiques, caméra à plans successifs avec inertie, étalonnage, son synthétisé. Yeux du personnage refaits (le modèle d'origine les avait tout blancs). Vérifié par captures en navigateur à 9 instants clés (qualité faible et moyenne, rendu logiciel) et par test Playwright ; NON mesuré : fluidité sur mobile/GPU réels, rendu en qualité « haute » (reflets du sol), mixage sonore à l'oreille (aucune écoute possible ici), synchro audio/images sur appareil lent.

@@ -106,7 +106,7 @@ export interface BankWorld {
   receptionist: THREE.Vector3;
 }
 
-export function buildBank(scene: THREE.Scene, opts: { reflect?: boolean } = {}): BankWorld {
+export function buildBank(scene: THREE.Scene, opts: { reflect?: boolean; /** false : pas de tours alentour (l'introduction a les siennes) */ towers?: boolean } = {}): BankWorld {
   const group = new THREE.Group(); scene.add(group);
   const disposables: { dispose(): void }[] = [];
   const reg = <T extends { dispose(): void }>(x: T) => { disposables.push(x); return x; };
@@ -258,8 +258,8 @@ export function buildBank(scene: THREE.Scene, opts: { reflect?: boolean } = {}):
   // tours alentour (silhouette urbaine, fenêtres éclairées)
   const tTex = reg(towerTexture());
   const tMat = (rx: number, ry: number) => { const t = tTex.clone(); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); t.needsUpdate = true; return reg(new THREE.MeshStandardMaterial({ map: t, emissiveMap: t, emissive: "#ffffff", emissiveIntensity: 0.55, roughness: 0.6 })); };
-  box(W + 10, 54, 18, tMat(6, 4), 0, 27, -20, group);           // tour de la banque
-  for (let i = 0; i < 26; i++) {
+  if (opts.towers !== false) box(W + 10, 54, 18, tMat(6, 4), 0, 27, -20, group);           // tour de la banque
+  if (opts.towers !== false) for (let i = 0; i < 26; i++) {
     const side = i % 2 ? 1 : -1, hh = 24 + rnd() * 60, ww = 8 + rnd() * 10, z = HALL.zFront - 24 + Math.floor(i / 2) * 11 + rnd() * 5, x = side * (30 + rnd() * 26);
     box(ww, hh, ww, tMat(Math.max(1, Math.round(ww / 3)), Math.max(1, Math.round(hh / 8))), x, hh / 2, z, group);
   }

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
-import { type Avatar, SKINS, HAIR_COLORS, SUITS, SHIRTS, TIES, GLASSES, WATCHES } from "@/engine/avatar";
+import { type Avatar, SKINS, HAIR_COLORS, SUITS, SHIRTS, TIES, GLASSES, WATCHES, EYES } from "@/engine/avatar";
 import type { CharacterRig } from "./rig";
 
 /**
@@ -130,13 +130,24 @@ export function dressCharacter(model: THREE.Object3D, rig: CharacterRig, a: Avat
   const skinMat = skinMats[0];
   const lidMat = reg(new THREE.MeshStandardMaterial({ color: new THREE.Color(skinHex).multiplyScalar(0.93), roughness: 0.6 }));
   const eyeMeshes: THREE.Mesh[] = []; model.traverse((o) => { if ((o.name === "EyeLeft" || o.name === "EyeRight") && (o as THREE.Mesh).isMesh) eyeMeshes.push(o as THREE.Mesh); });
+  // le modèle d'origine a des yeux tout blancs (texture d'iris inutilisable) : on les remplace par un globe, une cornée et un iris peints à la couleur choisie
+  const irisTex = eyeMeshes.length ? reg(irisTexture(EYES[a.eyes]?.color ?? "#4a2d1a")) : null;
+  const scleraMat = reg(new THREE.MeshStandardMaterial({ color: "#efe9e1", roughness: 0.32, metalness: 0 }));
+  const irisMat = irisTex ? reg(new THREE.MeshStandardMaterial({ map: irisTex, roughness: 0.1, metalness: 0 })) : null;
   for (const em of eyeMeshes) {
     em.geometry.computeBoundingSphere(); const bs = em.geometry.boundingSphere!;
     const bone = em.name === "EyeLeft" ? eyeL : eyeR; if (!bone || !skinMat) continue;
     const eg = aligned(bone, em.name); model.updateMatrixWorld(true);
     const pivot = new THREE.Group(); pivot.position.copy(eg.worldToLocal(em.localToWorld(bs.center.clone()))); eg.add(pivot);
+    if (irisMat) {
+      em.visible = false;
+      const ball = new THREE.Group(); ball.position.copy(pivot.position); ball.scale.setScalar(0.86); eg.add(ball);
+      const sc = new THREE.Mesh(geom(new THREE.SphereGeometry(bs.radius * 0.97, 28, 20)), scleraMat); sc.castShadow = false; ball.add(sc);
+      const capGeo = geom(new THREE.SphereGeometry(bs.radius * 1.003, 28, 10, 0, Math.PI * 2, 0, 0.5)); capGeo.rotateX(Math.PI / 2);
+      const cap = new THREE.Mesh(capGeo, irisMat); cap.castShadow = false; ball.add(cap);
+    }
     const lid = new THREE.Mesh(geom(new THREE.SphereGeometry(bs.radius * 1.04, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.42)), lidMat); lid.scale.set(1, 0.85, 0.8);
-    lid.rotation.x = Math.PI / 2; lid.castShadow = false; pivot.add(lid); pivot.rotation.x = -1.2; pivot.userData.open = -1.2;
+    lid.rotation.x = Math.PI / 2; lid.castShadow = false; pivot.add(lid); pivot.rotation.x = -0.92; pivot.userData.open = -0.92;
     lids.push({ pivot });
   }
 
@@ -301,4 +312,21 @@ function buildHair(model: THREE.Object3D, rig: CharacterRig, headG: THREE.Object
   const sg = new THREE.BufferGeometry(); sg.setAttribute("position", new THREE.Float32BufferAttribute(sp, 3)); sg.setAttribute("color", new THREE.Float32BufferAttribute(sc, 3)); sg.setIndex(si); sg.computeVertexNormals(); reg(sg);
   const sm = new THREE.Mesh(sg, hairM); sm.castShadow = true; group.add(sm);
   void RoundedBoxGeometry;
+}
+
+/** Iris en coordonnées polaires (u = angle, v = distance au centre) : pupille, fibres, anneau limbique sombre */
+function irisTexture(hex: string) {
+  const W = 256, H = 96, data = new Uint8Array(W * H * 4);
+  const col = new THREE.Color(hex), light = col.clone().lerp(new THREE.Color("#ffffff"), 0.3), dark = col.clone().multiplyScalar(0.4), c = new THREE.Color();
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const ang = (x / W) * Math.PI * 2, r = y / (H - 1);
+    const fib = 0.5 + 0.5 * Math.sin(ang * 41 + r * 5) * Math.sin(ang * 17 - r * 9);
+    if (r < 0.36) c.set("#060505");
+    else if (r < 0.62) c.copy(light).lerp(col, (r - 0.36) / 0.26).multiplyScalar(0.82 + fib * 0.3);
+    else c.copy(col).lerp(dark, Math.min(1, (r - 0.62) / 0.38) ** 1.6).multiplyScalar(0.85 + fib * 0.2);
+    if (r > 0.34 && r < 0.4) c.lerp(new THREE.Color("#060505"), 1 - Math.abs(r - 0.37) / 0.03);
+    c.convertLinearToSRGB();
+    const i = (y * W + x) * 4; data[i] = Math.round(c.r * 255); data[i + 1] = Math.round(c.g * 255); data[i + 2] = Math.round(c.b * 255); data[i + 3] = 255;
+  }
+  const tex = new THREE.DataTexture(data, W, H, THREE.RGBAFormat); tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = THREE.RepeatWrapping; tex.magFilter = THREE.LinearFilter; tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true; return tex;
 }
