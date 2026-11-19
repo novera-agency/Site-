@@ -30,7 +30,7 @@ export function IntroCinematic({ avatar, firstName, bankName, rankTitle, onDone,
         if (dead || !canvas.current) return;
         const s = new IntroSequence({
           canvas: canvas.current, avatar, muted: mutedRef.current,
-          onFrame: (tt) => { if (tt - lastSet.current > 0.05 || tt < lastSet.current) { lastSet.current = tt; setT(tt); } },
+          onFrame: (tt) => { if (tt - lastSet.current > 0.12 || tt < lastSet.current) { lastSet.current = tt; setT(tt); } },
           onEnd: () => { setEnding(true); setTimeout(() => cbs.current.onDone(), 650); },
         });
         seq.current = s; s.preview();

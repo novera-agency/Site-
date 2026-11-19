@@ -37,7 +37,7 @@ const mixV = (a: V3, b: V3, k: number) => a.clone().lerp(b, k);
 function pickQuality(): "high" | "medium" | "low" {
   try { const q = new URLSearchParams(window.location.search).get("q") ?? localStorage.getItem("fe_q"); if (q === "high" || q === "medium" || q === "low") return q; } catch { /* */ }
   if (navigator.webdriver) return "low";
-  if (/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)) return "medium";
+  if (/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)) return "low"; // téléphone : pas de post-traitement, résolution native, peu de lumières
   return "high";
 }
 function canvasTex(w: number, h: number, draw: (c: CanvasRenderingContext2D) => void, repeat?: [number, number], srgb = true) {
@@ -141,6 +141,8 @@ export class IntroSequence {
     // le hall et sa façade : exactement ceux du jeu (mêmes matériaux, même ascenseurs)
     this.bank = buildBank(this.scene, { reflect: q === "high", towers: false });
     this.bank.group.traverse((ob) => { const m = ob as THREE.Mesh; const p = (m.geometry as THREE.PlaneGeometry | undefined)?.parameters; if (m.isMesh && p?.width === 200 && p?.height === 120) m.visible = false; }); // fosse noir du hall : remplacé par le grand sol
+    // chaque lampe dynamique alourdit TOUS les pixels : on ne garde que le lustre (et 4 lampadaires en qualité haute), les ampoules restent lumineuses
+    let kept = 0; this.bank.group.traverse((ob) => { const l = ob as THREE.PointLight; if (l.isPointLight && l.intensity === 9) { if (q === "high" && kept++ < 4) return; l.visible = false; } });
     this.buildCity(); this.buildFacade(); this.buildStreet();
     this.hero = new RigSlot(o.avatar); this.scene.add(this.hero.root);
     this.buildCrowd();
@@ -200,7 +202,7 @@ export class IntroSequence {
     const brass = new THREE.MeshStandardMaterial({ color: "#b99a52", roughness: 0.3, metalness: 0.9 });
     for (const x of [-15.6, -2.8, 2.8, 15.6]) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.18, 9.2, 0.12), brass); m.position.set(x, 4.6, z + 0.04); g.add(m); }
     // éclairage d'accueil de l'entrée : deux projecteurs encastrés sur le perron
-    for (const x of [-3.6, 3.6]) { const s = new THREE.SpotLight("#ffe2b0", 60, 18, 0.5, 0.6, 1.4); s.position.set(x, 8.4, HALL.zFront + 3); s.target.position.set(x * 0.4, 0, HALL.zFront + 6); g.add(s, s.target); }
+    if (q === "high") for (const x of [-3.6, 3.6]) { const s = new THREE.SpotLight("#ffe2b0", 60, 18, 0.5, 0.6, 1.4); s.position.set(x, 8.4, HALL.zFront + 3); s.target.position.set(x * 0.4, 0, HALL.zFront + 6); g.add(s, s.target); }
   }
   private buildStreet() {
     const q = this.quality;
@@ -251,12 +253,12 @@ export class IntroSequence {
     // dehors : un couple qui discute devant l'entrée, des passants qui arrivent ou repartent, quelqu'un qui traverse la rue
     still(0, -9.4, 19.6, Math.PI / 2); still(1, -8.1, 19.5, -Math.PI / 2);
     add(2, v3(-16, 0, 38), v3(-16, 0, 13), 1.1, 3, 0);
-    if (q !== "low") { add(3, v3(15.5, 0, 14), v3(15.5, 0, 40), 1.2, 4, 7); add(4, v3(-30, 0, 55), v3(30, 0, 55), 1.3, 6, 2); still(5, 6.6, 24, -2.2); }
+    if (q === "high") { add(3, v3(15.5, 0, 14), v3(15.5, 0, 40), 1.2, 4, 7); add(4, v3(-30, 0, 55), v3(30, 0, 55), 1.3, 6, 2); still(5, 6.6, 24, -2.2); }
     // dedans : accueil, deux collègues qui discutent, deux qui circulent
     const rec = this.bank.receptionist; still(4, rec.x, rec.z, Math.PI);
     still(1, 6.6, 5.8, Math.PI / 2); still(3, 7.8, 5.5, -Math.PI / 2);
     add(2, v3(-14.6, 0, -4.5), v3(-14.6, 0, 5.5), 1.0, 2, 0);
-    if (q !== "low") { add(0, v3(8.6, 0, 6.2), v3(9, 0, -6.4), 1.15, 5, 31); add(5, v3(-8, 0, -6.4), v3(-5.2, 0, 4.8), 1.05, 4, 35); }
+    if (q === "high") { add(0, v3(8.6, 0, 6.2), v3(9, 0, -6.4), 1.15, 5, 31); add(5, v3(-8, 0, -6.4), v3(-5.2, 0, 4.8), 1.05, 4, 35); }
   }
 
   /* ───────── mise en scène ───────── */
@@ -304,7 +306,7 @@ export class IntroSequence {
   /* ───────── post-traitement ───────── */
   private initComposer() {
     const c = this.o.canvas, w = c.clientWidth || 800, h = c.clientHeight || 450;
-    const rt = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: this.quality === "high" ? 4 : 2 });
+    const rt = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: this.quality === "high" ? 2 : 0 });
     this.composer = new EffectComposer(this.renderer, rt);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.22, 0.55, 0.9));
@@ -331,14 +333,14 @@ export class IntroSequence {
   /* ───────── commandes ───────── */
   /** Le personnage est-il chargé ? (sinon l'avatar de secours est affiché) */
   get qualityNow() { return `${this.quality}${this.composer ? "+post" : ""}${this.scene.environment ? "+env" : ""}`; }
-  get heroReady() { return !!this.hero.character; }
+  get heroReady() { return !!this.hero.character && this.walkers.every((w) => !!w.rig.character); }
   start() {
     if (this.playing) return; this.playing = true; this.last = performance.now();
     this.audio.start(this.muted); this.audio.setSection("intro");
     cancelAnimationFrame(this.raf); this.raf = requestAnimationFrame(this.tick);
   }
   /** Rendu de l'image fixe avant le départ (écran de chargement) */
-  preview() { if (!this.playing) { this.update(0); this.draw(0.016); } }
+  preview() { if (!this.playing) { this.update(0); try { this.renderer.compile(this.scene, this.camera); } catch { /* */ } this.draw(0.016); } }
   setMuted(m: boolean) { this.muted = m; this.audio.setMuted(m); }
   seek(t: number) { this.t = Math.max(0, Math.min(INTRO_DURATION, t)); this.shotIdx = -1; this.heroAt(this.t - 0.03, this.lastHeroPos); this.update(0.03); this.draw(0.03); }
   skip() { if (!this.ended) { this.ended = true; this.audio.fadeOut(0.6); this.o.onEnd?.(); } }
@@ -444,14 +446,21 @@ export class IntroSequence {
     // plan serré sur un téléphone en portrait : on rétrécit le champ horizontal pour garder le sujet à l'écran
     if (this.camera.aspect < 0.9) { const f = Math.min(1.5, 0.9 / this.camera.aspect); const fv = Math.min(70, this.camFov * f); if (Math.abs(this.camera.fov - fv) > 0.01) { this.camera.fov = fv; this.camera.updateProjectionMatrix(); } }
   }
-  /** Mesure la fluidité : allège le rendu si l'appareil peine */
+  /** Mesure la fluidité et allège le rendu par paliers tant que l'appareil peine (sous ~30 images/s) */
+  private adaptN = 0; private adaptSum = 0; private adaptOk = 0;
   private adapt(dt: number) {
-    if (this.frames >= 90 || !this.playing || this.debug) return;
-    this.frames++; if (this.frames > 10) this.frameSum += dt;
-    if (this.frames === 40 || this.frames === 90) {
-      const avg = this.frameSum / Math.max(1, this.frames - 10);
-      if (avg > 0.045 && this.quality === "high") { this.quality = "medium"; this.bank.disableMirror(); this.renderer.setPixelRatio(1.1); this.resize(); this.frameSum = 0; this.frames = 41; }
-      else if (avg > 0.07 && this.quality !== "low") { this.quality = "low"; this.bank.disableMirror(); this.composer = undefined; this.grade = undefined; this.renderer.setPixelRatio(1); this.resize(); this.frames = 90; }
+    if (!this.playing || this.debug || this.quality === "low" && !this.composer || this.adaptOk >= 4) return;
+    if (++this.adaptN <= 20) return; // on ignore le démarrage (compilation des shaders, chargement)
+    this.adaptSum += dt;
+    if (this.adaptN - 20 < 25) return;
+    const avg = this.adaptSum / 25; this.adaptSum = 0; this.adaptN = 20;
+    if (avg <= 0.03) { this.adaptOk++; return; }
+    this.adaptOk = 0;
+    if (this.quality === "high") {
+      this.quality = "medium"; this.bank.disableMirror(); this.renderer.setPixelRatio(1);
+      this.sun.shadow.map?.dispose(); this.sun.shadow.map = null; this.sun.shadow.mapSize.set(1024, 1024); this.resize();
+    } else if (this.quality === "medium") {
+      this.quality = "low"; this.composer?.dispose(); this.composer = undefined; this.grade = undefined; this.renderer.setPixelRatio(1); this.resize();
     }
   }
 }
