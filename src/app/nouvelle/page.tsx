@@ -65,7 +65,7 @@ function Wizard() {
     let mps = 1; try { mps = Number(localStorage.getItem("fe_mps") || 1); } catch { /* */ }
     const r = await api<{ ok: boolean; gameId?: string; error?: string }>("/api/game/new", { mode, difficulty, bankId: mode === "carriere" ? bankId : "lutece", track: mode === "carriere" ? track : "trader", startingCapital: mode === "defi" ? 10000 : capital, profile: { ...p, avatar }, seed: seed || undefined, challengeId: mode === "defi" ? challenge : undefined, minutesPerSecond: mps, historical: mode !== "defi" && historical });
     if (!r.ok || !r.gameId) { setErr(r.error ?? "Création impossible"); setBusy(false); return; }
-    try { localStorage.setItem("fe_game", r.gameId); localStorage.setItem("fe_intro_new", r.gameId); } catch { /* */ } // l'introduction cinématographique se joue à l'arrivée
+    try { localStorage.setItem("fe_game", r.gameId); } catch { /* */ }
     router.push("/play");
   };
   return (

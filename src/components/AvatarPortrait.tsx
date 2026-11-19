@@ -1,6 +1,6 @@
 import { type Avatar, SKINS, HAIR_COLORS, SUITS, SHIRTS, TIES, EYES, GLASSES } from "@/engine/avatar";
 
-/** Portrait 2D de l'avatar du joueur (buste), cohérent avec le personnage 3D : utilisé dans les menus, réunions et messages */
+/** Portrait 2D de l'avatar du joueur (buste) : utilisé dans les menus, réunions et messages */
 export function AvatarPortrait({ avatar, size = 40, title }: { avatar: Avatar; size?: number; title?: string }) {
   const skin = SKINS[avatar.skin].color!, hair = HAIR_COLORS[avatar.hairColor].color!, suit = SUITS[avatar.suit].color!, shirt = SHIRTS[avatar.shirt].color!, eye = EYES[avatar.eyes].color!;
   const tie = TIES[avatar.tie], gl = GLASSES[avatar.glasses];

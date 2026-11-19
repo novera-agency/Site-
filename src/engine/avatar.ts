@@ -1,6 +1,6 @@
 /**
  * Avatar du joueur : un homme en costume parfaitement ajusté, entièrement personnalisable.
- * Les choix sont de simples indices (sérialisables, validés côté serveur) ; le rendu 3D les interprète (src/lib/three).
+ * Les choix sont de simples indices (sérialisables, validés côté serveur)  ; le portrait 2D les interprète (AvatarPortrait).
  * Certains costumes et accessoires se débloquent avec le grade.
  */
 export interface Avatar {
@@ -94,10 +94,3 @@ export function clampToRank(a: Avatar, rank: number): Avatar {
   return r;
 }
 
-/** Le modèle 3D gère une seule base de visage et trois familles de coiffure : ramène les anciens choix à une valeur prise en charge */
-export function normalizeForModel(a: Avatar): Avatar {
-  const r = { ...a };
-  if (![0, 1, 3, 5].includes(r.hair)) r.hair = r.hair === 6 || r.hair === 2 || r.hair === 4 ? 3 : 3;
-  if (r.beard !== 0 && r.beard !== 3) r.beard = 0;
-  return r;
-}
