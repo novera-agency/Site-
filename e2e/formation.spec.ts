@@ -32,7 +32,7 @@ test("séance de formation avec le N+1 : questions, corrections, bilan, carnet",
   await room.getByTestId("mode-ecrit").click();
   const log = room.getByTestId("meeting-log");
   await expect(log).toContainText("vous restez tard");
-  await expect(log).toContainText("Reprenons la notion");
+  await expect(log).toContainText("Un petit calcul");
   // Accessibilité de la réunion
   const ax = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(ax.violations.map((v) => `${v.id} ×${v.nodes.length}`)).toEqual([]);

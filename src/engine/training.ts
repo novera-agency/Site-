@@ -104,9 +104,9 @@ export function startTraining(s: GameState, hours: number, subject: SkillBranch 
   const used = new Set<string>();
   const items: TItem[] = [];
   const quizPool = QUIZ_BANK.filter((q) => (QUIZ_CATS[branch] ?? []).includes(q.cat)).map((q) => q.id);
-  // 2 à 5 questions : 1 h → 2 questions … 4 h → 5 questions, selon le schéma leçon, définition, calcul, leçon, définition
+  // 2 à 5 questions : 1 h → 2 questions … 4 h → 5 questions, selon le schéma calcul, leçon, définition, calcul, calcul : la pratique (calculs chiffrés et exercices) passe avant la théorie
   const count = Math.max(MIN_Q, Math.min(MAX_Q, hours + 1));
-  const PATTERN: ("lesson" | "def" | "calc")[] = ["lesson", "def", "calc", "lesson", "def"];
+  const PATTERN: ("lesson" | "def" | "calc")[] = ["calc", "lesson", "def", "calc", "calc"];
   for (let h = 0; h < count; h++) {
     const kind = PATTERN[h];
     if (kind === "lesson") {
