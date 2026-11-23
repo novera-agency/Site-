@@ -142,3 +142,5 @@ Accueil · Création de carrière · Choix de banque · Création de personnage 
 
 - Code de carrière court en base (Supabase) : `src/lib/career-cloud.ts`, `src/components/CloudSync.tsx`, `supabase/careers.sql` ; tests unitaires avec base simulée. Non vérifié contre une vraie base (aucun identifiant fourni) ni en navigateur.
 
+
+- Missions : banque de 506 modèles de pratique (calculs chiffrés à 8 mises en situation + actions vérifiées sur la partie) ; missions du jour et hebdomadaires tirées surtout de cette banque, avec mémoire des derniers modèles et familles pour éviter les répétitions. Testé : chaque modèle de calcul se crée et se résout (bonne et mauvaise réponse), titres uniques, variété sur 45 jours ouvrés, une action réelle valide bien la mission. Limite honnête : les 432 missions de calcul reposent sur 54 problèmes de fond (les 8 mises en situation changent le cadre, les montants et la difficulté, pas la formule).

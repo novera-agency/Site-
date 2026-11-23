@@ -8,6 +8,7 @@ import { changeRep, changeTrust, gainXp, nextId, notify, careerLog } from "./cor
 import { equityWeight, suitableEquityBand } from "./clients";
 import { dayIndex, MIN_PER_DAY, fmtShortDate } from "./time";
 import { quizState, quizById, QUIZ_BANK } from "./quiz";
+import { BANK, BANK_CALC, BANK_ACTION, bankGiver } from "./missionBank";
 
 interface Tpl {
   id: string; category: Mission["category"]; xp: number; rep: Partial<Record<RepKey, number>>; days: number;
@@ -16,6 +17,8 @@ interface Tpl {
   check: (s: GameState, m: Mission) => number;
   quiz?: (s: GameState, m: Mission) => { answer: number; tolerance: number; unit: string; question: string; explain: string };
   choiceQuiz?: (s: GameState, m: Mission) => { question: string; options: string[]; correct: number; explain: string };
+  /** Mode d'emploi propre au modèle (banque de missions) */
+  guide?: (s: GameState, m: Mission) => { steps: string[]; link: string; linkLabel: string; tip?: string };
 }
 
 const pctTxt = (x: number) => `${(x * 100).toFixed(0)} %`;
@@ -156,6 +159,7 @@ const DAILY: Tpl[] = [
     check: () => 0, quiz: (_s, m) => { const a = Number(m.params.cap) * Math.pow(1 + Number(m.params.rate) / 100, Number(m.params.years)); return { answer: Math.round(a), tolerance: a * 0.01, unit: "€", question: `${Number(m.params.cap).toLocaleString("fr-FR")} € à ${m.params.rate} % pendant ${m.params.years} ans (intérêts composés) ?`, explain: `${Number(m.params.cap).toLocaleString("fr-FR")} × (1 + ${m.params.rate} %)^${m.params.years} = ${Math.round(a).toLocaleString("fr-FR")} €.` }; } },
 ];
 for (const t of DAILY) TEMPLATES.push(t);
+for (const t of BANK) TEMPLATES.push(t);
 const BY_ID = Object.fromEntries(TEMPLATES.map((t) => [t.id, t]));
 export const DAILY_IDS = DAILY.map((t) => t.id);
 export function missionTemplate(id: string) { return BY_ID[id]; }
@@ -188,6 +192,8 @@ const TIPS: Record<string, string> = {
   encours_societe: "Le marketing et un commercial de plus font grimper l'encours, mais surveillez la trésorerie.",
 };
 export function missionGuide(s: GameState, m: Mission): MissionGuide {
+  const own = BY_ID[m.templateId]?.guide;
+  if (own) return own(s, m);
   return { ...guideSteps(s, m), tip: TIPS[m.templateId] };
 }
 function guideSteps(s: GameState, m: Mission): MissionGuide {
@@ -335,6 +341,7 @@ export function drawStakes(s: GameState, rng: Rng): 1 | 2 | 3 {
   return u < pHigh ? 3 : u < pHigh + pLow ? 1 : 2;
 }
 /** Chaque jour ouvré : au moins deux nouvelles missions, différentes de la veille */
+const QUICK_FAM = new Set((["classe_achat", "ordre", "taille", "veille", "alertes", "secteur", "zone"]));
 export function assignDailyMissions(s: GameState, rng: Rng) {
   if (!s.career.employed || s.mode !== "carriere") return;
   const day = dayIndex(s.t);
@@ -342,16 +349,28 @@ export function assignDailyMissions(s: GameState, rng: Rng) {
   if ((s.flags["vacationUntil"] && s.t < (s.flags["vacationUntil"] as number)) || s.flags["burnoutUntil"]) return; // pas de missions en congés ou en arrêt
   const yesterday = String(s.flags["dailyLast"] ?? "").split(",");
   const n = 2 + (s.career.rank >= 3 || appreciation(s) >= 70 ? 1 : 0);
-  const pool = DAILY.filter((t) => !yesterday.includes(t.id));
   const deadlineT = day * MIN_PER_DAY + 18 * 60 + 30;
   const made: string[] = [];
-  for (const t of pickN(rng, pool, pool.length)) {
-    if (made.length >= n) break;
+  const recent = String(s.flags["recentTpl"] ?? "").split(",").filter(Boolean), recentFam = String(s.flags["recentFam"] ?? "").split(",").filter(Boolean);
+  const famToday = new Set<string>();
+  for (let slot = 0; slot < n * 4 && made.length < n; slot++) {
+    // la pratique d'abord : 88 % de missions tirées d'une banque de plus de 500 modèles (calculs chiffrés, actions à mener sur la partie)
+    const u = rng.next();
+    let t: Tpl | undefined;
+    if (u < 0.12) t = rng.pick(DAILY.filter((x) => !yesterday.includes(x.id)));
+    else {
+      const pool = (u < 0.8 ? BANK_CALC : BANK_ACTION.filter((x) => QUICK_FAM.has(x.family))).filter((x) => !recent.includes(x.id) && !recentFam.slice(-12).includes(x.family) && !famToday.has(x.family));
+      t = pool.length ? rng.pick(pool) : undefined;
+    }
+    if (!t) continue;
     const st = drawStakes(s, rng);
-    const giver = st === 3 ? "director" : st === 2 ? "boss" : rng.pick(["senior", "risk", "boss"]);
-    const m = createMission(s, t.id, { k: st }, giver, { daily: true, stakes: st, deadlineT, quiet: true });
-    if (m) made.push(t.id);
+    const bank = BANK.find((x) => x.id === t!.id);
+    const giver = st === 3 ? "director" : st === 2 ? "boss" : (bank && bankGiver(bank) && st > 1 ? bankGiver(bank)! : rng.pick(["senior", "risk", "boss"]));
+    const m = createMission(s, t.id, { k: st }, s.npcs[giver] ? giver : "boss", { daily: true, stakes: st, deadlineT, quiet: true });
+    if (m) { made.push(t.id); if (bank) { famToday.add(bank.family); recent.push(t.id); recentFam.push(bank.family); } }
   }
+  s.flags["recentTpl"] = recent.slice(-150).join(",");
+  s.flags["recentFam"] = recentFam.slice(-30).join(",");
   s.flags["dailyLast"] = made.join(",");
   if (made.length) notify(s, "info", `${made.length} missions pour aujourd'hui`, "Elles sont à terminer avant 18 h 30. Les missions à fort enjeu rapportent beaucoup… et coûtent cher en cas d'échec.", "/play/missions");
 }
@@ -372,6 +391,14 @@ export function assignWeeklyMissions(s: GameState, rng: Rng) {
     entrepreneur: ["satisfaction_client", "battre_benchmark", "creer_societe", "diversifier"],
   };
   const pool = byTrack[s.career.track] ?? byTrack.trader;
-  for (let i = 0; i < 2; i++) createMission(s, rng.pick(pool), {}, "boss");
+  createMission(s, rng.pick(pool), {}, "boss");
+  // + deux missions de pratique tirées de la banque (un calcul, une action sur la partie), différentes des dernières attribuées
+  const recent = String(s.flags["recentTpl"] ?? "").split(",").filter(Boolean);
+  for (const src of [BANK_CALC, BANK_ACTION]) {
+    const p2 = src.filter((x) => !recent.includes(x.id));
+    const t = p2.length ? rng.pick(p2) : undefined;
+    if (t && createMission(s, t.id, { k: 1 }, "boss")) recent.push(t.id);
+  }
+  s.flags["recentTpl"] = recent.slice(-150).join(",");
   if (rng.chance(0.4)) createMission(s, "formation", { count: 2 }, "boss");
 }

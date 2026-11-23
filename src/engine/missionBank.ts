@@ -1,0 +1,408 @@
+/**
+ * Banque de missions « pratique » : plus de 500 modèles distincts, chacun aux chiffres tirés au hasard à chaque attribution.
+ *  - 54 types de problèmes de métier (calcul chiffré ou choix commenté) × 8 mises en situation (client particulier, PME, gestion privée,
+ *    desk, fonds de pension, structuration, trésorerie, comité) = 432 missions ; chaque mise en situation change le ton, l'interlocuteur,
+ *    l'ordre de grandeur des montants et la difficulté ;
+ *  - 74 missions d'action vérifiées par le moteur sur la partie (prendre une position dans un secteur ou une zone, tenir des limites de risque,
+ *    placer un type d'ordre précis, constituer un portefeuille, collecter des fonds…).
+ * Tout est déterministe : les nombres viennent du générateur aléatoire de la partie, les réponses attendues sont recalculées depuis les paramètres de la mission.
+ */
+import type { GameState, Mission, RepKey, Sector, ZoneId, AssetClass } from "./types";
+import type { Rng } from "./rng";
+import { accountEquity, exposures, positionViews, valueAtRisk } from "./portfolio";
+import { quizState } from "./quiz";
+
+type Params = Record<string, number | string>;
+type Cat = Mission["category"];
+export interface BankTpl {
+  id: string; category: Cat; xp: number; rep: Partial<Record<RepKey, number>>; days: number;
+  /** « calc » : question chiffrée ou à choix ; « action » : vérifiée par l'état de la partie */
+  kind: "calc" | "action"; family: string;
+  make: (s: GameState, p: Params, rng: Rng) => { title: string; description: string; criteria: string[]; params: Params; baseline?: Record<string, number> } | null;
+  check: (s: GameState, m: Mission) => number;
+  quiz?: (s: GameState, m: Mission) => { answer: number; tolerance: number; unit: string; question: string; explain: string };
+  choiceQuiz?: (s: GameState, m: Mission) => { question: string; options: string[]; correct: number; explain: string };
+  guide: (s: GameState, m: Mission) => { steps: string[]; link: string; linkLabel: string; tip?: string };
+}
+
+/* ───────── outils de mise en forme ───────── */
+const f0 = (x: number) => Math.round(x).toLocaleString("fr-FR");
+const fd = (x: number, d = 2) => x.toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d });
+const eur = (x: number) => `${f0(x)} €`;
+const K = (p: Params) => Math.max(1, Number(p.k ?? 1));
+/** Montant rond tiré dans [lo, hi] × échelle, multiple de `step` (au moins `step`) */
+const amt = (r: Rng, sc: number, lo: number, hi: number, step: number) => Math.max(step, Math.round((r.range(lo, hi) * sc) / step) * step);
+const px = (r: Rng, lo: number, hi: number) => Math.round(r.range(lo, hi) * 100) / 100;
+const rel = (x: number, min = 0.01) => (a: number) => Math.max(min, Math.abs(a) * x);
+const abs = (x: number) => () => x;
+
+/* ───────── mises en situation ───────── */
+interface Ctx { label: string; sc: number; intro: string[]; giver: string }
+const CTX: Ctx[] = [
+  { label: "Client particulier", sc: 0.15, giver: "senior", intro: ["Un client retraité de votre agence vous interroge :", "Une cliente vous écrit après son rendez-vous :", "Un jeune cadre qui prépare son premier investissement demande :", "Un client fidèle appelle la banque et pose cette question :"] },
+  { label: "Dirigeant de PME", sc: 0.6, giver: "boss", intro: ["Le dirigeant d'une PME de votre portefeuille souhaite savoir :", "La directrice financière d'une entreprise cliente demande :", "Un artisan qui place sa trésorerie vous demande :", "Le patron d'un cabinet d'architectes vous interroge :"] },
+  { label: "Gestion privée", sc: 1, giver: "senior", intro: ["Une famille suivie en gestion privée vous soumet ce cas :", "Un client fortuné prépare un arbitrage et vous demande :", "Lors du comité patrimonial, on vous pose cette question :", "Une héritière veut comprendre avant de signer :"] },
+  { label: "Desk de trading", sc: 2, giver: "boss", intro: ["Le responsable du desk veut un chiffre rapide :", "Un trader vous demande un contrôle avant d'envoyer l'ordre :", "Pendant la réunion du matin, on attend de vous :", "Le middle-office vous soumet ce calcul à valider :"] },
+  { label: "Fonds de pension", sc: 10, giver: "director", intro: ["Le comité de placement d'un fonds de pension doit trancher :", "Le directeur des investissements d'une caisse de retraite demande :", "Un gestionnaire institutionnel vous sollicite :", "Pour le rapport trimestriel d'un fonds de pension, il faut établir :"] },
+  { label: "Structuration", sc: 3, giver: "senior", intro: ["L'équipe de structuration prépare une offre et a besoin de :", "Pour calibrer un produit structuré, on vous demande :", "Le structureur vous glisse ce calcul à vérifier :", "Avant le lancement d'un produit, le juridique et le front office vous demandent :"] },
+  { label: "Trésorerie d'entreprise", sc: 5, giver: "boss", intro: ["Le trésorier d'un grand groupe industriel cherche à savoir :", "La trésorerie d'une multinationale vous demande :", "Un client corporate prépare son budget et pose cette question :", "Le directeur administratif d'un groupe vous contacte :"] },
+  { label: "Comité d'investissement", sc: 4, giver: "director", intro: ["Le comité d'investissement attend votre chiffre :", "Le directeur présente un dossier au comité exécutif et vous demande :", "Un associé de la banque vous interpelle dans le couloir :", "Pour la note de décision d'aujourd'hui, il manque :"] },
+];
+
+/* ───────── 54 types de problèmes ───────── */
+interface Fam {
+  key: string; title: string; cat: Cat; xp: number; hint: string;
+  gen: (r: Rng, sc: number) => Record<string, number>;
+  ask: (p: Record<string, number>) => string;
+  unit: string;
+  ans?: (p: Record<string, number>) => number;
+  tol?: (a: number) => number;
+  explain?: (p: Record<string, number>, a: number) => string;
+  choice?: (p: Record<string, number>) => { question: string; options: string[]; correct: number; explain: string };
+}
+const P = (p: Params) => p as Record<string, number>;
+const FX = [{ c: "USD", s: "$", lo: 1.02, hi: 1.2, d: 4 }, { c: "GBP", s: "£", lo: 0.82, hi: 0.9, d: 4 }, { c: "CHF", s: "CHF", lo: 0.92, hi: 1.0, d: 4 }, { c: "JPY", s: "¥", lo: 145, hi: 170, d: 2 }];
+const NAMES = ["Alpha", "Boréal", "Cassini", "Delta", "Éolia", "Fulgor", "Granit", "Horizon", "Ibérica", "Jade"];
+const OPT = ["call", "put"];
+/** n indices distincts dans [0, len) */
+const distinct = (r: Rng, n: number, len: number) => { const a = Array.from({ length: len }, (_, i) => i); const o: number[] = []; while (o.length < n) o.push(a.splice(r.int(0, a.length - 1), 1)[0]); return o; };
+
+const FAMS: Fam[] = [
+  { key: "int_simple", title: "Intérêts simples", cat: "maths", xp: 30, hint: "Intérêts simples = capital × taux × durée.", unit: "€",
+    gen: (r, sc) => ({ C: amt(r, sc, 5, 80, 500), i: r.pick([1.5, 2, 2.5, 3, 3.5, 4]), t: r.pick([0.5, 1, 2, 3, 4]) }),
+    ask: (p) => `Un placement de ${eur(p.C)} rapporte des intérêts simples de ${fd(p.i, 1)} % par an pendant ${fd(p.t, 1)} an(s). Quel montant d'intérêts perçoit-on ?`,
+    ans: (p) => (p.C * p.i * p.t) / 100, tol: rel(0.005, 1), explain: (p, a) => `${eur(p.C)} × ${fd(p.i, 1)} % × ${fd(p.t, 1)} = ${eur(a)}.` },
+  { key: "int_compose", title: "Intérêts composés", cat: "maths", xp: 35, hint: "Capital final = C × (1 + taux)^années.", unit: "€",
+    gen: (r, sc) => ({ C: amt(r, sc, 5, 120, 500), i: r.pick([2, 2.5, 3, 3.5, 4, 5]), n: r.int(3, 12) }),
+    ask: (p) => `${eur(p.C)} sont placés à ${fd(p.i, 1)} % par an, intérêts réinvestis, pendant ${p.n} ans. Quel capital final ?`,
+    ans: (p) => p.C * Math.pow(1 + p.i / 100, p.n), tol: rel(0.005, 1), explain: (p, a) => `${eur(p.C)} × (1 + ${fd(p.i, 1)} %)^${p.n} = ${eur(a)}.` },
+  { key: "taux_equiv", title: "Taux annuel équivalent", cat: "maths", xp: 35, hint: "Taux annuel = (1 + taux mensuel)^12 − 1.", unit: "%",
+    gen: (r) => ({ m: r.pick([0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1]) }),
+    ask: (p) => `Un placement rapporte ${fd(p.m, 1)} % par mois, intérêts capitalisés chaque mois. Quel est le taux annuel équivalent ?`,
+    ans: (p) => (Math.pow(1 + p.m / 100, 12) - 1) * 100, tol: abs(0.1), explain: (p, a) => `(1 + ${fd(p.m, 1)} %)^12 − 1 = ${fd(a, 2)} %.` },
+  { key: "rend_total", title: "Rendement total d'un titre", cat: "analyse", xp: 30, hint: "Rendement total = (cours final − cours initial + dividendes) ÷ cours initial.", unit: "%",
+    gen: (r) => { const p0 = px(r, 20, 200); return { p0, p1: px(r, p0 * 0.85, p0 * 1.25), d: Math.round(p0 * r.range(0, 0.04) * 100) / 100 }; },
+    ask: (p) => `Un titre acheté ${fd(p.p0)} € vaut aujourd'hui ${fd(p.p1)} € et a versé ${fd(p.d)} € de dividende. Quel rendement total en pourcentage ?`,
+    ans: (p) => ((p.p1 - p.p0 + p.d) / p.p0) * 100, tol: abs(0.1), explain: (p, a) => `(${fd(p.p1)} − ${fd(p.p0)} + ${fd(p.d)}) ÷ ${fd(p.p0)} = ${fd(a, 2)} %.` },
+  { key: "cagr", title: "Performance annualisée", cat: "maths", xp: 40, hint: "Taux annualisé = (valeur finale ÷ valeur initiale)^(1/années) − 1.", unit: "%",
+    gen: (r, sc) => { const V0 = amt(r, sc, 10, 200, 1000); return { V0, V1: Math.round((V0 * r.range(1.1, 2.2)) / 100) * 100, n: r.int(3, 10) }; },
+    ask: (p) => `Un portefeuille est passé de ${eur(p.V0)} à ${eur(p.V1)} en ${p.n} ans. Quelle performance annualisée ?`,
+    ans: (p) => (Math.pow(p.V1 / p.V0, 1 / p.n) - 1) * 100, tol: abs(0.1), explain: (p, a) => `(${f0(p.V1)} ÷ ${f0(p.V0)})^(1/${p.n}) − 1 = ${fd(a, 2)} %.` },
+  { key: "var_enchainee", title: "Hausse puis baisse", cat: "maths", xp: 25, hint: "Les variations se multiplient : (1 + x)(1 − y) − 1.", unit: "%",
+    gen: (r) => ({ x: r.pick([10, 15, 20, 25, 30, 40]), y: r.pick([10, 15, 20, 25, 30]) }),
+    ask: (p) => `Un titre gagne ${p.x} % en janvier puis perd ${p.y} % en février. Quelle variation totale sur les deux mois ?`,
+    ans: (p) => ((1 + p.x / 100) * (1 - p.y / 100) - 1) * 100, tol: abs(0.1), explain: (p, a) => `1,${String(p.x).padStart(2, "0")} × 0,${String(100 - p.y).padStart(2, "0")} − 1 = ${fd(a, 1)} %.` },
+  { key: "pnl_long", title: "Résultat d'une position acheteuse", cat: "trading", xp: 30, hint: "P&L = quantité × (cours de vente − cours d'achat) − frais.", unit: "€",
+    gen: (r, sc) => { const p0 = px(r, 20, 150); return { q: amt(r, sc, 300, 3000, 50), p0, p1: px(r, p0 * 0.88, p0 * 1.2), f: amt(r, 1, 20, 200, 10) }; },
+    ask: (p) => `Vous avez acheté ${f0(p.q)} titres à ${fd(p.p0)} € et vous les revendez ${fd(p.p1)} €, avec ${eur(p.f)} de frais au total. Quel résultat net ?`,
+    ans: (p) => p.q * (p.p1 - p.p0) - p.f, tol: rel(0.005, 5), explain: (p, a) => `${f0(p.q)} × (${fd(p.p1)} − ${fd(p.p0)}) − ${eur(p.f)} = ${eur(a)}.` },
+  { key: "pnl_short", title: "Résultat d'une vente à découvert", cat: "trading", xp: 35, hint: "À découvert, on gagne quand le cours baisse : P&L = quantité × (cours de vente − cours de rachat).", unit: "€",
+    gen: (r, sc) => { const p0 = px(r, 20, 150); return { q: amt(r, sc, 300, 3000, 50), p0, p1: px(r, p0 * 0.8, p0 * 1.1) }; },
+    ask: (p) => `Vous avez vendu à découvert ${f0(p.q)} titres à ${fd(p.p0)} € et vous les rachetez ${fd(p.p1)} €. Quel résultat (hors frais) ?`,
+    ans: (p) => p.q * (p.p0 - p.p1), tol: rel(0.005, 5), explain: (p, a) => `${f0(p.q)} × (${fd(p.p0)} − ${fd(p.p1)}) = ${eur(a)}.` },
+  { key: "levier_perte", title: "Perte avec effet de levier", cat: "risque", xp: 35, hint: "Perte = capital × levier × baisse du sous-jacent.", unit: "€",
+    gen: (r, sc) => ({ E: amt(r, sc, 10, 200, 1000), L: r.pick([2, 3, 4, 5, 8, 10]), v: r.pick([1, 2, 3, 4, 5]) }),
+    ask: (p) => `Avec ${eur(p.E)} de capital et un levier ×${p.L}, l'actif sous-jacent baisse de ${p.v} %. Quelle perte en euros ?`,
+    ans: (p) => (p.E * p.L * p.v) / 100, tol: rel(0.005, 1), explain: (p, a) => `${eur(p.E)} × ${p.L} × ${p.v} % = ${eur(a)} (soit ${p.L * p.v} % du capital).` },
+  { key: "marge_init", title: "Marge initiale", cat: "risque", xp: 30, hint: "Marge = nominal × taux de marge.", unit: "€",
+    gen: (r, sc) => ({ N: amt(r, sc, 50, 800, 5000), m: r.pick([5, 10, 15, 20, 25]) }),
+    ask: (p) => `Un contrat à terme de ${eur(p.N)} de valeur nominale exige ${p.m} % de marge initiale. Quel dépôt de garantie ?`,
+    ans: (p) => (p.N * p.m) / 100, tol: rel(0.005, 1), explain: (p, a) => `${eur(p.N)} × ${p.m} % = ${eur(a)}.` },
+  { key: "taille_stop", title: "Taille de position et stop-loss", cat: "risque", xp: 40, hint: "Quantité = risque accepté ÷ (prix d'entrée − prix du stop).", unit: "titres",
+    gen: (r, sc) => { const e = px(r, 20, 200); return { B: amt(r, sc, 5, 60, 100), e, s: px(r, e * 0.9, e * 0.97) }; },
+    ask: (p) => `Vous acceptez de perdre au plus ${eur(p.B)} sur un trade. Entrée à ${fd(p.e)} €, stop-loss à ${fd(p.s)} €. Combien de titres au maximum ?`,
+    ans: (p) => Math.floor(p.B / (p.e - p.s)), tol: (a) => Math.max(1, a * 0.01), explain: (p, a) => `${eur(p.B)} ÷ (${fd(p.e)} − ${fd(p.s)}) ≈ ${f0(a)} titres.` },
+  { key: "ratio_rr", title: "Ratio rendement / risque d'un trade", cat: "trading", xp: 30, hint: "Ratio = gain visé ÷ perte maximale.", unit: "ratio",
+    gen: (r) => { const e = px(r, 20, 200); return { e, s: px(r, e * 0.92, e * 0.97), t: px(r, e * 1.06, e * 1.2) }; },
+    ask: (p) => `Entrée à ${fd(p.e)} €, stop à ${fd(p.s)} €, objectif à ${fd(p.t)} €. Quel ratio gain visé / perte maximale ?`,
+    ans: (p) => (p.t - p.e) / (p.e - p.s), tol: abs(0.06), explain: (p, a) => `(${fd(p.t)} − ${fd(p.e)}) ÷ (${fd(p.e)} − ${fd(p.s)}) = ${fd(a, 2)}.` },
+  { key: "pru", title: "Prix de revient moyen", cat: "trading", xp: 30, hint: "PRU = (q₁p₁ + q₂p₂) ÷ (q₁ + q₂).", unit: "€",
+    gen: (r, sc) => ({ q1: amt(r, sc, 50, 500, 10), p1: px(r, 20, 150), q2: amt(r, sc, 50, 500, 10), p2: px(r, 20, 150) }),
+    ask: (p) => `Vous détenez ${f0(p.q1)} titres achetés ${fd(p.p1)} € et vous en achetez ${f0(p.q2)} de plus à ${fd(p.p2)} €. Quel prix de revient moyen ?`,
+    ans: (p) => (p.q1 * p.p1 + p.q2 * p.p2) / (p.q1 + p.q2), tol: rel(0.002, 0.03), explain: (p, a) => `(${f0(p.q1)} × ${fd(p.p1)} + ${f0(p.q2)} × ${fd(p.p2)}) ÷ ${f0(p.q1 + p.q2)} = ${fd(a, 2)} €.` },
+  { key: "div_total", title: "Dividendes encaissés", cat: "analyse", xp: 25, hint: "Dividendes = nombre de titres × dividende par titre.", unit: "€",
+    gen: (r, sc) => ({ n: amt(r, sc, 100, 5000, 100), d: Math.round(r.range(0.3, 4) * 100) / 100 }),
+    ask: (p) => `Vous détenez ${f0(p.n)} actions qui versent ${fd(p.d)} € de dividende par action. Quel dividende total ?`,
+    ans: (p) => p.n * p.d, tol: rel(0.005, 1), explain: (p, a) => `${f0(p.n)} × ${fd(p.d)} = ${eur(a)}.` },
+  { key: "rend_div", title: "Rendement du dividende", cat: "analyse", xp: 25, hint: "Rendement = dividende ÷ cours.", unit: "%",
+    gen: (r) => { const c = px(r, 20, 200); return { c, d: Math.round(c * r.range(0.015, 0.06) * 100) / 100 }; },
+    ask: (p) => `Une action cote ${fd(p.c)} € et verse ${fd(p.d)} € par an. Quel rendement du dividende ?`,
+    ans: (p) => (p.d / p.c) * 100, tol: abs(0.06), explain: (p, a) => `${fd(p.d)} ÷ ${fd(p.c)} = ${fd(a, 2)} %.` },
+  { key: "per", title: "Ratio cours / bénéfices (PER)", cat: "analyse", xp: 30, hint: "PER = cours ÷ bénéfice par action.", unit: "fois",
+    gen: (r) => { const c = px(r, 20, 200); return { c, e: Math.round((c / r.range(8, 30)) * 100) / 100 }; },
+    ask: (p) => `Une action cote ${fd(p.c)} € pour un bénéfice par action de ${fd(p.e)} €. Quel PER ?`,
+    ans: (p) => p.c / p.e, tol: abs(0.15), explain: (p, a) => `${fd(p.c)} ÷ ${fd(p.e)} = ${fd(a, 1)} fois.` },
+  { key: "bpa", title: "Bénéfice par action", cat: "analyse", xp: 25, hint: "BPA = résultat net ÷ nombre d'actions.", unit: "€",
+    gen: (r, sc) => ({ NI: amt(r, Math.max(1, sc), 50, 900, 10), n: r.int(20, 400) }),
+    ask: (p) => `Une société a dégagé ${f0(p.NI)} millions d'euros de résultat net, pour ${f0(p.n)} millions d'actions. Quel bénéfice par action ?`,
+    ans: (p) => p.NI / p.n, tol: abs(0.03), explain: (p, a) => `${f0(p.NI)} ÷ ${f0(p.n)} = ${fd(a, 2)} € par action.` },
+  { key: "capi", title: "Capitalisation boursière", cat: "analyse", xp: 25, hint: "Capitalisation = cours × nombre d'actions.", unit: "Md€",
+    gen: (r) => ({ c: px(r, 15, 400), n: r.int(80, 2500) }),
+    ask: (p) => `Une action cote ${fd(p.c)} € et la société compte ${f0(p.n)} millions d'actions. Quelle capitalisation, en milliards d'euros ?`,
+    ans: (p) => (p.c * p.n) / 1000, tol: rel(0.01, 0.05), explain: (p, a) => `${fd(p.c)} × ${f0(p.n)} millions = ${fd(a, 1)} milliards d'euros.` },
+  { key: "ev", title: "Valeur d'entreprise", cat: "analyse", xp: 35, hint: "VE = capitalisation + dette nette (dette − trésorerie).", unit: "M€",
+    gen: (r, sc) => ({ cap: amt(r, Math.max(1, sc) * 4, 200, 4000, 50), D: amt(r, Math.max(1, sc) * 2, 50, 1500, 10), T: amt(r, Math.max(1, sc), 20, 600, 10) }),
+    ask: (p) => `Une société capitalise ${f0(p.cap)} M€, avec ${f0(p.D)} M€ de dette brute et ${f0(p.T)} M€ de trésorerie. Quelle valeur d'entreprise ?`,
+    ans: (p) => p.cap + p.D - p.T, tol: rel(0.01, 1), explain: (p, a) => `${f0(p.cap)} + ${f0(p.D)} − ${f0(p.T)} = ${f0(a)} M€.` },
+  { key: "ev_ebitda", title: "Multiple VE / EBITDA", cat: "analyse", xp: 35, hint: "Multiple = valeur d'entreprise ÷ EBITDA.", unit: "fois",
+    gen: (r, sc) => { const eb = amt(r, Math.max(1, sc), 40, 800, 5); return { ev: Math.round(eb * r.range(5, 14)), eb }; },
+    ask: (p) => `Une entreprise vaut ${f0(p.ev)} M€ (valeur d'entreprise) pour un EBITDA de ${f0(p.eb)} M€. Quel multiple VE/EBITDA ?`,
+    ans: (p) => p.ev / p.eb, tol: abs(0.1), explain: (p, a) => `${f0(p.ev)} ÷ ${f0(p.eb)} = ${fd(a, 1)} fois.` },
+  { key: "roe", title: "Rentabilité des fonds propres", cat: "analyse", xp: 30, hint: "ROE = résultat net ÷ fonds propres.", unit: "%",
+    gen: (r, sc) => { const fp = amt(r, Math.max(1, sc), 200, 3000, 10); return { ni: Math.round(fp * r.range(0.04, 0.22)), fp }; },
+    ask: (p) => `Une société a un résultat net de ${f0(p.ni)} M€ pour ${f0(p.fp)} M€ de fonds propres. Quel ROE ?`,
+    ans: (p) => (p.ni / p.fp) * 100, tol: abs(0.2), explain: (p, a) => `${f0(p.ni)} ÷ ${f0(p.fp)} = ${fd(a, 1)} %.` },
+  { key: "marge_nette", title: "Marge nette", cat: "analyse", xp: 25, hint: "Marge nette = résultat net ÷ chiffre d'affaires.", unit: "%",
+    gen: (r, sc) => { const ca = amt(r, Math.max(1, sc), 300, 6000, 10); return { ca, ni: Math.round(ca * r.range(0.02, 0.2)) }; },
+    ask: (p) => `Chiffre d'affaires de ${f0(p.ca)} M€ et résultat net de ${f0(p.ni)} M€ : quelle marge nette ?`,
+    ans: (p) => (p.ni / p.ca) * 100, tol: abs(0.2), explain: (p, a) => `${f0(p.ni)} ÷ ${f0(p.ca)} = ${fd(a, 1)} %.` },
+  { key: "dette_ebitda", title: "Levier financier d'une entreprise", cat: "risque", xp: 35, hint: "Levier = dette nette ÷ EBITDA ; au-delà de 3 à 4 fois, les banques s'inquiètent.", unit: "fois",
+    gen: (r, sc) => { const eb = amt(r, Math.max(1, sc), 40, 700, 5); return { d: Math.round(eb * r.range(0.8, 5.5)), eb }; },
+    ask: (p) => `Une entreprise a ${f0(p.d)} M€ de dette nette pour ${f0(p.eb)} M€ d'EBITDA. Quel ratio dette nette / EBITDA ?`,
+    ans: (p) => p.d / p.eb, tol: abs(0.1), explain: (p, a) => `${f0(p.d)} ÷ ${f0(p.eb)} = ${fd(a, 1)} fois.` },
+  { key: "peg", title: "Ratio PEG", cat: "analyse", xp: 30, hint: "PEG = PER ÷ croissance annuelle attendue des bénéfices (en %).", unit: "ratio",
+    gen: (r) => ({ per: r.int(10, 40), g: r.pick([5, 8, 10, 12, 15, 20, 25]) }),
+    ask: (p) => `Un titre se paie ${p.per} fois ses bénéfices, qui devraient croître de ${p.g} % par an. Quel PEG ?`,
+    ans: (p) => p.per / p.g, tol: abs(0.1), explain: (p, a) => `${p.per} ÷ ${p.g} = ${fd(a, 2)} (en dessous de 1, la croissance est « bon marché »).` },
+  { key: "gordon", title: "Valorisation par actualisation des dividendes", cat: "analyse", xp: 45, hint: "Valeur = dividende suivant ÷ (rendement exigé − croissance).", unit: "€",
+    gen: (r) => ({ d: Math.round(r.range(1, 6) * 100) / 100, r: r.pick([6, 7, 8, 9, 10]), g: r.pick([1, 2, 3, 4]) }),
+    ask: (p) => `Une action verse ${fd(p.d)} € de dividende l'an prochain, croissant de ${p.g} % par an. Rendement exigé : ${p.r} %. Quelle valeur théorique ?`,
+    ans: (p) => p.d / ((p.r - p.g) / 100), tol: rel(0.01, 0.1), explain: (p, a) => `${fd(p.d)} ÷ (${p.r} % − ${p.g} %) = ${fd(a, 2)} €.` },
+  { key: "van", title: "Valeur actuelle nette d'un projet", cat: "maths", xp: 45, hint: "VAN = −investissement + Σ flux ÷ (1 + taux)^année.", unit: "k€",
+    gen: (r, sc) => { const I = amt(r, Math.max(1, sc), 100, 1000, 10); return { I, a: Math.round(I * r.range(0.3, 0.5)), b: Math.round(I * r.range(0.3, 0.5)), c: Math.round(I * r.range(0.3, 0.5)), i: r.pick([4, 5, 6, 8, 10]) }; },
+    ask: (p) => `Un projet coûte ${f0(p.I)} k€ et rapporte ${f0(p.a)}, ${f0(p.b)} puis ${f0(p.c)} k€ sur trois ans. Taux d'actualisation ${p.i} %. Quelle VAN ?`,
+    ans: (p) => -p.I + p.a / (1 + p.i / 100) + p.b / Math.pow(1 + p.i / 100, 2) + p.c / Math.pow(1 + p.i / 100, 3), tol: rel(0.005, 2), explain: (p, a) => `−${f0(p.I)} + ${f0(p.a)}/${fd(1 + p.i / 100, 2)} + ${f0(p.b)}/${fd(Math.pow(1 + p.i / 100, 2), 3)} + ${f0(p.c)}/${fd(Math.pow(1 + p.i / 100, 3), 3)} = ${fd(a, 1)} k€.` },
+  { key: "annuite", title: "Échéance d'un emprunt", cat: "maths", xp: 40, hint: "Annuité = capital × i ÷ (1 − (1 + i)^−n).", unit: "€/an",
+    gen: (r, sc) => ({ C: amt(r, sc, 100, 400, 5000), i: r.pick([2, 3, 3.5, 4, 5]), n: r.pick([10, 15, 20, 25]) }),
+    ask: (p) => `Un emprunt de ${eur(p.C)} à ${fd(p.i, 1)} % sur ${p.n} ans, remboursé par annuités constantes. Quelle annuité ?`,
+    ans: (p) => (p.C * (p.i / 100)) / (1 - Math.pow(1 + p.i / 100, -p.n)), tol: rel(0.005, 5), explain: (p, a) => `${eur(p.C)} × ${fd(p.i, 1)} % ÷ (1 − (1 + ${fd(p.i, 1)} %)^−${p.n}) = ${eur(a)} par an.` },
+  { key: "epargne_fv", title: "Épargne régulière", cat: "maths", xp: 40, hint: "Capital = versement × ((1 + i)^n − 1) ÷ i.", unit: "€",
+    gen: (r, sc) => ({ V: amt(r, sc, 2, 20, 500), i: r.pick([2, 3, 4, 5, 6]), n: r.pick([5, 8, 10, 15, 20]) }),
+    ask: (p) => `Vous versez ${eur(p.V)} à la fin de chaque année pendant ${p.n} ans, à ${p.i} % par an. Quel capital au terme ?`,
+    ans: (p) => (p.V * (Math.pow(1 + p.i / 100, p.n) - 1)) / (p.i / 100), tol: rel(0.005, 5), explain: (p, a) => `${eur(p.V)} × ((1 + ${p.i} %)^${p.n} − 1) ÷ ${p.i} % = ${eur(a)}.` },
+  { key: "duration_prix", title: "Sensibilité d'une obligation aux taux", cat: "maths", xp: 40, hint: "Variation du prix ≈ −duration modifiée × variation du taux.", unit: "%",
+    gen: (r) => ({ D: Math.round(r.range(2, 12) * 10) / 10, b: r.pick([10, 25, 50, 75, 100]) }),
+    ask: (p) => `Une obligation a une duration modifiée de ${fd(p.D, 1)}. Les taux montent de ${p.b} points de base. De combien varie son prix, en pourcentage ?`,
+    ans: (p) => -(p.D * p.b) / 100, tol: abs(0.05), explain: (p, a) => `−${fd(p.D, 1)} × ${p.b} pb = ${fd(a, 2)} % (1 pb = 0,01 %).` },
+  { key: "zc_prix", title: "Prix d'une obligation zéro coupon", cat: "maths", xp: 40, hint: "Prix = 100 ÷ (1 + rendement)^années.", unit: "% du nominal",
+    gen: (r) => ({ y: r.pick([2, 2.5, 3, 3.5, 4, 5, 6]), n: r.int(2, 10) }),
+    ask: (p) => `Une obligation zéro coupon rembourse 100 dans ${p.n} ans. Le rendement exigé est de ${fd(p.y, 1)} %. Quel prix (pour 100 de nominal) ?`,
+    ans: (p) => 100 / Math.pow(1 + p.y / 100, p.n), tol: abs(0.06), explain: (p, a) => `100 ÷ (1 + ${fd(p.y, 1)} %)^${p.n} = ${fd(a, 2)}.` },
+  { key: "rend_courant", title: "Rendement courant d'une obligation", cat: "analyse", xp: 25, hint: "Rendement courant = coupon ÷ prix.", unit: "%",
+    gen: (r) => ({ cp: r.pick([2, 2.5, 3, 4, 5, 6]), pr: px(r, 88, 112) }),
+    ask: (p) => `Une obligation verse un coupon annuel de ${fd(p.cp, 1)} (pour 100 de nominal) et cote ${fd(p.pr)} %. Quel rendement courant ?`,
+    ans: (p) => (p.cp / p.pr) * 100, tol: abs(0.03), explain: (p, a) => `${fd(p.cp, 1)} ÷ ${fd(p.pr)} = ${fd(a, 2)} %.` },
+  { key: "change_conv", title: "Conversion de devises", cat: "macro", xp: 25, hint: "Montant converti = montant en euros × cours de la devise.", unit: "montant converti",
+    gen: (r, sc) => { const f = r.int(0, FX.length - 1); const fx = FX[f]; return { A: amt(r, sc, 10, 400, 1000), f, r: Math.round(r.range(fx.lo, fx.hi) * 10 ** fx.d) / 10 ** fx.d }; },
+    ask: (p) => `Un client convertit ${eur(p.A)} en ${FX[p.f].c} au cours de ${fd(p.r, FX[p.f].d)} ${FX[p.f].c} pour 1 €. Quel montant reçoit-il (en ${FX[p.f].c}) ?`,
+    ans: (p) => p.A * p.r, tol: rel(0.005, 1), explain: (p, a) => `${eur(p.A)} × ${fd(p.r, FX[p.f].d)} = ${f0(a)} ${FX[p.f].c}.` },
+  { key: "change_cross", title: "Cours croisé", cat: "macro", xp: 35, hint: "GBPUSD = EURUSD ÷ EURGBP.", unit: "USD pour 1 GBP",
+    gen: (r) => ({ a: Math.round(r.range(1, 1.2) * 10000) / 10000, b: Math.round(r.range(0.82, 0.9) * 10000) / 10000 }),
+    ask: (p) => `EURUSD = ${fd(p.a, 4)} et EURGBP = ${fd(p.b, 4)}. Combien de dollars pour une livre sterling ?`,
+    ans: (p) => p.a / p.b, tol: abs(0.002), explain: (p, a) => `${fd(p.a, 4)} ÷ ${fd(p.b, 4)} = ${fd(a, 4)}.` },
+  { key: "forward_fx", title: "Cours à terme EUR/USD", cat: "macro", xp: 45, hint: "Terme = comptant × (1 + taux USD × t) ÷ (1 + taux EUR × t).", unit: "USD pour 1 €",
+    gen: (r) => ({ S: Math.round(r.range(1.05, 1.15) * 10000) / 10000, u: r.pick([3, 4, 5]), e: r.pick([1, 2, 3]), t: r.pick([0.25, 0.5, 1]) }),
+    ask: (p) => `EURUSD au comptant : ${fd(p.S, 4)}. Taux USD ${p.u} %, taux EUR ${p.e} %, échéance ${fd(p.t, 2)} an. Quel cours à terme ?`,
+    ans: (p) => (p.S * (1 + (p.u / 100) * p.t)) / (1 + (p.e / 100) * p.t), tol: abs(0.0015), explain: (p, a) => `${fd(p.S, 4)} × (1 + ${p.u} % × ${fd(p.t, 2)}) ÷ (1 + ${p.e} % × ${fd(p.t, 2)}) = ${fd(a, 4)}.` },
+  { key: "parite_pc", title: "Parité call-put", cat: "maths", xp: 45, hint: "Put = call − cours + strike actualisé.", unit: "€",
+    gen: (r) => { const S = px(r, 60, 140); return { S, C: px(r, 6, 14), rr: r.pick([2, 3, 4]) }; },
+    ask: (p) => `Un call at-the-money (strike ${fd(p.S)} €, un an) vaut ${fd(p.C)} € ; le titre cote ${fd(p.S)} € ; taux sans risque ${p.rr} %. Quelle valeur pour le put de même strike ?`,
+    ans: (p) => p.C - p.S + p.S / (1 + p.rr / 100), tol: abs(0.08), explain: (p, a) => `${fd(p.C)} − ${fd(p.S)} + ${fd(p.S)}/(1 + ${p.rr} %) = ${fd(a, 2)} €.` },
+  { key: "val_intr", title: "Valeur intrinsèque d'options", cat: "maths", xp: 35, hint: "Call : max(cours − strike, 0) ; put : max(strike − cours, 0) ; × 100 par contrat.", unit: "€",
+    gen: (r) => { const t = r.int(0, 1); const S = px(r, 40, 180); return { t, S, K: t === 0 ? px(r, S * 0.85, S * 0.97) : px(r, S * 1.03, S * 1.15), n: r.int(1, 20) }; },
+    ask: (p) => `Vous détenez ${p.n} contrat(s) ${OPT[p.t]} de 100 titres, strike ${fd(p.K)} €, alors que le sous-jacent cote ${fd(p.S)} €. Quelle valeur intrinsèque totale ?`,
+    ans: (p) => Math.abs(p.S - p.K) * 100 * p.n, tol: rel(0.005, 1), explain: (p, a) => `|${fd(p.S)} − ${fd(p.K)}| × 100 × ${p.n} = ${eur(a)}.` },
+  { key: "breakeven_opt", title: "Seuil de rentabilité d'une option", cat: "maths", xp: 35, hint: "Call : strike + prime ; put : strike − prime.", unit: "€",
+    gen: (r) => { const K0 = px(r, 40, 180); return { t: r.int(0, 1), K: K0, pr: px(r, K0 * 0.02, K0 * 0.09) }; },
+    ask: (p) => `Vous achetez un ${OPT[p.t]} de strike ${fd(p.K)} € en payant une prime de ${fd(p.pr)} €. Quel cours du sous-jacent à l'échéance pour ne ni gagner ni perdre ?`,
+    ans: (p) => (p.t === 0 ? p.K + p.pr : p.K - p.pr), tol: abs(0.03), explain: (p, a) => `${p.t === 0 ? `${fd(p.K)} + ${fd(p.pr)}` : `${fd(p.K)} − ${fd(p.pr)}`} = ${fd(a, 2)} €.` },
+  { key: "payoff_exp", title: "Gain d'une option à l'échéance", cat: "maths", xp: 40, hint: "Gain net = valeur à l'échéance − prime payée, × 100 par contrat.", unit: "€",
+    gen: (r) => { const K0 = px(r, 40, 180), t = r.int(0, 1); return { t, K: K0, pr: px(r, K0 * 0.02, K0 * 0.08), ST: px(r, K0 * 0.85, K0 * 1.2) }; },
+    ask: (p) => `Un ${OPT[p.t]} de strike ${fd(p.K)} € a coûté ${fd(p.pr)} € (contrat de 100). À l'échéance, le sous-jacent cote ${fd(p.ST)} €. Quel résultat net pour un contrat ?`,
+    ans: (p) => ((p.t === 0 ? Math.max(p.ST - p.K, 0) : Math.max(p.K - p.ST, 0)) - p.pr) * 100, tol: rel(0.005, 2), explain: (p, a) => `(${p.t === 0 ? `max(${fd(p.ST)} − ${fd(p.K)}, 0)` : `max(${fd(p.K)} − ${fd(p.ST)}, 0)`} − ${fd(p.pr)}) × 100 = ${eur(a)}.` },
+  { key: "hedge_futures", title: "Couverture par contrats à terme", cat: "risque", xp: 50, hint: "Contrats = valeur du portefeuille × bêta ÷ (cours du future × multiplicateur).", unit: "contrats",
+    gen: (r) => { const F = r.int(3000, 5500), c = r.int(6, 40), beta = Math.round(r.range(0.8, 1.3) * 100) / 100; return { F, m: 10, beta, V: Math.round((c * F * 10) / beta / 100000) * 100000 }; },
+    ask: (p) => `Un portefeuille actions de ${eur(p.V)} a un bêta de ${fd(p.beta)}. Un future sur indice cote ${f0(p.F)} points à ${p.m} € le point. Combien de contrats vendre pour couvrir intégralement ?`,
+    ans: (p) => (p.V * p.beta) / (p.F * p.m), tol: (a) => Math.max(0.6, a * 0.02), explain: (p, a) => `${eur(p.V)} × ${fd(p.beta)} ÷ (${f0(p.F)} × ${p.m}) ≈ ${fd(a, 1)} contrats.` },
+  { key: "beta_ptf", title: "Bêta d'un portefeuille", cat: "risque", xp: 35, hint: "Bêta du portefeuille = Σ poids × bêta.", unit: "",
+    gen: (r) => { const w = r.pick([[50, 30, 20], [40, 40, 20], [60, 25, 15], [34, 33, 33], [70, 20, 10]]); return { w1: w[0], w2: w[1], w3: w[2], b1: Math.round(r.range(0.6, 1.6) * 100) / 100, b2: Math.round(r.range(0.4, 1.4) * 100) / 100, b3: Math.round(r.range(0.2, 1.2) * 100) / 100 }; },
+    ask: (p) => `Un portefeuille est réparti ${p.w1} % / ${p.w2} % / ${p.w3} % sur trois lignes de bêtas ${fd(p.b1)}, ${fd(p.b2)} et ${fd(p.b3)}. Quel bêta global ?`,
+    ans: (p) => (p.w1 * p.b1 + p.w2 * p.b2 + p.w3 * p.b3) / 100, tol: abs(0.02), explain: (p, a) => `(${p.w1} × ${fd(p.b1)} + ${p.w2} × ${fd(p.b2)} + ${p.w3} × ${fd(p.b3)}) ÷ 100 = ${fd(a, 3)}.` },
+  { key: "rend_pondere", title: "Rendement d'un portefeuille", cat: "analyse", xp: 30, hint: "Rendement du portefeuille = Σ poids × rendement.", unit: "%",
+    gen: (r) => { const w = r.pick([[50, 30, 20], [40, 40, 20], [60, 25, 15], [25, 25, 50]]); return { w1: w[0], w2: w[1], w3: w[2], r1: Math.round(r.range(-6, 18) * 10) / 10, r2: Math.round(r.range(-6, 14) * 10) / 10, r3: Math.round(r.range(-6, 10) * 10) / 10 }; },
+    ask: (p) => `Trois lignes pèsent ${p.w1} %, ${p.w2} % et ${p.w3} % et ont rapporté ${fd(p.r1, 1)} %, ${fd(p.r2, 1)} % et ${fd(p.r3, 1)} %. Quel rendement du portefeuille ?`,
+    ans: (p) => (p.w1 * p.r1 + p.w2 * p.r2 + p.w3 * p.r3) / 100, tol: abs(0.06), explain: (p, a) => `(${p.w1} × ${fd(p.r1, 1)} + ${p.w2} × ${fd(p.r2, 1)} + ${p.w3} × ${fd(p.r3, 1)}) ÷ 100 = ${fd(a, 2)} %.` },
+  { key: "vol_horizon", title: "Volatilité sur un horizon donné", cat: "risque", xp: 40, hint: "Volatilité sur n jours = volatilité annuelle × √(n ÷ 252).", unit: "%",
+    gen: (r) => ({ s: r.int(10, 40), d: r.pick([5, 10, 21, 63]) }),
+    ask: (p) => `Un actif a une volatilité annuelle de ${p.s} %. Quelle volatilité sur ${p.d} jours de bourse ?`,
+    ans: (p) => p.s * Math.sqrt(p.d / 252), tol: abs(0.12), explain: (p, a) => `${p.s} % × √(${p.d} ÷ 252) = ${fd(a, 2)} %.` },
+  { key: "var_param", title: "Valeur à risque d'une position", cat: "risque", xp: 45, hint: "VaR 99 % à 1 jour ≈ 2,33 × volatilité quotidienne × position.", unit: "€",
+    gen: (r, sc) => ({ V: amt(r, sc, 2, 20, 50000), s: r.pick([0.8, 1, 1.2, 1.5, 2]) }),
+    ask: (p) => `Une position de ${eur(p.V)} a une volatilité quotidienne de ${fd(p.s, 1)} %. Quelle VaR 99 % à un jour (z = 2,33) ?`,
+    ans: (p) => 2.33 * (p.s / 100) * p.V, tol: rel(0.01, 5), explain: (p, a) => `2,33 × ${fd(p.s, 1)} % × ${eur(p.V)} = ${eur(a)}.` },
+  { key: "sharpe", title: "Ratio de Sharpe", cat: "risque", xp: 40, hint: "Sharpe = (rendement − taux sans risque) ÷ volatilité.", unit: "",
+    gen: (r) => ({ R: Math.round(r.range(4, 16) * 10) / 10, rf: r.pick([1, 2, 3, 4]), s: Math.round(r.range(8, 25) * 10) / 10 }),
+    ask: (p) => `Un fonds rapporte ${fd(p.R, 1)} % par an avec ${fd(p.s, 1)} % de volatilité ; le taux sans risque est de ${p.rf} %. Quel ratio de Sharpe ?`,
+    ans: (p) => (p.R - p.rf) / p.s, tol: abs(0.03), explain: (p, a) => `(${fd(p.R, 1)} − ${p.rf}) ÷ ${fd(p.s, 1)} = ${fd(a, 2)}.` },
+  { key: "spread_bps", title: "Coût du spread", cat: "trading", xp: 30, hint: "Spread en points de base = (ask − bid) ÷ milieu × 10 000.", unit: "pb",
+    gen: (r) => { const b = px(r, 20, 300); return { b, a: Math.round(b * (1 + r.range(0.0005, 0.004)) * 100) / 100 }; },
+    ask: (p) => `Une action cote ${fd(p.b)} € à l'achat de la contrepartie (bid) et ${fd(p.a)} € à la vente (ask). Quel spread en points de base ?`,
+    ans: (p) => ((p.a - p.b) / ((p.a + p.b) / 2)) * 10000, tol: abs(0.6), explain: (p, a) => `(${fd(p.a)} − ${fd(p.b)}) ÷ ${fd((p.a + p.b) / 2)} × 10 000 = ${fd(a, 1)} pb.` },
+  { key: "cout_trans", title: "Coût d'une transaction", cat: "trading", xp: 25, hint: "Coût = quantité × cours × frais en points de base ÷ 10 000.", unit: "€",
+    gen: (r, sc) => ({ q: amt(r, sc, 500, 5000, 100), c: px(r, 20, 200), b: r.pick([2, 5, 8, 10, 15]) }),
+    ask: (p) => `Vous achetez ${f0(p.q)} titres à ${fd(p.c)} € avec ${p.b} points de base de frais. Quel coût en euros ?`,
+    ans: (p) => (p.q * p.c * p.b) / 10000, tol: rel(0.005, 1), explain: (p, a) => `${f0(p.q)} × ${fd(p.c)} × ${p.b} ÷ 10 000 = ${eur(a)}.` },
+  { key: "inflation_reelle", title: "Rendement réel", cat: "macro", xp: 30, hint: "Rendement réel = (1 + nominal) ÷ (1 + inflation) − 1.", unit: "%",
+    gen: (r) => ({ n: r.pick([3, 4, 5, 6, 7]), i: r.pick([1.5, 2, 2.5, 3, 4]) }),
+    ask: (p) => `Un placement rapporte ${p.n} % par an alors que l'inflation est de ${fd(p.i, 1)} %. Quel rendement réel ?`,
+    ans: (p) => ((1 + p.n / 100) / (1 + p.i / 100) - 1) * 100, tol: abs(0.06), explain: (p, a) => `1,${String(p.n).padStart(2, "0")} ÷ ${fd(1 + p.i / 100, 3)} − 1 = ${fd(a, 2)} %.` },
+  { key: "rule72", title: "Règle des 72", cat: "maths", xp: 20, hint: "Années pour doubler ≈ 72 ÷ taux.", unit: "ans",
+    gen: (r) => ({ r: r.pick([2, 3, 4, 6, 8, 9, 12]) }),
+    ask: (p) => `En appliquant la règle des 72, en combien d'années double un capital placé à ${p.r} % par an ?`,
+    ans: (p) => 72 / p.r, tol: abs(0.35), explain: (p, a) => `72 ÷ ${p.r} = ${fd(a, 1)} ans.` },
+  { key: "dv01", title: "Sensibilité en euros d'un portefeuille obligataire", cat: "risque", xp: 45, hint: "Gain ou perte ≈ nominal × duration modifiée × variation du taux.", unit: "€",
+    gen: (r, sc) => ({ N: amt(r, sc, 10, 200, 100000), D: Math.round(r.range(2, 10) * 10) / 10, b: r.pick([1, 5, 10, 25]) }),
+    ask: (p) => `Un portefeuille obligataire de ${eur(p.N)} a une duration modifiée de ${fd(p.D, 1)}. Les taux baissent de ${p.b} points de base. De combien gagne-t-il (en euros) ?`,
+    ans: (p) => (p.N * p.D * p.b) / 10000, tol: rel(0.01, 5), explain: (p, a) => `${eur(p.N)} × ${fd(p.D, 1)} × ${p.b} ÷ 10 000 = ${eur(a)}.` },
+  { key: "frais_gestion", title: "Impact des frais de gestion", cat: "client", xp: 40, hint: "Comparez le capital sans frais et avec frais : C(1+g)^n − C(1+g−frais)^n.", unit: "€",
+    gen: (r, sc) => ({ C: amt(r, sc, 10, 150, 1000), g: r.pick([5, 6, 7]), f: r.pick([0.5, 1, 1.5, 2]), n: r.pick([10, 15, 20, 25]) }),
+    ask: (p) => `${eur(p.C)} sont placés ${p.n} ans à ${p.g} % brut par an. Combien les frais annuels de ${fd(p.f, 1)} % coûtent-ils au final (écart entre le capital sans frais et avec frais) ?`,
+    ans: (p) => p.C * (Math.pow(1 + p.g / 100, p.n) - Math.pow(1 + (p.g - p.f) / 100, p.n)), tol: rel(0.01, 10), explain: (p, a) => `${eur(p.C)} × ((1 + ${p.g} %)^${p.n} − (1 + ${fd(p.g - p.f, 1)} %)^${p.n}) = ${eur(a)}.` },
+  { key: "compare_placements", title: "Comparer trois placements", cat: "client", xp: 35, hint: "Comparez les rendements nets de frais, pas les rendements bruts.", unit: "",
+    gen: (r) => { const g = [0, 1, 2].map(() => Math.round(r.range(3, 7) * 10) / 10); const f = [0, 1, 2].map(() => Math.round(r.range(0.1, 1.8) * 10) / 10); const net = g.map((x, i) => x - f[i]); const best = net.indexOf(Math.max(...net)); const ok = net.filter((x) => Math.abs(x - net[best]) < 0.15).length === 1; return { g0: g[0], g1: g[1], g2: g[2], f0: f[0], f1: f[1], f2: f[2], ok: ok ? 1 : 0, c: best }; },
+    ask: () => "",
+    choice: (p) => ({ question: "Trois placements (rendement brut annuel, frais annuels). Lequel rapporte le plus net de frais ?", options: [0, 1, 2].map((i) => `Placement ${"ABC"[i]} : ${fd(p[`g${i}`], 1)} % brut, ${fd(p[`f${i}`], 1)} % de frais`), correct: p.c, explain: `Net de frais : ${[0, 1, 2].map((i) => `${"ABC"[i]} = ${fd(p[`g${i}`] - p[`f${i}`], 1)} %`).join(", ")}.` }) },
+  { key: "compare_per4", title: "Quelle action est la moins chère ?", cat: "analyse", xp: 35, hint: "Comparez les PER (cours ÷ bénéfice par action).", unit: "",
+    gen: (r) => { const o: Record<string, number> = {}; const pe: number[] = []; const nm = distinct(r, 4, NAMES.length); for (let i = 0; i < 4; i++) { const eps = px(r, 1, 12); const per = Math.round(r.range(8, 32) * 10) / 10; o[`n${i}`] = nm[i]; o[`e${i}`] = eps; o[`c${i}`] = Math.round(eps * per * 100) / 100; pe.push(o[`c${i}`] / eps); } o.c = pe.indexOf(Math.min(...pe)); return o; },
+    ask: () => "",
+    choice: (p) => ({ question: "Quelle société a le PER le plus bas ?", options: [0, 1, 2, 3].map((i) => `${NAMES[p[`n${i}`]]} (cours ${fd(p[`c${i}`])} €, bénéfice par action ${fd(p[`e${i}`])} €)`), correct: p.c, explain: `PER : ${[0, 1, 2, 3].map((i) => `${NAMES[p[`n${i}`]]} ${fd(p[`c${i}`] / p[`e${i}`], 1)}`).join(", ")}.` }) },
+  { key: "compare_oblig", title: "Quelle obligation rapporte le plus ?", cat: "analyse", xp: 35, hint: "Rendement courant = coupon ÷ prix.", unit: "",
+    gen: (r) => { const o: Record<string, number> = {}; const y: number[] = []; for (let i = 0; i < 3; i++) { o[`cp${i}`] = r.pick([2, 2.5, 3, 3.5, 4, 5, 6]); o[`pr${i}`] = px(r, 85, 115); y.push((o[`cp${i}`] / o[`pr${i}`]) * 100); } o.c = y.indexOf(Math.max(...y)); return o; },
+    ask: () => "",
+    choice: (p) => ({ question: "Quelle obligation offre le meilleur rendement courant ?", options: [0, 1, 2].map((i) => `Obligation ${"ABC"[i]} : coupon ${fd(p[`cp${i}`], 1)}, cours ${fd(p[`pr${i}`])} %`), correct: p.c, explain: `Rendements courants : ${[0, 1, 2].map((i) => `${"ABC"[i]} = ${fd((p[`cp${i}`] / p[`pr${i}`]) * 100, 2)} %`).join(", ")}.` }) },
+  { key: "classer_risque", title: "Quelle position est la plus risquée ?", cat: "risque", xp: 35, hint: "À montant égal, la VaR croît avec la volatilité.", unit: "",
+    gen: (r) => { const o: Record<string, number> = {}; const v: number[] = []; const nm = distinct(r, 4, NAMES.length); const vols = distinct(r, 4, 53).map((x) => x + 8); for (let i = 0; i < 4; i++) { o[`n${i}`] = nm[i]; o[`v${i}`] = vols[i]; v.push(vols[i]); } o.c = v.indexOf(Math.max(...v)); return o; },
+    ask: () => "",
+    choice: (p) => ({ question: "À montant investi égal, quel actif a la VaR la plus élevée ?", options: [0, 1, 2, 3].map((i) => `${NAMES[p[`n${i}`]]} (volatilité annuelle ${p[`v${i}`]} %)`), correct: p.c, explain: "La VaR est proportionnelle à la volatilité : l'actif le plus volatil est le plus risqué." }) },
+];
+
+/** Compte la première famille « choix » : (les trois dernières familles + celle des placements sont des QCM calculés) */
+function famTemplate(fam: Fam, ci: number): BankTpl {
+  const ctx = CTX[ci];
+  const id = `p_${fam.key}_${ci}`;
+  const isChoice = !!fam.choice;
+  return {
+    id, category: fam.cat, xp: Math.round(fam.xp * (0.8 + 0.2 * Math.min(4, ci + 1))), rep: { professionnelle: 1 }, days: 2, kind: "calc", family: fam.key,
+    make: (_s, p, rng) => {
+      const k = K(p), sc = ctx.sc * (1 + 0.25 * (k - 1));
+      let vals: Record<string, number> = {};
+      for (let t = 0; t < 8; t++) { vals = fam.gen(rng, sc); if (vals.ok === undefined || vals.ok === 1) break; }
+      const intro = rng.pick(ctx.intro);
+      const qtext = isChoice ? fam.choice!(vals).question : fam.ask(vals);
+      return {
+        title: `${fam.title} · ${ctx.label}`,
+        description: `${intro} ${qtext}${isChoice ? "" : ` (Formule utile : ${fam.hint})`}`,
+        criteria: [isChoice ? "Bonne réponse" : `Réponse à ${fam.tol ? "la tolérance indiquée" : "1 %"} près`],
+        params: { ...vals, _fam: fam.key, _ctx: ci },
+      };
+    },
+    check: () => 0,
+    ...(isChoice
+      ? { choiceQuiz: (_s: GameState, m: Mission) => fam.choice!(P(m.params)) }
+      : { quiz: (_s: GameState, m: Mission) => { const p = P(m.params), a = fam.ans!(p), tol = fam.tol!(a); return { answer: a, tolerance: tol, unit: fam.unit, question: fam.ask(p), explain: fam.explain!(p, a) }; } }),
+    guide: () => ({ steps: ["Lisez l'énoncé et posez le calcul avec les chiffres donnés.", `Rappel : ${fam.hint}`, isChoice ? "Choisissez la bonne réponse ci-dessous." : "Saisissez votre résultat ci-dessous : une tolérance est admise pour les arrondis."], link: "/play/missions", linkLabel: "Retour aux missions", tip: fam.hint }),
+  };
+}
+
+/* ───────── 72 missions d'action ───────── */
+const SECTORS: Sector[] = ["Technologie", "Banque", "Industrie", "Énergie", "Santé", "Luxe", "Distribution", "Télécoms", "Automobile", "Immobilier", "Assurance", "Matériaux"];
+const ZONES: [ZoneId, string][] = [["US", "États-Unis"], ["EZ", "zone euro"], ["UK", "Royaume-Uni"], ["JP", "Japon"], ["CN", "Chine"], ["EM", "pays émergents"]];
+const CLASSES: [AssetClass, string, string][] = [["etf", "un ETF", "ETF"], ["obligation", "une obligation", "obligations"], ["matiere", "une matière première", "matières premières"], ["crypto", "un cryptoactif", "cryptoactifs"], ["devise", "une paire de devises", "devises"]];
+const manual = (s: GameState, m: Mission) => s.fills.filter((f) => f.t >= m.startT && (f.account === "perso" || f.account === "desk") && !s.orders.find((o) => o.id === f.orderId)?.tag);
+const notion = (f: { qty: number; price: number }) => f.qty * f.price;
+const baseEq = (s: GameState) => Math.max(accountEquity(s, "perso"), 3000);
+const round50 = (x: number) => Math.max(250, Math.round(x / 50) * 50);
+const mk = (partial: Omit<BankTpl, "kind" | "rep"> & { rep?: BankTpl["rep"] }): BankTpl => ({ kind: "action", rep: { professionnelle: 1 }, ...partial });
+const G = (steps: string[], link: string, linkLabel: string, tip?: string) => () => ({ steps, link, linkLabel, tip });
+const heldViews = (s: GameState) => [...positionViews(s, "perso"), ...(s.accounts.desk ? positionViews(s, "desk") : [])];
+
+function actionTemplates(): BankTpl[] {
+  const out: BankTpl[] = [];
+  // 1. une position dans un secteur (12)
+  for (const sec of SECTORS) out.push(mk({ id: `a_secteur_${sec}`, category: "trading", xp: 40, days: 5, family: "secteur",
+    make: (s) => { if (!Object.values(s.instruments).some((d) => d.cls === "action" && d.sector === sec)) return null; const target = round50(baseEq(s) * 0.04); return { title: `Prendre position dans le secteur ${sec}`, description: `Votre responsable veut une idée dans le secteur ${sec} : achetez des actions du secteur pour au moins ${eur(target)} (compte personnel ou book du desk).`, criteria: [`≥ ${eur(target)} d'actions ${sec} achetées`], params: { target, sec } }; },
+    check: (s, m) => Math.min(1, manual(s, m).filter((f) => f.side === "buy" && s.instruments[f.instrumentId]?.sector === m.params.sec && s.instruments[f.instrumentId]?.cls === "action").reduce((a, f) => a + notion(f), 0) / Number(m.params.target)),
+    guide: G([`Ouvrez la recherche et filtrez par secteur « ${sec} ».`, "Ouvrez la fiche d'une valeur, vérifiez PER et actualités.", "Achetez au moins le montant demandé."], "/play/recherche", "Rechercher un titre", "Comparez au moins deux valeurs du secteur avant d'acheter.") }));
+  // 2. une position dans une zone (6)
+  for (const [z, label] of ZONES) out.push(mk({ id: `a_zone_${z}`, category: "marches", xp: 40, days: 5, family: "zone",
+    make: (s) => { if (!Object.values(s.instruments).some((d) => (d.cls === "action" || d.cls === "etf") && d.zone === z)) return null; const target = round50(baseEq(s) * 0.04); return { title: `Exposition ${label}`, description: `Le comité souhaite une exposition ${label} : achetez des actions ou ETF cotés dans cette zone pour au moins ${eur(target)}.`, criteria: [`≥ ${eur(target)} d'actions ou d'ETF de la zone ${label}`], params: { target, z } }; },
+    check: (s, m) => Math.min(1, manual(s, m).filter((f) => f.side === "buy" && s.instruments[f.instrumentId]?.zone === m.params.z && ["action", "etf"].includes(s.instruments[f.instrumentId]?.cls)).reduce((a, f) => a + notion(f), 0) / Number(m.params.target)),
+    guide: G([`Dans la recherche, repérez les titres de la zone ${label}.`, "Achetez-en pour le montant demandé."], "/play/recherche", "Rechercher un titre") }));
+  // 3. par classe d'actifs : acheter, détenir, vendre avec profit (15)
+  for (const [cls, one, many] of CLASSES) {
+    out.push(mk({ id: `a_classe_achat_${cls}`, category: "trading", xp: 35, days: 5, family: "classe_achat",
+      make: (s) => { if (!Object.values(s.instruments).some((d) => d.cls === cls)) return null; return { title: `Acheter ${one}`, description: `Découvrez les ${many} : achetez ${one} (compte personnel ou book du desk).`, criteria: [`Au moins un achat de ${many}`], params: { cls } }; },
+      check: (s, m) => (manual(s, m).some((f) => f.side === "buy" && s.instruments[f.instrumentId]?.cls === cls) ? 1 : 0),
+      guide: G([`Cherchez un instrument de la catégorie « ${many} ».`, "Passez un ordre d'achat, même modeste."], "/play/recherche", "Rechercher un instrument") }));
+    out.push(mk({ id: `a_classe_detenir_${cls}`, category: "risque", xp: 45, days: 7, family: "classe_detenir",
+      make: (s) => { if (!Object.values(s.instruments).some((d) => d.cls === cls)) return null; const target = round50(baseEq(s) * 0.05); return { title: `Détenir des ${many}`, description: `Constituez une ligne en ${many} d'au moins ${eur(target)} de valeur de marché (compte personnel ou desk) avant l'échéance.`, criteria: [`≥ ${eur(target)} de ${many} détenus`], params: { cls, target } }; },
+      check: (s, m) => Math.min(1, heldViews(s).filter((v) => v.cls === cls).reduce((a, v) => a + Math.abs(v.mvEur), 0) / Number(m.params.target)),
+      guide: G([`Achetez des ${many} pour la valeur demandée.`, "La valeur se lit dans le portefeuille."], "/play/portefeuille", "Voir mon portefeuille") }));
+    out.push(mk({ id: `a_classe_profit_${cls}`, category: "trading", xp: 60, days: 10, family: "classe_profit",
+      make: (s) => { if (!Object.values(s.instruments).some((d) => d.cls === cls)) return null; return { title: `Un gain réalisé sur ${one}`, description: `Réalisez un profit : vendez ${one} avec un gain réalisé positif (achat puis vente).`, criteria: [`Une vente de ${many} avec P&L réalisé > 0`], params: { cls } }; },
+      check: (s, m) => (manual(s, m).some((f) => f.side === "sell" && f.realized > 0 && s.instruments[f.instrumentId]?.cls === cls) ? 1 : 0),
+      guide: G([`Achetez ${one}, attendez une hausse, puis vendez.`, "Le P&L réalisé apparaît dans l'historique des transactions."], "/play/transactions", "Voir les transactions", "Un stop-loss limite la casse si le marché tourne.") }));
+  }
+  // 4. types d'ordre (6)
+  const orderM = (id: string, title: string, desc: string, crit: string, pred: (o: GameState["orders"][number]) => boolean, steps: string[]) => out.push(mk({ id, category: "trading", xp: 40, days: 7, family: "ordre",
+    make: () => ({ title, description: desc, criteria: [crit], params: {} }),
+    check: (s, m) => (s.orders.some((o) => o.createdT >= m.startT && (o.account === "perso" || o.account === "desk") && pred(o)) ? 1 : 0),
+    guide: G(steps, "/play/ordres", "Passer un ordre") }));
+  orderM("a_ordre_limite", "Placer un ordre à cours limité", "Un ordre limité garantit un prix maximum d'achat (ou minimum de vente) : placez-en un.", "Un ordre « limite » placé", (o) => o.type === "limit", ["Ouvrez une fiche, choisissez le type « Limite ».", "Fixez un prix, validez."]);
+  orderM("a_ordre_stop", "Protéger une position avec un stop", "Placez un ordre stop pour limiter la perte d'une position ouverte.", "Un ordre « stop » placé", (o) => o.type === "stop" || o.type === "stop_limit", ["Choisissez le type « Stop » avec un prix en dessous du cours.", "Validez."]);
+  orderM("a_ordre_vente_limite", "Vendre à un objectif de cours", "Placez un ordre de vente limité au-dessus du cours actuel pour sécuriser un gain.", "Un ordre de vente limité placé", (o) => o.type === "limit" && o.side === "sell", ["Sur une position gagnante, choisissez Vendre, type « Limite ».", "Fixez le prix cible."]);
+  orderM("a_ordre_achat_limite", "Acheter moins cher", "Placez un ordre d'achat limité sous le cours actuel : on n'achète que si le prix baisse.", "Un ordre d'achat limité placé", (o) => o.type === "limit" && o.side === "buy", ["Choisissez Acheter, type « Limite », prix sous le cours.", "Validez."]);
+  orderM("a_ordre_oco", "Un ordre qui en annule un autre", "Placez deux ordres liés (OCO) : l'exécution de l'un annule l'autre.", "Un ordre lié OCO placé", (o) => !!o.ocoWith, ["Sur une position, placez stop-loss et objectif liés (option OCO).", "Validez."]);
+  orderM("a_ordre_annuler", "Savoir annuler un ordre", "Un ordre en attente peut être annulé : placez un ordre limité éloigné du cours puis annulez-le.", "Un ordre annulé", (o) => o.status === "annule", ["Placez un ordre limité loin du cours.", "Dans les ordres en attente, annulez-le."]);
+  // 5. structure de portefeuille (8)
+  for (const n of [3, 4, 6, 8, 10]) out.push(mk({ id: `a_lignes_${n}`, category: "risque", xp: 30 + n * 4, days: 10, family: "lignes",
+    make: () => ({ title: `Un portefeuille d'au moins ${n} lignes`, description: `La diversification commence par le nombre de lignes : détenez au moins ${n} positions différentes sur votre compte personnel.`, criteria: [`≥ ${n} positions ouvertes`], params: { n } }),
+    check: (s, m) => Math.min(1, positionViews(s, "perso").length / Number(m.params.n)), guide: G([`Achetez des instruments différents jusqu'à ${n} lignes.`], "/play/recherche", "Chercher des instruments") }));
+  for (const n of [2, 3, 4]) out.push(mk({ id: `a_classes_${n}`, category: "risque", xp: 40 + n * 5, days: 10, family: "classes",
+    make: () => ({ title: `Diversifier sur ${n} classes d'actifs`, description: `Détenez, sur votre compte personnel, des positions dans au moins ${n} classes d'actifs différentes (actions, ETF, obligations, matières premières, devises…).`, criteria: [`≥ ${n} classes d'actifs`], params: { n } }),
+    check: (s, m) => Math.min(1, new Set(positionViews(s, "perso").map((v) => v.cls)).size / Number(m.params.n)), guide: G(["Combinez par exemple un ETF actions, une obligation et de l'or."], "/play/recherche", "Chercher des instruments") }));
+  // 6. limites de risque (7)
+  for (const x of [50, 60, 70]) out.push(mk({ id: `a_var_${x}`, category: "risque", xp: 40 + (80 - x), days: 7, family: "var",
+    make: (s) => (s.accounts.desk ? { title: `Ramener la VaR sous ${x} % de la limite`, description: `Le risk manager demande une VaR du desk sous ${x} % de la limite, avec au moins 3 positions ouvertes (pas de book vide !).`, criteria: [`VaR ≤ ${x} % de la limite`, "≥ 3 positions"], params: { x } } : null),
+    check: (s, m) => { if (Object.keys(s.accounts.desk?.positions ?? {}).length < 3) return 0; const v = valueAtRisk(s, "desk").var, lim = s.career.deskLimitVaR / 100; return v <= (Number(m.params.x) / 100) * lim ? 1 : Math.max(0, Math.min(0.9, 1 - (v / lim - Number(m.params.x) / 100))); },
+    guide: G(["Ouvrez Risques : repérez les positions les plus volatiles.", "Réduisez-les jusqu'à passer sous le seuil, en gardant 3 lignes."], "/play/risques", "Voir la VaR") }));
+  for (const x of [15, 20, 25, 35]) out.push(mk({ id: `a_poids_${x}`, category: "risque", xp: 70 - x, days: 10, family: "poids",
+    make: () => ({ title: `Aucune ligne au-dessus de ${x} %`, description: `Sur votre compte personnel, aucune ligne ne doit dépasser ${x} % du portefeuille, avec au moins 4 positions.`, criteria: [`Poids maximal ≤ ${x} %`, "≥ 4 positions"], params: { x } }),
+    check: (s, m) => { const ex = exposures(s, "perso"); if (positionViews(s, "perso").length < 4) return Math.min(0.5, positionViews(s, "perso").length / 8); return ex.largestWeight <= Number(m.params.x) ? 1 : 0.6; }, guide: G(["Vendez une partie de la plus grosse ligne, rachetez ailleurs."], "/play/portefeuille", "Voir mon portefeuille") }));
+  // 7. outils du terminal (7)
+  for (const n of [6, 8, 10, 12]) out.push(mk({ id: `a_veille_${n}`, category: "analyse", xp: 20 + n, days: 7, family: "veille",
+    make: () => ({ title: `Une liste de suivi de ${n} valeurs`, description: `Suivez le marché de près : ajoutez des instruments à votre liste de surveillance jusqu'à en avoir ${n}.`, criteria: [`≥ ${n} instruments surveillés`], params: { n } }),
+    check: (s, m) => Math.min(1, s.watchlist.length / Number(m.params.n)), guide: G(["Sur une fiche, cliquez « ☆ Surveiller »."], "/play/recherche", "Rechercher") }));
+  for (const n of [1, 2, 3]) out.push(mk({ id: `a_alertes_${n}`, category: "analyse", xp: 15 + n * 8, days: 7, family: "alertes",
+    make: () => ({ title: `${n} alerte${n > 1 ? "s" : ""} de prix en place`, description: `Configurez ${n} alerte${n > 1 ? "s" : ""} de prix pour être prévenu quand un cours franchit un niveau.`, criteria: [`≥ ${n} alerte${n > 1 ? "s" : ""}`], params: { n } }),
+    check: (s, m) => Math.min(1, s.alerts.length / Number(m.params.n)), guide: G(["Sur une fiche, saisissez un niveau dans « Alerte à… » puis cliquez 🔔."], "/play/recherche", "Rechercher") }));
+  // 8. collecte clients (4)
+  for (const t of [10000, 25000, 50000, 100000]) out.push(mk({ id: `a_collecte_${t}`, category: "client", xp: 30 + t / 2500, days: 10, family: "collecte",
+    make: (s) => (s.clients.some((c) => !c.lost) ? { title: `Collecter ${eur(t)} auprès des clients`, description: `Appelez vos clients et obtenez au moins ${eur(t)} de nouveaux versements cumulés avant l'échéance.`, criteria: [`≥ ${eur(t)} de collecte`], params: { t }, baseline: { sales: Number(s.flags["salesYtd"] ?? 0) } } : null),
+    check: (s, m) => Math.min(1, (Number(s.flags["salesYtd"] ?? 0) - (m.baseline?.sales ?? 0)) / Number(m.params.t)), guide: G(["Ouvrez Clients et appelez ceux dont la satisfaction est élevée.", "Proposez un produit adapté à leur profil."], "/play/clients", "Mes clients") }));
+  // 9. taille d'une position (6) et culture (3)
+  for (const [i, fr] of ([0.02, 0.05, 0.1, 0.15, 0.2, 0.25] as number[]).entries()) out.push(mk({ id: `a_taille_${i}`, category: "trading", xp: 30 + i * 5, days: 7, family: "taille",
+    make: (s) => { const target = round50(baseEq(s) * fr); return { title: `Une position d'au moins ${eur(target)}`, description: `Prenez une position significative : un seul achat d'au moins ${eur(target)} (≈ ${Math.round(fr * 100)} % de votre compte personnel).`, criteria: [`Un achat ≥ ${eur(target)}`], params: { target } }; },
+    check: (s, m) => Math.min(1, Math.max(0, ...manual(s, m).filter((f) => f.side === "buy").map(notion)) / Number(m.params.target)), guide: G(["Passez un ordre d'achat d'un seul bloc du montant demandé."], "/play/terminal", "Salle des marchés") }));
+  for (const n of [3, 5, 8]) out.push(mk({ id: `a_culture_${n}`, category: "analyse", xp: 20 + n * 4, days: 10, family: "culture",
+    make: (s) => ({ title: `Répondre à ${n} questions de culture économique`, description: `Entraînez-vous : répondez à ${n} questions du quiz d'économie avant l'échéance.`, criteria: [`${n} questions répondues`], params: { n }, baseline: { a: quizState(s).answered } }),
+    check: (s, m) => Math.min(1, (quizState(s).answered - (m.baseline?.a ?? 0)) / Number(m.params.n)), guide: G(["Ouvrez le quiz d'économie et répondez."], "/play/culture", "Quiz d'économie") }));
+  return out;
+}
+
+export const BANK: BankTpl[] = [...FAMS.flatMap((f) => CTX.map((_c, ci) => famTemplate(f, ci))), ...actionTemplates()];
+export const BANK_BY_ID: Record<string, BankTpl> = Object.fromEntries(BANK.map((t) => [t.id, t]));
+export const BANK_CALC = BANK.filter((t) => t.kind === "calc");
+export const BANK_ACTION = BANK.filter((t) => t.kind === "action");
+/** Contexte (donneur d'ordre conseillé) d'un modèle de calcul */
+export const bankGiver = (t: BankTpl) => (t.kind === "calc" ? CTX[Number(t.id.split("_").pop())]?.giver : undefined);

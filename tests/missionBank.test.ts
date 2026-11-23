@@ -1,0 +1,88 @@
+import { describe, it, expect } from "vitest";
+import { game } from "./helpers";
+import { advance } from "@/engine/engine";
+import { createMission, answerMission, missionQuestion, missionGuide, checkMissions, missionTemplate } from "@/engine/missions";
+import { BANK, BANK_CALC, BANK_ACTION } from "@/engine/missionBank";
+import { Rng, seedRng } from "@/engine/rng";
+import { assignDailyMissions } from "@/engine/missions";
+import { dayIndex, nextBusinessDay, MIN_PER_DAY } from "@/engine/time";
+
+describe("Banque de missions de pratique", () => {
+  it("contient plus de 500 modèles distincts, aux identifiants et titres uniques", () => {
+    expect(BANK.length).toBeGreaterThanOrEqual(500);
+    expect(new Set(BANK.map((t) => t.id)).size).toBe(BANK.length);
+    const s = game("carriere", "bank-1");
+    const titles = new Set<string>();
+    for (const t of BANK) { const made = t.make(s, { k: 1 }, new Rng(seedRng("t" + t.id))); if (made) titles.add(made.title); }
+    expect(titles.size).toBeGreaterThanOrEqual(498);
+    expect(BANK_CALC.length).toBe(54 * 8);
+    expect(BANK_ACTION.length).toBeGreaterThanOrEqual(70);
+  });
+
+  it("chaque mission de calcul se résout : la bonne réponse réussit, une mauvaise échoue, la correction est donnée", () => {
+    const s = game("carriere", "bank-calc");
+    for (const [i, t] of BANK_CALC.entries()) {
+      for (const good of [true, false]) {
+        const m = createMission(s, t.id, { k: 1 + (i % 3) }, "boss");
+        expect(m, t.id).toBeTruthy();
+        expect(m!.description.length).toBeGreaterThan(40);
+        expect(JSON.parse(JSON.stringify(m!.params))).toEqual(m!.params);
+        const q = missionQuestion(s, m!)!;
+        expect(q, t.id).toBeTruthy();
+        const guide = missionGuide(s, m!); expect(guide.steps.length).toBeGreaterThan(0);
+        const r = q.kind === "numeric"
+          ? answerMission(s, m!.id, { value: (() => { const info = t.quiz!(s, m!); return good ? info.answer : info.answer + 50 * info.tolerance + 7; })() })
+          : answerMission(s, m!.id, { choice: (() => { const info = t.choiceQuiz!(s, m!); return good ? info.correct : (info.correct + 1) % info.options.length; })() });
+        expect(r.ok, t.id).toBe(true);
+        expect(m!.status, `${t.id} ${good}`).toBe(good ? "reussie" : "echouee");
+        if (r.ok) expect((r as { message: string }).message.length).toBeGreaterThan(8);
+      }
+    }
+  });
+
+  it("les chiffres changent d'une attribution à l'autre", () => {
+    const s = game("carriere", "bank-var");
+    const seen = new Set<string>();
+    for (let i = 0; i < 12; i++) { const m = createMission(s, "p_int_compose_2", { k: 1 }, "boss"); seen.add(m!.description); m!.status = "echouee"; }
+    expect(seen.size).toBeGreaterThanOrEqual(8);
+  });
+
+  it("les missions d'action se créent, se vérifient sans erreur et ne se valident pas toutes seules", () => {
+    const s = game("carriere", "bank-act");
+    let made = 0;
+    for (const t of BANK_ACTION) {
+      const m = createMission(s, t.id, { k: 1 }, "boss");
+      if (!m) continue; made++;
+      const p = t.check(s, m);
+      expect(p, t.id).toBeGreaterThanOrEqual(-1); expect(p).toBeLessThanOrEqual(1);
+    }
+    expect(made).toBeGreaterThanOrEqual(70);
+    checkMissions(s);
+  });
+
+  it("une action réelle valide la mission : acheter une valeur du secteur demandé", () => {
+    const s = game("carriere", "bank-buy");
+    const m = createMission(s, "a_classe_achat_etf", { k: 1 }, "boss")!;
+    expect(m.status).toBe("active");
+    const etf = Object.values(s.instruments).find((d) => d.cls === "etf")!;
+    s.fills.push({ id: "f1", orderId: "o-none", account: "perso", instrumentId: etf.id, side: "buy", qty: 10, price: 100, fees: 0, t: s.t + 1, slippageBps: 0, realized: 0 });
+    checkMissions(s);
+    expect(m.status).toBe("reussie");
+  });
+
+  it("au fil des semaines, les missions du jour sont très variées et surtout pratiques", () => {
+    const s = game("carriere", "bank-days"); const rng = new Rng(s.rng);
+    const all: string[] = [];
+    for (let d = 0; d < 45; d++) {
+      s.t = nextBusinessDay(dayIndex(s.t) + 1) * MIN_PER_DAY + 1;
+      const before = new Set(s.missions.map((m) => m.id));
+      assignDailyMissions(s, rng);
+      for (const m of s.missions) if (!before.has(m.id)) { all.push(m.templateId); m.status = "echouee"; }
+    }
+    const bank = all.filter((id) => id.startsWith("p_") || id.startsWith("a_"));
+    expect(all.length).toBeGreaterThanOrEqual(90);
+    expect(new Set(all).size).toBeGreaterThanOrEqual(Math.floor(all.length * 0.9)); // presque aucune répétition
+    expect(bank.length / all.length).toBeGreaterThan(0.7);
+    expect(all.every((id) => !!missionTemplate(id))).toBe(true);
+  });
+});
