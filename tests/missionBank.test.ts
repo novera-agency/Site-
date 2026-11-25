@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { game } from "./helpers";
 import { advance } from "@/engine/engine";
 import { createMission, answerMission, missionQuestion, missionGuide, checkMissions, missionTemplate } from "@/engine/missions";
-import { BANK, BANK_CALC, BANK_ACTION } from "@/engine/missionBank";
+import { BANK, BANK_CALC, BANK_ACTION, BANK_CTX } from "@/engine/missionBank";
 import { Rng, seedRng } from "@/engine/rng";
 import { assignDailyMissions } from "@/engine/missions";
 import { dayIndex, nextBusinessDay, MIN_PER_DAY } from "@/engine/time";
@@ -14,7 +14,8 @@ describe("Banque de missions de pratique", () => {
     const s = game("carriere", "bank-1");
     const titles = new Set<string>();
     for (const t of BANK) { const made = t.make(s, { k: 1 }, new Rng(seedRng("t" + t.id))); if (made) titles.add(made.title); }
-    expect(titles.size).toBeGreaterThanOrEqual(498);
+    expect(titles.size).toBeGreaterThanOrEqual(480); // les missions de situation ne se proposent que si la situation existe
+    expect(BANK_CTX.length).toBe(19);
     expect(BANK_CALC.length).toBe(54 * 8);
     expect(BANK_ACTION.length).toBeGreaterThanOrEqual(70);
   });
@@ -84,5 +85,26 @@ describe("Banque de missions de pratique", () => {
     expect(new Set(all).size).toBeGreaterThanOrEqual(Math.floor(all.length * 0.9)); // presque aucune répétition
     expect(bank.length / all.length).toBeGreaterThan(0.7);
     expect(all.every((id) => !!missionTemplate(id))).toBe(true);
+  });
+});
+
+describe("Missions de situation (nées de l'état de la partie)", () => {
+  it("chaque modèle renvoie null sans situation, et se résout sur les chiffres du moment quand elle existe", () => {
+    const s = game("carriere", "ctx-1"); const rng = new Rng(seedRng("ctx"));
+    s.crises = []; s.news = [];
+    const withoutCrisis = BANK_CTX.filter((t) => t.make(s, { k: 1 }, rng) === null).map((t) => t.id);
+    expect(withoutCrisis).toEqual(expect.arrayContaining(["c_crise_var", "c_crise_expo", "c_crise_choix", "c_news_signe"]));
+    s.crises.push({ id: "cr1", kind: "krach", phase: 2, phaseSinceT: s.t, startT: s.t, severity: 2, resolved: false, log: [] } as never);
+    s.news.push({ id: "n1", t: s.t - 60, category: "entreprises", title: "Résultats record", body: "Très bons chiffres.", impact: "fort", tickers: ["MAIS"], zones: [], sentiment: 0.7 } as never);
+    let ok = 0;
+    for (const t of BANK_CTX) {
+      const m = createMission(s, t.id, { k: 1 }, "boss");
+      if (!m) continue; ok++;
+      const q = missionQuestion(s, m);
+      if (t.quiz) { const info = t.quiz(s, m); expect(answerMission(s, m.id, { value: info.answer }).ok).toBe(true); expect(m.status, t.id).toBe("reussie"); }
+      else if (t.choiceQuiz) { const info = t.choiceQuiz(s, m); expect(q).toBeTruthy(); answerMission(s, m.id, { choice: info.correct }); expect(m.status, t.id).toBe("reussie"); }
+      else expect(t.check(s, m)).toBeGreaterThanOrEqual(0);
+    }
+    expect(ok).toBeGreaterThanOrEqual(14);
   });
 });

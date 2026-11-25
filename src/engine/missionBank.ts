@@ -1,5 +1,5 @@
 /**
- * Banque de missions « pratique » : plus de 500 modèles distincts, chacun aux chiffres tirés au hasard à chaque attribution.
+ * Banque de missions « pratique » : plus de 500 modèles distincts, dont 19 « de situation » (missionContext.ts), chacun aux chiffres tirés au hasard à chaque attribution.
  *  - 54 types de problèmes de métier (calcul chiffré ou choix commenté) × 8 mises en situation (client particulier, PME, gestion privée,
  *    desk, fonds de pension, structuration, trésorerie, comité) = 432 missions ; chaque mise en situation change le ton, l'interlocuteur,
  *    l'ordre de grandeur des montants et la difficulté ;
@@ -11,6 +11,7 @@ import type { GameState, Mission, RepKey, Sector, ZoneId, AssetClass } from "./t
 import type { Rng } from "./rng";
 import { accountEquity, exposures, positionViews, valueAtRisk } from "./portfolio";
 import { quizState } from "./quiz";
+import { CONTEXT } from "./missionContext";
 
 type Params = Record<string, number | string>;
 type Cat = Mission["category"];
@@ -37,16 +38,16 @@ const rel = (x: number, min = 0.01) => (a: number) => Math.max(min, Math.abs(a) 
 const abs = (x: number) => () => x;
 
 /* ───────── mises en situation ───────── */
-interface Ctx { label: string; sc: number; intro: string[]; giver: string }
+interface Ctx { label: string; sc: number; intro: string[]; giver: string; outro: string[] }
 const CTX: Ctx[] = [
-  { label: "Client particulier", sc: 0.15, giver: "senior", intro: ["Un client retraité de votre agence vous interroge :", "Une cliente vous écrit après son rendez-vous :", "Un jeune cadre qui prépare son premier investissement demande :", "Un client fidèle appelle la banque et pose cette question :"] },
-  { label: "Dirigeant de PME", sc: 0.6, giver: "boss", intro: ["Le dirigeant d'une PME de votre portefeuille souhaite savoir :", "La directrice financière d'une entreprise cliente demande :", "Un artisan qui place sa trésorerie vous demande :", "Le patron d'un cabinet d'architectes vous interroge :"] },
-  { label: "Gestion privée", sc: 1, giver: "senior", intro: ["Une famille suivie en gestion privée vous soumet ce cas :", "Un client fortuné prépare un arbitrage et vous demande :", "Lors du comité patrimonial, on vous pose cette question :", "Une héritière veut comprendre avant de signer :"] },
-  { label: "Desk de trading", sc: 2, giver: "boss", intro: ["Le responsable du desk veut un chiffre rapide :", "Un trader vous demande un contrôle avant d'envoyer l'ordre :", "Pendant la réunion du matin, on attend de vous :", "Le middle-office vous soumet ce calcul à valider :"] },
-  { label: "Fonds de pension", sc: 10, giver: "director", intro: ["Le comité de placement d'un fonds de pension doit trancher :", "Le directeur des investissements d'une caisse de retraite demande :", "Un gestionnaire institutionnel vous sollicite :", "Pour le rapport trimestriel d'un fonds de pension, il faut établir :"] },
-  { label: "Structuration", sc: 3, giver: "senior", intro: ["L'équipe de structuration prépare une offre et a besoin de :", "Pour calibrer un produit structuré, on vous demande :", "Le structureur vous glisse ce calcul à vérifier :", "Avant le lancement d'un produit, le juridique et le front office vous demandent :"] },
-  { label: "Trésorerie d'entreprise", sc: 5, giver: "boss", intro: ["Le trésorier d'un grand groupe industriel cherche à savoir :", "La trésorerie d'une multinationale vous demande :", "Un client corporate prépare son budget et pose cette question :", "Le directeur administratif d'un groupe vous contacte :"] },
-  { label: "Comité d'investissement", sc: 4, giver: "director", intro: ["Le comité d'investissement attend votre chiffre :", "Le directeur présente un dossier au comité exécutif et vous demande :", "Un associé de la banque vous interpelle dans le couloir :", "Pour la note de décision d'aujourd'hui, il manque :"] },
+  { label: "Client particulier", outro: ["Merci de me répondre avant ce soir.", "Il aimerait une réponse claire, sans jargon.", "Prenez le temps de bien lui expliquer.", "Il attend votre retour dans la journée."], sc: 0.15, giver: "senior", intro: ["Un client retraité de votre agence vous interroge :", "Une cliente vous écrit après son rendez-vous :", "Un jeune cadre qui prépare son premier investissement demande :", "Un client fidèle appelle la banque et pose cette question :"] },
+  { label: "Dirigeant de PME", outro: ["Il a un rendez-vous avec son banquier demain.", "Il doit décider cette semaine.", "Une réponse précise l'aiderait à trancher.", "Merci de répondre avant 18 h 30."], sc: 0.6, giver: "boss", intro: ["Le dirigeant d'une PME de votre portefeuille souhaite savoir :", "La directrice financière d'une entreprise cliente demande :", "Un artisan qui place sa trésorerie vous demande :", "Le patron d'un cabinet d'architectes vous interroge :"] },
+  { label: "Gestion privée", outro: ["La famille décide en fin de semaine.", "Le conseiller attend votre validation.", "Merci de répondre avec précision.", "Le dossier part ce soir."], sc: 1, giver: "senior", intro: ["Une famille suivie en gestion privée vous soumet ce cas :", "Un client fortuné prépare un arbitrage et vous demande :", "Lors du comité patrimonial, on vous pose cette question :", "Une héritière veut comprendre avant de signer :"] },
+  { label: "Desk de trading", outro: ["C'est pour tout de suite.", "Pas le temps de vérifier deux fois : répondez vite et juste.", "L'ordre part dans cinq minutes.", "Le risk manager regarde par-dessus l'épaule."], sc: 2, giver: "boss", intro: ["Le responsable du desk veut un chiffre rapide :", "Un trader vous demande un contrôle avant d'envoyer l'ordre :", "Pendant la réunion du matin, on attend de vous :", "Le middle-office vous soumet ce calcul à valider :"] },
+  { label: "Fonds de pension", outro: ["Le comité se réunit demain matin.", "Les trustees attendent un chiffre fiable.", "Le rapport est publié vendredi.", "L'erreur ne serait pas pardonnée."], sc: 10, giver: "director", intro: ["Le comité de placement d'un fonds de pension doit trancher :", "Le directeur des investissements d'une caisse de retraite demande :", "Un gestionnaire institutionnel vous sollicite :", "Pour le rapport trimestriel d'un fonds de pension, il faut établir :"] },
+  { label: "Structuration", outro: ["Le term sheet part ce soir.", "Le juridique attend votre chiffre.", "Le client veut le prix avant midi.", "Pas de marge d'erreur sur ce calcul."], sc: 3, giver: "senior", intro: ["L'équipe de structuration prépare une offre et a besoin de :", "Pour calibrer un produit structuré, on vous demande :", "Le structureur vous glisse ce calcul à vérifier :", "Avant le lancement d'un produit, le juridique et le front office vous demandent :"] },
+  { label: "Trésorerie d'entreprise", outro: ["Le budget est bouclé jeudi.", "La direction générale attend la réponse.", "Le groupe décide ce soir.", "Une erreur fausserait les prévisions de trésorerie."], sc: 5, giver: "boss", intro: ["Le trésorier d'un grand groupe industriel cherche à savoir :", "La trésorerie d'une multinationale vous demande :", "Un client corporate prépare son budget et pose cette question :", "Le directeur administratif d'un groupe vous contacte :"] },
+  { label: "Comité d'investissement", outro: ["Le comité commence dans une heure.", "Le dossier est sur la table du directeur.", "Un chiffre faux se verrait tout de suite.", "Répondez, le comité vous écoute."], sc: 4, giver: "director", intro: ["Le comité d'investissement attend votre chiffre :", "Le directeur présente un dossier au comité exécutif et vous demande :", "Un associé de la banque vous interpelle dans le couloir :", "Pour la note de décision d'aujourd'hui, il manque :"] },
 ];
 
 /* ───────── 54 types de problèmes ───────── */
@@ -292,16 +293,17 @@ function famTemplate(fam: Fam, ci: number): BankTpl {
   const id = `p_${fam.key}_${ci}`;
   const isChoice = !!fam.choice;
   return {
-    id, category: fam.cat, xp: Math.round(fam.xp * (0.8 + 0.2 * Math.min(4, ci + 1))), rep: { professionnelle: 1 }, days: 2, kind: "calc", family: fam.key,
+    id, category: fam.cat, xp: Math.round(fam.xp * 0.75), rep: { professionnelle: 1 }, days: 2, kind: "calc", family: fam.key,
     make: (_s, p, rng) => {
       const k = K(p), sc = ctx.sc * (1 + 0.25 * (k - 1));
       let vals: Record<string, number> = {};
       for (let t = 0; t < 8; t++) { vals = fam.gen(rng, sc); if (vals.ok === undefined || vals.ok === 1) break; }
+      for (const k of Object.keys(vals)) if (vals[k] === 0) vals[k] = 0; // évite -0 (perdu à la sauvegarde JSON)
       const intro = rng.pick(ctx.intro);
       const qtext = isChoice ? fam.choice!(vals).question : fam.ask(vals);
       return {
         title: `${fam.title} · ${ctx.label}`,
-        description: `${intro} ${qtext}${isChoice ? "" : ` (Formule utile : ${fam.hint})`}`,
+        description: `${intro} ${qtext}${isChoice ? "" : ` (${rng.pick(["Formule utile", "Rappel", "Indice", "Pour mémoire"])} : ${fam.hint})`}${rng.chance(0.6) ? ` ${rng.pick(ctx.outro)}` : ""}`,
         criteria: [isChoice ? "Bonne réponse" : `Réponse à ${fam.tol ? "la tolérance indiquée" : "1 %"} près`],
         params: { ...vals, _fam: fam.key, _ctx: ci },
       };
@@ -400,9 +402,11 @@ function actionTemplates(): BankTpl[] {
   return out;
 }
 
-export const BANK: BankTpl[] = [...FAMS.flatMap((f) => CTX.map((_c, ci) => famTemplate(f, ci))), ...actionTemplates()];
+export const BANK: BankTpl[] = [...FAMS.flatMap((f) => CTX.map((_c, ci) => famTemplate(f, ci))), ...actionTemplates(), ...CONTEXT];
+/** Missions de situation : nées de l'état réel de la partie (crise, résultats, banques centrales, actualité, portefeuille) */
+export const BANK_CTX = CONTEXT;
 export const BANK_BY_ID: Record<string, BankTpl> = Object.fromEntries(BANK.map((t) => [t.id, t]));
-export const BANK_CALC = BANK.filter((t) => t.kind === "calc");
-export const BANK_ACTION = BANK.filter((t) => t.kind === "action");
+export const BANK_CALC = BANK.filter((t) => t.kind === "calc" && !CONTEXT.includes(t));
+export const BANK_ACTION = BANK.filter((t) => t.kind === "action" && !CONTEXT.includes(t));
 /** Contexte (donneur d'ordre conseillé) d'un modèle de calcul */
 export const bankGiver = (t: BankTpl) => (t.kind === "calc" ? CTX[Number(t.id.split("_").pop())]?.giver : undefined);

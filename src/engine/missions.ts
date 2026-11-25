@@ -8,7 +8,7 @@ import { changeRep, changeTrust, gainXp, nextId, notify, careerLog } from "./cor
 import { equityWeight, suitableEquityBand } from "./clients";
 import { dayIndex, MIN_PER_DAY, fmtShortDate } from "./time";
 import { quizState, quizById, QUIZ_BANK } from "./quiz";
-import { BANK, BANK_CALC, BANK_ACTION, bankGiver } from "./missionBank";
+import { BANK, BANK_CALC, BANK_ACTION, BANK_CTX, bankGiver } from "./missionBank";
 
 interface Tpl {
   id: string; category: Mission["category"]; xp: number; rep: Partial<Record<RepKey, number>>; days: number;
@@ -357,9 +357,10 @@ export function assignDailyMissions(s: GameState, rng: Rng) {
     // la pratique d'abord : 88 % de missions tirées d'une banque de plus de 500 modèles (calculs chiffrés, actions à mener sur la partie)
     const u = rng.next();
     let t: Tpl | undefined;
-    if (u < 0.12) t = rng.pick(DAILY.filter((x) => !yesterday.includes(x.id)));
+    if (u < 0.1) t = rng.pick(DAILY.filter((x) => !yesterday.includes(x.id)));
     else {
-      const pool = (u < 0.8 ? BANK_CALC : BANK_ACTION.filter((x) => QUICK_FAM.has(x.family))).filter((x) => !recent.includes(x.id) && !recentFam.slice(-12).includes(x.family) && !famToday.has(x.family));
+      // missions « de situation » (crise en cours, résultats à venir, banques centrales, actualité, votre portefeuille) : proposées dès que la situation existe
+      const pool = (u < 0.4 ? BANK_CTX : u < 0.8 ? BANK_CALC : BANK_ACTION.filter((x) => QUICK_FAM.has(x.family))).filter((x) => !recent.includes(x.id) && !recentFam.slice(-12).includes(x.family) && !famToday.has(x.family));
       t = pool.length ? rng.pick(pool) : undefined;
     }
     if (!t) continue;
