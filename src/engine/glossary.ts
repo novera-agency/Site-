@@ -1,5 +1,6 @@
 /** Glossaire utilisé en réunion : un participant explique un terme quand le joueur demande « Qu'est-ce que… ? ». */
 import { LESSONS } from "./data/learning";
+import { GLOSSARY_BANK } from "./data/glossaryBank";
 
 export function normalize(t: string) {
   return t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[’']/g, " ").replace(/[^a-z0-9%&+,.\s-]/g, " ").replace(/-/g, " ").replace(/\s+/g, " ").trim();
@@ -41,7 +42,10 @@ const LESSON_DEFS: TermDef[] = LESSONS.map((l) => {
   const base = l.term.split(/[(/]/).map((x) => normalize(x)).filter((x) => x.length > 1);
   return { term: l.term, aliases: [...new Set([...base, normalize(l.term)])], simple: l.simple + " " + l.definition, example: l.example };
 });
-const ALL = [...EXTRA, ...LESSON_DEFS];
+/** Mots trop courants en français pour être soulignés seuls (ils restent expliqués dans des expressions plus précises) */
+const STOP_ALIASES = new Set(["or", "ca", "ve", "vol", "risk", "limite", "limite", "achat", "acheter", "long", "valeur", "valeurs", "hausse", "baisse", "progresser", "progresse", "progresse", "entree", "reel", "veille", "suivre", "surveiller", "par an", "verse", "croit", "croissant", "croissante", "croitre", "hier", "change", "rapport", "limite", "once", "refuge", "entree", "capital final", "performance", "cash", "ratios", "cote", "limite", "titre"]);
+const BANK_DEFS: TermDef[] = GLOSSARY_BANK.map((b) => ({ term: b.term, simple: b.simple, example: b.example, aliases: [...new Set(b.aliases.map((a) => normalize(a)).filter((a) => a.length > 1 && !STOP_ALIASES.has(a)))] }));
+const ALL = [...EXTRA, ...LESSON_DEFS, ...BANK_DEFS];
 /** Toutes les notions du glossaire (pour les fiches de synthèse) */
 export function allTerms() { return ALL; }
 const extraAliases: Record<string, string[]> = { "VaR (Value at Risk)": ["var", "value at risk", "valeur a risque"], "Ratio de Sharpe": ["sharpe"], "Marge / appel de marge": ["appel de marge", "marge"], "ITM / ATM / OTM": ["itm", "atm", "otm", "dans la monnaie", "a la monnaie", "hors de la monnaie"], "Duration": ["duration", "duration modifiee"], "Sensibilité": ["sensibilite"], "Effet de levier": ["levier", "effet de levier"], "Inflation et politique monétaire": ["inflation", "politique monetaire"], "Produits structurés": ["produit structure", "produits structures", "autocall", "phoenix"], "Risque de contrepartie": ["contrepartie"], "Free cash-flow": ["free cash flow", "cash flow"] };
@@ -63,3 +67,63 @@ export function findTerm(question: string): TermDef | null {
 }
 /** Le texte emploie-t-il ce terme ? */
 export function usesTerm(text: string, d: TermDef) { const t = ` ${normalize(text)} `; return d.aliases.some((a) => a.length > 1 && (t.includes(` ${a} `) || t.includes(` ${a}s `))); }
+
+
+/* ───────── annotation d'un texte : chaque mot de métier devient explicable ───────── */
+const words = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9&]+/g, " ").trim().split(" ").filter(Boolean);
+let INDEX: Map<string, TermDef> | null = null; let MAXN = 1;
+function index() {
+  if (INDEX) return INDEX;
+  INDEX = new Map();
+  for (const d of ALL) for (const a of d.aliases) {
+    const w = words(a); if (!w.length || (w.length === 1 && w[0].length < 2)) continue;
+    const key = w.join(" "); MAXN = Math.max(MAXN, w.length);
+    if (!INDEX.has(key)) INDEX.set(key, d);
+    const sing = key.endsWith("s") ? key.slice(0, -1) : key + "s"; // pluriel / singulier
+    if (!INDEX.has(sing)) INDEX.set(sing, d);
+  }
+  return INDEX;
+}
+export interface Seg { text: string; def?: TermDef }
+/** Découpe un texte en morceaux, les mots de métier portant leur définition (la plus longue expression l'emporte ; chaque notion n'est soulignée qu'une fois) */
+export function annotate(text: string, o: { once?: boolean; skip?: Set<string> } = {}): Seg[] {
+  const idx = index(); const once = o.once !== false;
+  const ws: { s: number; e: number; w: string }[] = [];
+  for (const m of text.matchAll(/[\p{L}\p{N}&]+/gu)) ws.push({ s: m.index!, e: m.index! + m[0].length, w: words(m[0]).join("") });
+  const out: Seg[] = []; const used = new Set<string>(o.skip ?? []); let pos = 0;
+  for (let i = 0; i < ws.length;) {
+    let hit: { n: number; d: TermDef } | null = null;
+    for (let n = Math.min(MAXN, ws.length - i); n >= 1 && !hit; n--) {
+      const key = ws.slice(i, i + n).map((x) => x.w).join(" ");
+      const d = idx.get(key);
+      // un mot isolé suivi d'une apostrophe ou d'un trait d'union (« d'entreprise », « stop-loss ») : on regarde aussi la forme collée
+      if (d && !(once && used.has(d.term))) hit = { n, d };
+    }
+    if (hit) {
+      const a = ws[i], b = ws[i + hit.n - 1];
+      if (a.s > pos) out.push({ text: text.slice(pos, a.s) });
+      out.push({ text: text.slice(a.s, b.e), def: hit.d }); used.add(hit.d.term); pos = b.e; i += hit.n;
+    } else i++;
+  }
+  if (pos < text.length) out.push({ text: text.slice(pos) });
+  return out;
+}
+/** Notions employées dans un ou plusieurs textes (sans doublon, dans l'ordre d'apparition) */
+export function termsIn(texts: string[]): TermDef[] {
+  const seen = new Map<string, TermDef>();
+  for (const t of texts) for (const s of annotate(t, { once: false })) if (s.def && !seen.has(s.def.term)) seen.set(s.def.term, s.def);
+  return [...seen.values()];
+}
+
+/** Recherche libre d'un mot ou d'une expression : exact d'abord, puis débuts de mots, puis contenu (pour le champ « un mot que vous ne comprenez pas ») */
+export function searchTerms(query: string, n = 4): TermDef[] {
+  const q = words(query).join(" "); if (q.length < 2) return [];
+  const score = (d: TermDef) => {
+    const keys = [d.term, ...d.aliases].map((a) => words(a).join(" "));
+    if (keys.some((k) => k === q || k === q + "s" || k + "s" === q)) return 3;
+    if (keys.some((k) => k.startsWith(q))) return 2;
+    if (keys.some((k) => k.includes(q)) || words(d.simple).join(" ").includes(q)) return 1;
+    return 0;
+  };
+  return ALL.map((d) => ({ d, s: score(d) })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s).slice(0, n).map((x) => x.d);
+}

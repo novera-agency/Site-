@@ -1,4 +1,6 @@
 "use client";
+import { Explained, HelpMe } from "@/components/Explained";
+import { termsIn } from "@/engine/glossary";
 import { useEffect, useState } from "react";
 import { useView, useAction } from "@/lib/hooks";
 import { Card, PageTitle, Loading, Badge, Bar, Button, Tabs } from "@/components/ui";
@@ -45,14 +47,15 @@ export default function Culture() {
     {!q ? <Card title="Série terminée 🎉"><p className="text-sm text-ink-200" data-testid="quiz-end">{round.n > 0 ? `Vous avez réussi ${round.ok} question${round.ok > 1 ? "s" : ""} sur ${round.n}.` : cat === "jour" ? "Vos deux questions du jour sont faites. Revenez demain, ou continuez avec une autre catégorie." : "Vous avez répondu à toutes les questions disponibles dans cette catégorie !"} {queue && queue.length === 0 ? "Plus aucune question à découvrir ici : changez de catégorie." : ""}</p><div className="mt-3">{queue && queue.length > 0 && cat !== "jour" && <Button onClick={restart}>Nouvelle série</Button>}{cat === "jour" && <Button variant="ghost" onClick={() => { setCat("mix"); restart(); }}>Continuer avec un mélange</Button>}</div></Card>
       : <Card>
         <div className="mb-2 flex items-center gap-2"><Badge tone={CAT[q.cat]?.[1] ?? "neutral"}>{CAT[q.cat]?.[0] ?? q.cat}</Badge><Badge tone="neutral">{LEVEL[q.level]}</Badge>{q.review && <Badge tone="warn">🔁 Révision</Badge>}<span className="ml-auto text-[11px] text-ink-400">Question {seen.length + 1} / {queue!.length}</span></div>
-        <h2 className="mb-3 text-base font-semibold text-white" data-testid="quiz-question">{q.q}</h2>
+        <h2 className="mb-3 text-base font-semibold text-white" data-testid="quiz-question"><Explained text={q.q} /></h2>
         <div className="space-y-2" role="group" aria-label="Réponses possibles">{q.options.map((o: string, i: number) => {
           const state = !res ? "" : i === res.answer ? "border-green-500 bg-green-500/10" : i === picked ? "border-red-500 bg-red-500/10" : "opacity-60";
           return <button key={i} data-testid={`quiz-opt-${i}`} disabled={!!res} onClick={() => pick(i)} className={`block w-full rounded-lg border px-3 py-2.5 text-left text-sm transition ${state || "border-ink-600 bg-ink-900 hover:border-gold"}`}><span className="mr-2 text-ink-400">{String.fromCharCode(65 + i)}.</span>{o}{res && i === res.answer && <span className="ml-2 text-gain">✔</span>}{res && i === picked && i !== res.answer && <span className="ml-2 text-loss">✘</span>}</button>;
         })}</div>
+        <HelpMe key={q.id ?? q.q} defaultOpen={!!res && !res.correct} help={{ terms: termsIn([q.q, ...q.options, ...(res ? [res.explain] : [])]).map((x) => ({ term: x.term, simple: x.simple, example: x.example })), examples: [] }} label="🤔 Je ne comprends pas un mot" />
         {res && <div className={`mt-3 rounded-lg border p-3 text-sm ${res.correct ? "border-green-500/40 bg-green-500/5" : "border-red-500/40 bg-red-500/5"}`} data-testid="quiz-result" role="status">
           <div className={`font-semibold ${res.correct ? "text-gain" : "text-loss"}`}>{res.correct ? "✔ Bonne réponse !" : "✘ Pas tout à fait."}{res.xp > 0 && <span className="ml-2 text-xs text-gold">+{res.xp} XP</span>}</div>
-          <p className="mt-1 text-ink-200">{res.explain}</p>
+          <p className="mt-1 text-ink-200"><Explained text={res.explain} /></p>
           <div className="mt-3"><Button data-testid="quiz-next" onClick={next}>Question suivante →</Button></div>
         </div>}
       </Card>}

@@ -4,16 +4,21 @@ import { useState } from "react";
 import { useView, useAction } from "@/lib/hooks";
 import { useGame } from "@/lib/store";
 import { Button, Badge, Bar, inputCls } from "./ui";
+import { Explained, HelpMe } from "./Explained";
 import { fmtShortDate } from "@/engine/time";
 
+/** Question d'une mission : mots de métier explicables au toucher + panneau « Je ne comprends pas » */
 export function MissionQuiz({ m }: { m: any }) {
+  return <><MissionQuizInner m={m} /><HelpMe help={m.help} /></>;
+}
+function MissionQuizInner({ m }: { m: any }) {
   const act = useAction();
   const [v, setV] = useState("");
   const q = m.question;
   if (!q) return null;
-  if (q.kind === "numeric") return <div className="mt-2 rounded bg-ink-900 p-2"><div className="text-sm">{q.question}</div><div className="mt-1 flex gap-2"><input value={v} onChange={(e) => setV(e.target.value)} className={inputCls} placeholder={q.unit} /><Button onClick={() => act({ type: "answer_mission", missionId: m.id, value: Number(v.replace(",", ".")) })}>Répondre</Button></div></div>;
-  if (q.kind === "choice") return <div className="mt-2 rounded bg-ink-900 p-2"><div className="text-sm">{q.question}</div><div className="mt-1 flex flex-wrap gap-2">{q.options.map((o: string, i: number) => <Button key={o} variant="outline" size="sm" onClick={() => act({ type: "answer_mission", missionId: m.id, choice: i })}>{o}</Button>)}</div></div>;
-  return <div className="mt-2 rounded bg-ink-900 p-2"><div className="text-sm">{q.question} {q.answered && <Badge tone="info">prévision : {q.answered}</Badge>}</div>{!q.answered && <div className="mt-1 flex gap-2">{q.options.map((o: string) => <Button key={o} variant="outline" size="sm" onClick={() => act({ type: "answer_mission", missionId: m.id, forecast: o })}>{o.replace("_", " ")}</Button>)}</div>}</div>;
+  if (q.kind === "numeric") return <div className="mt-2 rounded bg-ink-900 p-2"><div className="text-sm"><Explained text={q.question} /></div><div className="mt-1 flex gap-2"><input value={v} onChange={(e) => setV(e.target.value)} className={inputCls} placeholder={q.unit} /><Button onClick={() => act({ type: "answer_mission", missionId: m.id, value: Number(v.replace(",", ".")) })}>Répondre</Button></div></div>;
+  if (q.kind === "choice") return <div className="mt-2 rounded bg-ink-900 p-2"><div className="text-sm"><Explained text={q.question} /></div><div className="mt-1 flex flex-wrap gap-2">{q.options.map((o: string, i: number) => <Button key={o} variant="outline" size="sm" onClick={() => act({ type: "answer_mission", missionId: m.id, choice: i })}>{o}</Button>)}</div></div>;
+  return <div className="mt-2 rounded bg-ink-900 p-2"><div className="text-sm"><Explained text={q.question} /> {q.answered && <Badge tone="info">prévision : {q.answered}</Badge>}</div>{!q.answered && <div className="mt-1 flex gap-2">{q.options.map((o: string) => <Button key={o} variant="outline" size="sm" onClick={() => act({ type: "answer_mission", missionId: m.id, forecast: o })}>{o.replace("_", " ")}</Button>)}</div>}</div>;
 }
 
 /** Bouton qui active / désactive l'aide d'une mission */

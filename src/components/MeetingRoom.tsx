@@ -1,4 +1,5 @@
 "use client";
+import { Explained } from "./Explained";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useView, useAction } from "@/lib/hooks";
 import { useGame } from "@/lib/store";
@@ -286,7 +287,7 @@ export function MeetingRoom({ meetingId, onClose }: { meetingId: string; onClose
                     const mine = l.who.includes("(vous)"); const sys = l.who === "—" || l.who === "Correction" || l.who === "Exécution" || l.who === "Bilan";
                     return <div key={i} className={`fade-in ${mine ? "ml-auto max-w-[80%] text-right" : "max-w-[90%]"}`}>
                       <div className={`text-[11px] ${sys ? "text-gold" : "text-ink-400"}`}>{mine && myAvatar ? <span className="inline-flex items-center gap-1.5"><AvatarPortrait avatar={myAvatar} size={22} /><b className="text-ink-200">{l.who}</b></span> : who ? <>{who.avatar} <b className="text-ink-200">{who.name}</b> · {who.role}{readAloud && speaker === who.id && <span className="ml-1 text-gold">🔊 parle…</span>}</> : l.who}</div>
-                      <div className={`mt-0.5 inline-block rounded-lg px-3 py-2 text-sm leading-relaxed ${mine ? "bg-accent/20 text-blue-100" : sys ? "border border-ink-600 bg-ink-850 text-ink-200" : "bg-ink-800 text-ink-100"}`}>{l.text}</div>
+                      <div className={`mt-0.5 inline-block rounded-lg px-3 py-2 text-sm leading-relaxed ${mine ? "bg-accent/20 text-blue-100" : sys ? "border border-ink-600 bg-ink-850 text-ink-200" : "bg-ink-800 text-ink-100"}`}>{mine ? l.text : <Explained text={l.text} />}</div>
                     </div>;
                   })}
                 </div>

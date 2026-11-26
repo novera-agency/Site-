@@ -11,6 +11,7 @@ import { listExpiries, strikeGrid, optionId, optionable, buyingPower, canTradeOn
 import { tutorialChecklist, wealth, CHALLENGES } from "@/engine/engine";
 import { meetingView, allMeetingTemplates, meetingTemplate } from "@/engine/meetingEngine";
 import { missionQuestion, missionGuide } from "@/engine/missions";
+import { missionHelp } from "@/engine/missionHelp";
 import { performanceScore, rankTitle } from "@/engine/career";
 import { currentAllocation, equityWeight, suitableEquityBand, totalAum } from "@/engine/clients";
 import { ALLOC_BUCKETS } from "@/engine/people";
@@ -214,7 +215,7 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
       const pend = typeof s.flags["pendingMeeting"] === "string" ? JSON.parse(s.flags["pendingMeeting"] as string) : null;
       return { active: active ? meetingView(s, active) : null, pending: pend, history: s.meetings.filter((m) => m.done).slice(0, 40).map((m) => ({ id: m.id, templateId: m.templateId, title: meetingView(s, m).title, startedT: m.startedT, outcome: m.outcome, score: m.score })), templates: allMeetingTemplates().map((t) => ({ id: t.id, type: t.type })) };
     }
-    case "mission": { const m = s.missions.find((x) => x.id === p.id); return m ? { ...m, question: m.status === "active" ? missionQuestion(s, m) : null, guide: missionGuide(s, m), giverInfo: person(s, m.giver) } : { error: "Mission introuvable" }; }
+    case "mission": { const m = s.missions.find((x) => x.id === p.id); return m ? { ...m, question: m.status === "active" ? missionQuestion(s, m) : null, guide: missionGuide(s, m), help: m.status === "active" ? missionHelp(s, m) : null, giverInfo: person(s, m.giver) } : { error: "Mission introuvable" }; }
     case "meeting": { const m = s.meetings.find((x) => x.id === p.id); return m ? { ...meetingView(s, m), recap: m.done ? buildRecap(s, m) : null } : { error: "Réunion introuvable" }; }
     case "agenda": return { agenda: withPeople(s, s.agenda.slice(-80)), t: s.t };
     case "messages": return { messages: s.messages.slice(0, 100) };
@@ -224,7 +225,7 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
       clients: s.clients.map((c) => ({ ...c, wealth: c.wealth / 100, aum: accountEquity(s, c.accountId), perf: performance(s.accounts[c.accountId]), equityWeight: equityWeight(s, c.accountId), band: suitableEquityBand(c.riskTolerance), allocation: currentAllocation(s, c), npc: s.npcs[c.npcId], history: c.history.slice(0, 15), equityHistory: s.accounts[c.accountId].equityHistory.slice(-120) })),
       buckets: ALLOC_BUCKETS.map((b) => ({ ...b, price: b.id === "CASH" ? 1 : s.quotes[b.id]?.price })), totalAum: totalAum(s), feesYtd: ((s.flags["feesYtd"] as number) ?? 0) / 100, salesYtd: (s.flags["salesYtd"] as number) ?? 0,
     };
-    case "missions": return { appreciation: Math.round(appreciation(s)), rank: s.career.rank, missions: s.missions.slice(0, 80).map((m) => ({ ...m, question: m.status === "active" ? missionQuestion(s, m) : null, guide: missionGuide(s, m), giverInfo: person(s, m.giver) })) };
+    case "missions": return { appreciation: Math.round(appreciation(s)), rank: s.career.rank, missions: s.missions.slice(0, 80).map((m) => ({ ...m, question: m.status === "active" ? missionQuestion(s, m) : null, guide: missionGuide(s, m), help: m.status === "active" ? missionHelp(s, m) : null, giverInfo: person(s, m.giver) })) };
     case "learning": return { lessons: LESSONS.map((l) => ({ ...l, exercise: l.exercise.kind === "qcm" ? { kind: l.exercise.kind, question: l.exercise.question, options: l.exercise.options } : { kind: l.exercise.kind, question: l.exercise.question, unit: l.exercise.unit } })), completed: s.learning.completed, attempts: s.learning.attempts };
     case "skills": return { skills: Object.entries(s.skills).map(([k, xp]) => ({ id: k, name: SKILL_NAMES[k as keyof typeof SKILL_NAMES], xp, level: skillLevel(xp), next: SKILL_LEVELS[skillLevel(xp) + 1] ?? null, prev: SKILL_LEVELS[skillLevel(xp)] })), log: s.skillLog.slice(0, 60), reputation: Object.entries(s.reputation).map(([k, v]) => ({ id: k, name: REP_NAMES[k as keyof typeof REP_NAMES], value: v })), avgRep: avgRep(s), decisions: s.decisions.slice(0, 80) };
     case "network": return { npcs: Object.values(s.npcs).map((n) => ({ ...n, client: n.relation === "client", status: relationStatus(s, n.id) })) };

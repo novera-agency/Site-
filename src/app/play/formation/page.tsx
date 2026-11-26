@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { useView, useAction } from "@/lib/hooks";
 import { Card, PageTitle, Loading, Badge, Button, inputCls, Tabs } from "@/components/ui";
+import { Explained, HelpMe } from "@/components/Explained";
+import { termsIn } from "@/engine/glossary";
 
 export default function Formation() {
   const { data } = useView<any>("learning", {}, 30000);
@@ -20,13 +22,13 @@ export default function Formation() {
       <Card pad={false}><ul className="scroll-thin max-h-[70vh] divide-y divide-ink-800 overflow-y-auto">{lessons.map((x: any) => <li key={x.id}><button onClick={() => { setSel(x.id); setAns(""); setRes(null); }} className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-ink-800 ${l?.id === x.id ? "bg-ink-800" : ""}`}><span>{x.term}</span>{data.completed.includes(x.id) ? <Badge tone="gain">✔</Badge> : <Badge>niv. {x.level}</Badge>}</button></li>)}</ul></Card>
       {l && <Card title={l.term} right={<Badge tone="info">{l.branch}</Badge>}>
         <div className="space-y-3 text-sm leading-relaxed">
-          <div><div className="text-[11px] uppercase text-gold">Mise en pratique dans le jeu</div>{l.application}</div>
-          <div className="rounded-lg border border-gold/40 bg-ink-900 p-3"><div className="text-[11px] uppercase text-gold">À vous de jouer</div><div className="mb-2 font-medium">{l.exercise.question}</div>
+          <div><div className="text-[11px] uppercase text-gold">Mise en pratique dans le jeu</div><Explained text={l.application} /></div>
+          <div className="rounded-lg border border-gold/40 bg-ink-900 p-3"><div className="text-[11px] uppercase text-gold">À vous de jouer</div><div className="mb-2 font-medium"><Explained text={l.exercise.question} /></div>
             {l.exercise.kind === "qcm" ? <div className="grid gap-2">{l.exercise.options.map((o: string, i: number) => <Button key={o} variant="outline" onClick={() => submit(i)}>{o}</Button>)}</div> : <div className="flex gap-2"><input value={ans} onChange={(e) => setAns(e.target.value)} className={inputCls} placeholder={l.exercise.unit} /><Button onClick={() => submit(Number(ans.replace(",", ".").replace(/\s/g, "")))}>Valider</Button></div>}
             {res && <div className={`mt-3 rounded p-2 text-sm ${res.correct ? "bg-green-500/10 text-green-200" : "bg-red-500/10 text-red-200"}`}><div className="text-[11px] uppercase">Correction détaillée</div>{res.correct ? "✔ Bonne réponse. " : "✘ Réponse incorrecte. "}{res.correction}</div>}
-          </div>
+          <HelpMe help={{ plain: l.simple, formula: l.definition, terms: termsIn([l.definition, l.simple, l.example, l.application, l.exercise.question, ...(l.exercise.options ?? [])]).filter((x) => x.term !== l.term).map((x) => ({ term: x.term, simple: x.simple, example: x.example })), examples: [{ question: `Exemple chiffré : ${l.term}`, explain: l.example, answer: "" }] }} /></div>
           <details key={l.id + (res ? "r" : "")} open={!!res} className="rounded-lg border border-ink-700 bg-ink-900/60 p-3"><summary className="cursor-pointer text-xs font-semibold text-ink-300">Rappel théorique (définition, explication, exemple chiffré)</summary>
-            <div className="mt-2 space-y-2"><div><div className="text-[11px] uppercase text-gold">Définition</div>{l.definition}</div><div><div className="text-[11px] uppercase text-gold">Explication simple</div>{l.simple}</div><div><div className="text-[11px] uppercase text-gold">Exemple chiffré</div>{l.example}</div></div>
+            <div className="mt-2 space-y-2"><div><div className="text-[11px] uppercase text-gold">Définition</div><Explained text={l.definition} /></div><div><div className="text-[11px] uppercase text-gold">Explication simple</div><Explained text={l.simple} /></div><div><div className="text-[11px] uppercase text-gold">Exemple chiffré</div><Explained text={l.example} /></div></div>
           </details>
         </div>
       </Card>}

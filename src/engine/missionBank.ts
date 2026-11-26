@@ -8,7 +8,7 @@
  * Tout est déterministe : les nombres viennent du générateur aléatoire de la partie, les réponses attendues sont recalculées depuis les paramètres de la mission.
  */
 import type { GameState, Mission, RepKey, Sector, ZoneId, AssetClass } from "./types";
-import type { Rng } from "./rng";
+import { Rng, seedRng } from "./rng";
 import { accountEquity, exposures, positionViews, valueAtRisk } from "./portfolio";
 import { quizState } from "./quiz";
 import { CONTEXT } from "./missionContext";
@@ -286,6 +286,81 @@ const FAMS: Fam[] = [
     ask: () => "",
     choice: (p) => ({ question: "À montant investi égal, quel actif a la VaR la plus élevée ?", options: [0, 1, 2, 3].map((i) => `${NAMES[p[`n${i}`]]} (volatilité annuelle ${p[`v${i}`]} %)`), correct: p.c, explain: "La VaR est proportionnelle à la volatilité : l'actif le plus volatil est le plus risqué." }) },
 ];
+
+
+/** La question dite autrement, en mots simples, avec la marche à suivre : affiché quand l'élève ne comprend pas */
+const PLAIN: Record<string, string> = {
+  int_simple: "Un placement rapporte de l'argent chaque année : ce sont les intérêts. « Simples » veut dire qu'on les calcule toujours sur la somme de départ, jamais sur les intérêts déjà gagnés. Calculez donc les intérêts d'une seule année (capital × taux), puis multipliez par le nombre d'années.",
+  int_compose: "Ici les intérêts gagnés sont ajoutés au capital, donc l'année suivante ils rapportent eux aussi des intérêts. Chaque année, le capital est multiplié par (1 + taux). Il suffit de répéter cette multiplication autant de fois qu'il y a d'années : capital × (1 + taux)^années.",
+  taux_equiv: "On vous donne un petit taux appliqué chaque mois. Question : quel serait le taux sur une année entière ? Comme chaque mois les intérêts s'ajoutent au capital, on multiplie 12 fois par (1 + taux mensuel), puis on retire 1 et on exprime en pourcentage.",
+  rend_total: "On veut savoir combien l'action a rapporté au total, en pourcentage de son prix d'achat. Il y a deux sources de gain : l'évolution du cours (prix final − prix initial) et le dividende reçu. On additionne les deux, puis on divise par le prix initial.",
+  cagr: "Le portefeuille a grossi sur plusieurs années. On cherche le pourcentage moyen gagné par an, en tenant compte des intérêts composés. On divise la valeur finale par la valeur initiale, on prend la racine n-ième (n = nombre d'années), puis on retire 1.",
+  var_enchainee: "Attention au piège : +20 % puis −20 % ne revient pas à zéro, car la baisse s'applique à un prix plus grand. On multiplie les deux coefficients : (1 + hausse) × (1 − baisse), puis on retire 1 pour retrouver une variation.",
+  pnl_long: "« P&L » veut dire « profit et perte » : ce qu'on gagne ou perd. On a acheté puis revendu. Le gain par titre est (prix de vente − prix d'achat). On le multiplie par le nombre de titres, puis on retire les frais payés.",
+  pnl_short: "Vendre à découvert, c'est vendre un titre qu'on a emprunté, en espérant le racheter moins cher. Le gain par titre est donc (prix de vente − prix de rachat) : positif si le cours a baissé. On le multiplie par le nombre de titres.",
+  levier_perte: "Le levier amplifie les gains et les pertes. Avec un levier de 5 et un capital de 10 000 €, on contrôle 50 000 € d'actifs. Si ces actifs baissent de 2 %, on perd 2 % de 50 000 €. Calculez la perte : capital × levier × baisse.",
+  marge_init: "Pour ouvrir un contrat à terme, on ne paie pas sa valeur totale : on bloque seulement un pourcentage, appelé marge ou dépôt de garantie. Il suffit d'appliquer ce pourcentage à la valeur du contrat.",
+  taille_stop: "On se fixe une perte maximale en euros. Le stop-loss fixe le prix de sortie si ça tourne mal : la perte par titre est (prix d'entrée − prix du stop). Pour ne pas dépasser le budget, on divise la perte acceptée par la perte par titre. On arrondit à l'entier inférieur.",
+  ratio_rr: "On compare ce qu'on peut gagner à ce qu'on peut perdre. Gain visé par titre = objectif − entrée. Perte maximale par titre = entrée − stop. Le ratio est le premier divisé par le second : plus il est grand, plus le trade est intéressant.",
+  pru: "Quand on achète en deux fois à des prix différents, le prix moyen payé n'est pas la simple moyenne des deux prix : il faut pondérer par les quantités. Total payé = q1 × p1 + q2 × p2 ; on le divise par le nombre total de titres.",
+  div_total: "Chaque action donne droit à un dividende. Si on possède plusieurs actions, on multiplie : nombre d'actions × dividende par action.",
+  rend_div: "Le rendement du dividende dit quelle part du prix de l'action est « rendue » chaque année en dividende. On divise le dividende annuel par le cours, puis on multiplie par 100 pour avoir un pourcentage.",
+  per: "Le PER dit combien d'années de bénéfices il faut pour « rembourser » le prix de l'action : un PER de 15 signifie qu'on paie 15 fois le bénéfice annuel. On divise le cours par le bénéfice par action.",
+  bpa: "Le bénéfice par action est la part du bénéfice qui revient à chaque action. On divise le résultat net de la société par le nombre d'actions. Attention : les deux chiffres sont ici en millions, donc le résultat est directement en euros par action.",
+  capi: "La capitalisation boursière est la valeur de toute l'entreprise vue par la bourse : le prix d'une action multiplié par le nombre d'actions. Les actions sont en millions, et on demande la réponse en milliards : divisez par 1 000.",
+  ev: "La valeur d'entreprise est le prix pour racheter toute l'entreprise, dettes comprises, en récupérant sa trésorerie : capitalisation + dette − trésorerie disponible.",
+  ev_ebitda: "Un multiple compare le prix de l'entreprise à ce qu'elle gagne avant intérêts, impôts et amortissements (l'EBITDA). On divise la valeur d'entreprise par l'EBITDA : le résultat se lit « on paie X fois le résultat ».",
+  roe: "Le ROE mesure le rendement obtenu avec l'argent des actionnaires. On divise le résultat net par les fonds propres, puis on exprime en pourcentage.",
+  marge_nette: "La marge nette dit combien l'entreprise garde de bénéfice sur chaque euro vendu. On divise le résultat net par le chiffre d'affaires et on exprime en pourcentage.",
+  dette_ebitda: "Ce ratio dit en combien d'années de résultat (EBITDA) l'entreprise pourrait rembourser sa dette nette. On divise la dette nette par l'EBITDA.",
+  peg: "Un PER élevé peut se justifier si l'entreprise croît vite. Le PEG corrige cela : on divise le PER par la croissance attendue des bénéfices, exprimée en pourcentage (sans le signe %).",
+  gordon: "On estime la valeur d'une action par ses dividendes futurs, qui croissent à un rythme régulier. Formule : dividende de l'an prochain ÷ (rendement exigé − croissance), avec les deux taux écrits en pourcentage puis convertis (6 % = 0,06).",
+  van: "Pour comparer de l'argent à des dates différentes, on ramène chaque flux futur à aujourd'hui en le divisant par (1 + taux)^année. La VAN est la somme de ces valeurs d'aujourd'hui, moins l'investissement de départ. Positive : le projet est rentable.",
+  annuite: "On rembourse un emprunt avec une somme identique chaque année. La formule donne cette somme : capital × taux ÷ (1 − (1 + taux)^−durée). Utilisez le taux écrit en décimal (4 % = 0,04).",
+  epargne_fv: "On verse la même somme chaque année et chaque versement rapporte des intérêts jusqu'à la fin. Le capital final vaut : versement × ((1 + taux)^années − 1) ÷ taux.",
+  duration_prix: "La duration modifiée dit de combien (en pourcentage) le prix d'une obligation varie quand les taux bougent de 1 %. Un point de base vaut 0,01 %. Variation du prix ≈ − duration × variation des taux ; si les taux montent, le prix baisse (signe moins).",
+  zc_prix: "Une obligation zéro coupon ne verse rien avant l'échéance où elle rembourse 100. Son prix d'aujourd'hui est ces 100 ramenés à aujourd'hui : 100 ÷ (1 + rendement)^années.",
+  rend_courant: "Le rendement courant compare ce que rapporte le coupon chaque année au prix payé : coupon ÷ prix × 100. C'est une mesure simple, qui ne tient pas compte du remboursement final.",
+  change_conv: "Le cours indique combien d'unités de la devise étrangère on obtient pour 1 euro. Pour convertir des euros dans cette devise, on multiplie le montant en euros par le cours.",
+  change_cross: "On connaît deux cours qui ont l'euro en commun et on veut un troisième cours sans euro. EURUSD = dollars pour 1 €, EURGBP = livres pour 1 €. Pour avoir des dollars pour 1 livre, on divise EURUSD par EURGBP.",
+  forward_fx: "Le cours à terme fixe aujourd'hui le prix d'une devise pour plus tard. Il tient compte de l'écart d'intérêts : la devise qui paie le plus d'intérêts se déprécie à terme. Formule : comptant × (1 + taux USD × durée) ÷ (1 + taux EUR × durée).",
+  parite_pc: "Call et put de même strike et même échéance sont liés. Quand on connaît le call, on retrouve le put : put = call − cours de l'action + strike actualisé (strike ÷ (1 + taux sans risque)).",
+  val_intr: "La valeur intrinsèque est ce que l'option rapporterait si on l'exerçait tout de suite. Call : cours − strike (si positif). Put : strike − cours (si positif). Un contrat porte sur 100 titres, on multiplie donc par 100 et par le nombre de contrats.",
+  breakeven_opt: "Quand on achète une option, on paie une prime. Pour récupérer cette prime, le prix du sous-jacent doit aller assez loin. Call : strike + prime. Put : strike − prime.",
+  payoff_exp: "À l'échéance, un call vaut max(cours − strike ; 0) et un put max(strike − cours ; 0). Le gain net est cette valeur moins la prime payée. Un contrat porte sur 100 titres : multipliez par 100.",
+  hedge_futures: "Pour protéger un portefeuille d'actions on vend des contrats à terme sur indice. On veut que la valeur « couverte » soit la même : valeur du portefeuille × bêta, divisée par la valeur d'un contrat (cours du future × multiplicateur).",
+  beta_ptf: "Le bêta d'un portefeuille est la moyenne des bêtas de ses lignes, pondérée par leur poids. Multipliez chaque bêta par le poids de sa ligne (en pourcentage), additionnez, divisez par 100.",
+  rend_pondere: "Le rendement du portefeuille est la moyenne des rendements de ses lignes, pondérée par leur poids. Multipliez chaque rendement par le poids de sa ligne, additionnez, divisez par 100.",
+  vol_horizon: "La volatilité annuelle ne s'applique pas telle quelle à une période plus courte : elle se réduit comme la racine carrée du temps. Il y a environ 252 jours de bourse par an. Volatilité sur n jours = volatilité annuelle × √(n ÷ 252).",
+  var_param: "La VaR estime la perte à ne pas dépasser (sauf 1 jour sur 100). Avec un niveau de confiance de 99 %, on multiplie la volatilité quotidienne par 2,33 puis par la valeur de la position.",
+  sharpe: "Le ratio de Sharpe dit combien de rendement « en plus » on obtient par unité de risque. On retire le taux sans risque du rendement du fonds, puis on divise par la volatilité.",
+  spread_bps: "Le spread est l'écart entre le prix d'achat et le prix de vente, un coût caché. On le rapporte au prix moyen et on l'exprime en points de base : 1 point de base = 0,01 %. Spread (pb) = (ask − bid) ÷ milieu × 10 000.",
+  cout_trans: "Les frais sont exprimés en points de base (1 pb = 0,01 %). Montant de la transaction = quantité × cours. Coût = montant × nombre de pb ÷ 10 000.",
+  inflation_reelle: "L'inflation réduit ce que l'argent permet d'acheter. Le rendement réel enlève cet effet : on divise (1 + rendement) par (1 + inflation), puis on retire 1.",
+  rule72: "Astuce de calcul mental : le nombre d'années pour doubler un capital est à peu près 72 divisé par le taux annuel en pourcentage.",
+  dv01: "Une variation de taux de quelques points de base change la valeur d'un portefeuille d'obligations. Gain ≈ valeur du portefeuille × duration modifiée × variation en points de base ÷ 10 000 (les taux baissent : le prix monte).",
+  frais_gestion: "Les frais réduisent le rendement chaque année, et l'effet s'accumule avec le temps. Calculez le capital final sans frais (rendement brut) puis avec frais (rendement brut − frais), et faites la différence.",
+  compare_placements: "Pour comparer, ne regardez pas seulement le rendement affiché : ce qui compte, c'est ce qui reste après les frais. Calculez rendement − frais pour chaque placement, puis choisissez le plus élevé.",
+  compare_per4: "Le PER d'une action = cours ÷ bénéfice par action. Calculez-le pour chaque société : le plus bas est le moins cher par rapport à ses bénéfices.",
+  compare_oblig: "Le rendement courant d'une obligation = coupon ÷ prix. Calculez-le pour chaque obligation et choisissez le plus élevé.",
+  classer_risque: "La VaR croît avec la volatilité : à montant égal, l'actif le plus volatil est celui qui peut faire perdre le plus. Cherchez la volatilité la plus élevée.",
+};
+export const FAM_BY_KEY: Record<string, Fam> = Object.fromEntries(FAMS.map((f) => [f.key, f]));
+export interface WorkedExample { question: string; options?: string[]; answer: string; explain: string }
+/** Exemples résolus (autres chiffres, même problème) : montrent la méthode du début à la fin, avec les mots de la question expliqués */
+export function famExamples(key: string, n = 2): WorkedExample[] {
+  const f = FAM_BY_KEY[key]; if (!f) return [];
+  const out: WorkedExample[] = [];
+  for (let i = 0; i < n; i++) {
+    const r = new Rng(seedRng(`ex-${key}-${i}`)); let vals: Record<string, number> = {};
+    for (let k = 0; k < 8; k++) { vals = f.gen(r, 0.4); if (vals.ok === undefined || vals.ok === 1) break; }
+    if (f.choice) { const c = f.choice(vals); out.push({ question: c.question, options: c.options, answer: c.options[c.correct], explain: c.explain }); }
+    else { const a = f.ans!(vals); out.push({ question: f.ask(vals), answer: `${fd(a, Math.abs(a) < 10 ? 2 : Math.abs(a) < 1000 ? 1 : 0)} ${f.unit}`.trim(), explain: f.explain!(vals, a) }); }
+  }
+  return out;
+}
+export const famPlain = (key: string) => PLAIN[key];
+export const famHint = (key: string) => FAM_BY_KEY[key]?.hint;
 
 /** Compte la première famille « choix » : (les trois dernières familles + celle des placements sont des QCM calculés) */
 function famTemplate(fam: Fam, ci: number): BankTpl {
