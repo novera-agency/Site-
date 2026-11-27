@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { game } from "./helpers";
 import { advance } from "@/engine/engine";
 import { createMission, answerMission, missionQuestion, missionGuide, checkMissions, missionTemplate } from "@/engine/missions";
-import { BANK, BANK_CALC, BANK_ACTION, BANK_CTX } from "@/engine/missionBank";
+import { BANK, BANK_CALC, BANK_ACTION, BANK_CTX, FAM_BY_KEY } from "@/engine/missionBank";
 import { Rng, seedRng } from "@/engine/rng";
 import { assignDailyMissions } from "@/engine/missions";
 import { dayIndex, nextBusinessDay, MIN_PER_DAY } from "@/engine/time";
@@ -16,7 +16,8 @@ describe("Banque de missions de pratique", () => {
     for (const t of BANK) { const made = t.make(s, { k: 1 }, new Rng(seedRng("t" + t.id))); if (made) titles.add(made.title); }
     expect(titles.size).toBeGreaterThanOrEqual(480); // les missions de situation ne se proposent que si la situation existe
     expect(BANK_CTX.length).toBe(19);
-    expect(BANK_CALC.length).toBe(54 * 8);
+    expect(BANK_CALC.length).toBe(Object.keys(FAM_BY_KEY).length * 8);
+    expect(Object.keys(FAM_BY_KEY).length).toBe(66);
     expect(BANK_ACTION.length).toBeGreaterThanOrEqual(70);
   });
 
@@ -106,5 +107,29 @@ describe("Missions de situation (nées de l'état de la partie)", () => {
       else expect(t.check(s, m)).toBeGreaterThanOrEqual(0);
     }
     expect(ok).toBeGreaterThanOrEqual(14);
+  });
+});
+
+import { atEuOpen } from "./helpers";
+import { applyAction } from "@/server/actions";
+
+describe("Missions d'action jouées pour de vrai (ordres réels, exécutés par le moteur)", () => {
+  it("acheter un ETF, des actions d'un secteur, placer un ordre limité et un stop valident les missions correspondantes", () => {
+    const s = atEuOpen(game("carriere", "bank-real")); s.paused = false;
+    const eur = Object.values(s.instruments).filter((d) => d.cls === "action" && !d.lite && d.currency === "EUR" && d.sector && !s.quotes[d.id].halted);
+    const sector = eur[0].sector!; const stocks = eur.filter((d) => d.sector === sector).slice(0, 3);
+    const ids = ["a_classe_achat_etf", `a_secteur_${sector}`, "a_ordre_limite", "a_ordre_stop", "a_lignes_3", "a_taille_0", "a_classes_2"];
+    const ms = ids.map((id) => createMission(s, id, { k: 1 }, "boss")).filter(Boolean) as ReturnType<typeof createMission>[];
+    expect(ms.length).toBe(ids.length);
+    const order = (inst: string, side: "buy" | "sell", type: string, qty: number, extra: object = {}) => applyAction(s, { type: "order", account: "perso", instrumentId: inst, side, orderType: type, qty, duration: "jour", ...extra } as never);
+    const etf = Object.values(s.instruments).find((d) => d.cls === "etf" && !d.lite)!;
+    expect(order(etf.id, "buy", "market", 20).ok).toBe(true);
+    for (const d of stocks) expect(order(d.id, "buy", "market", Math.max(1, Math.round(1500 / s.quotes[d.id].price))).ok).toBe(true);
+    const px = s.quotes[etf.id].price;
+    expect(order(etf.id, "buy", "limit", 1, { limit: Math.round(px * 0.9 * 100) / 100 }).ok).toBe(true);
+    expect(order(etf.id, "sell", "stop", 1, { stop: Math.round(px * 0.8 * 100) / 100 }).ok).toBe(true);
+    advance(s, 30); checkMissions(s);
+    const done = Object.fromEntries(ms.map((m) => [m!.templateId, m!.status]));
+    for (const id of ["a_classe_achat_etf", `a_secteur_${sector}`, "a_ordre_limite", "a_ordre_stop", "a_lignes_3", "a_classes_2"]) expect(done[id], `${id} → ${JSON.stringify(done)}`).toBe("reussie");
   });
 });

@@ -38,6 +38,18 @@ test("explications : les mots de métier s'expliquent au toucher, « Je ne compr
   await help.click();
   await expect(page.getByTestId("help-me-panel")).toHaveCount(0);
 
+  // Mode d'emploi « on apprend en faisant » : affiché, fermable, ne revient pas
+  await page.goto(BASE + "/play/missions");
+  await expect(page.getByTestId("practice-tip")).toBeVisible({ timeout: 60000 });
+  await page.getByTestId("practice-tip-close").click();
+  await expect(page.getByTestId("practice-tip")).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByTestId("appreciation")).toBeVisible({ timeout: 60000 });
+  await expect(page.getByTestId("practice-tip")).toHaveCount(0);
+  // Bilan de pratique dans Compétences
+  await page.goto(BASE + "/play/competences");
+  await expect(page.getByTestId("practice-summary")).toBeVisible({ timeout: 60000 });
+
   // Formation : l'exercice commence par les mots à comprendre
   await page.goto(BASE + "/play/formation");
   await expect(page.getByTestId("help-me").first()).toBeVisible({ timeout: 60000 });

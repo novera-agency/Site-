@@ -12,6 +12,7 @@ import { tutorialChecklist, wealth, CHALLENGES } from "@/engine/engine";
 import { meetingView, allMeetingTemplates, meetingTemplate } from "@/engine/meetingEngine";
 import { missionQuestion, missionGuide } from "@/engine/missions";
 import { missionHelp } from "@/engine/missionHelp";
+import { FAM_BY_KEY } from "@/engine/missionBank";
 import { performanceScore, rankTitle } from "@/engine/career";
 import { currentAllocation, equityWeight, suitableEquityBand, totalAum } from "@/engine/clients";
 import { ALLOC_BUCKETS } from "@/engine/people";
@@ -227,6 +228,12 @@ export function buildView(s: GameState, name: string, p: Record<string, string>)
     };
     case "missions": return { appreciation: Math.round(appreciation(s)), rank: s.career.rank, missions: s.missions.slice(0, 80).map((m) => ({ ...m, question: m.status === "active" ? missionQuestion(s, m) : null, guide: missionGuide(s, m), help: m.status === "active" ? missionHelp(s, m) : null, giverInfo: person(s, m.giver) })) };
     case "learning": return { lessons: LESSONS.map((l) => ({ ...l, exercise: l.exercise.kind === "qcm" ? { kind: l.exercise.kind, question: l.exercise.question, options: l.exercise.options } : { kind: l.exercise.kind, question: l.exercise.question, unit: l.exercise.unit } })), completed: s.learning.completed, attempts: s.learning.attempts };
+    case "practice": {
+      const fams = Object.values(FAM_BY_KEY).map((f) => { const r = s.practice?.[f.key] ?? { ok: 0, ko: 0 }; const n = r.ok + r.ko; return { key: f.key, title: f.title, cat: f.cat, ok: r.ok, ko: r.ko, rate: n ? Math.round((r.ok / n) * 100) : null }; });
+      const other = (["~situation", "~action", "~autre"] as const).map((k) => { const r = s.practice?.[k] ?? { ok: 0, ko: 0 }; const n = r.ok + r.ko; return { key: k, title: k === "~situation" ? "Missions de situation" : k === "~action" ? "Missions d'action" : "Autres missions", cat: "", ok: r.ok, ko: r.ko, rate: n ? Math.round((r.ok / n) * 100) : null }; });
+      const attempted = fams.filter((f) => f.rate !== null);
+      return { families: fams, other, total: attempted.length, available: fams.length, weak: attempted.filter((f) => f.rate! < 60 && f.ok + f.ko >= 2).sort((a, b) => a.rate! - b.rate!).slice(0, 5) };
+    }
     case "skills": return { skills: Object.entries(s.skills).map(([k, xp]) => ({ id: k, name: SKILL_NAMES[k as keyof typeof SKILL_NAMES], xp, level: skillLevel(xp), next: SKILL_LEVELS[skillLevel(xp) + 1] ?? null, prev: SKILL_LEVELS[skillLevel(xp)] })), log: s.skillLog.slice(0, 60), reputation: Object.entries(s.reputation).map(([k, v]) => ({ id: k, name: REP_NAMES[k as keyof typeof REP_NAMES], value: v })), avgRep: avgRep(s), decisions: s.decisions.slice(0, 80) };
     case "network": return { npcs: Object.values(s.npcs).map((n) => ({ ...n, client: n.relation === "client", status: relationStatus(s, n.id) })) };
     case "hr": {

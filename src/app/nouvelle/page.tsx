@@ -22,6 +22,13 @@ const CHALLENGES = [
   { id: "survivre_krach", name: "Survivre au krach", desc: "100 000 € — terminez 30 jours avec une perte < 10 %." },
   { id: "objectif_10", name: "Objectif +10 %", desc: "50 000 € — +10 % en 60 jours." },
   { id: "choc_petrolier", name: "Choc pétrolier", desc: "75 000 € — +5 % en 40 jours malgré une crise énergétique." },
+  { id: "panique_bancaire", name: "Panique bancaire", desc: "100 000 € — perte < 8 % pendant une crise de liquidité." },
+  { id: "bulle_tech", name: "Éclatement de la bulle", desc: "100 000 € — perte < 10 % quand la bulle tech éclate." },
+  { id: "choc_taux", name: "Choc de taux", desc: "80 000 € — perte < 5 % quand les taux grimpent." },
+  { id: "defaut_souverain", name: "Défaut souverain", desc: "100 000 € — perte < 10 % quand un État fait défaut." },
+  { id: "crise_change", name: "Crise de change", desc: "75 000 € — perte < 5 % quand une devise s'effondre." },
+  { id: "recession", name: "Récession", desc: "100 000 € — aucune perte en 45 jours de récession." },
+  { id: "inflation_folle", name: "Inflation qui s'emballe", desc: "80 000 € — +3 % en 40 jours." },
 ];
 const DIFF = [
   { id: "debutant", label: "Débutant", desc: "Conseils, missions guidées, pas de vente à découvert, marges réduites." },

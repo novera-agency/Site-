@@ -49,9 +49,16 @@ export interface NewGameOptions {
 }
 
 export const CHALLENGES = [
-  { id: "survivre_krach", name: "Survivre au krach", description: "100 000 € de capital. Un krach se prépare. Terminez les 30 jours avec une perte inférieure à 10 %.", capital: 100000, days: 30, target: -0.1, crisis: "krach" as const },
-  { id: "objectif_10", name: "Objectif +10 %", description: "50 000 € de capital, 60 jours pour réaliser +10 % sans liquidation forcée.", capital: 50000, days: 60, target: 0.1, crisis: undefined },
-  { id: "choc_petrolier", name: "Choc pétrolier", description: "75 000 € : une crise énergétique va éclater. Réalisez +5 % en 40 jours.", capital: 75000, days: 40, target: 0.05, crisis: "crise_energie" as const },
+  { id: "survivre_krach", name: "Survivre au krach", description: "100 000 € de capital. Un krach se prépare. Terminez les 30 jours avec une perte inférieure à 10 %.", capital: 100000, days: 30, target: -0.1, crisis: "krach" as const, lesson: "Dans un krach, tout baisse en même temps : la diversification protège peu. Ce qui sauve : réduire l'exposition tôt, garder des liquidités, couvrir ou poser des stops avant la chute." },
+  { id: "objectif_10", name: "Objectif +10 %", description: "50 000 € de capital, 60 jours pour réaliser +10 % sans liquidation forcée.", capital: 50000, days: 60, target: 0.1, crisis: undefined, lesson: "Viser +10 % en 60 jours demande du risque : la clé est de le dimensionner (taille de position, stop-loss) pour qu'une série de pertes ne vous élimine pas." },
+  { id: "choc_petrolier", name: "Choc pétrolier", description: "75 000 € : une crise énergétique va éclater. Réalisez +5 % en 40 jours.", capital: 75000, days: 40, target: 0.05, crisis: "crise_energie" as const, lesson: "Un choc énergétique fait monter le pétrole et l'inflation, et pèse sur les secteurs consommateurs d'énergie. On peut en profiter (énergie, matières premières) à condition de ne pas être pris du mauvais côté." },
+  { id: "panique_bancaire", name: "Panique bancaire", description: "100 000 € : une crise de liquidité secoue les banques. Perdez moins de 8 % en 30 jours.", capital: 100000, days: 30, target: -0.08, crisis: "liquidite_bancaire" as const, lesson: "Une crise de liquidité frappe d'abord les banques et les titres difficiles à vendre. Évitez les actifs peu liquides et gardez du cash : vendre devient impossible quand tout le monde veut sortir." },
+  { id: "bulle_tech", name: "Éclatement de la bulle", description: "100 000 € : la bulle technologique éclate. Perdez moins de 10 % en 30 jours.", capital: 100000, days: 30, target: -0.1, crisis: "bulle_tech" as const, lesson: "Quand une bulle éclate, les valeurs les plus chères (PER très élevé) chutent le plus. Se méfier d'un portefeuille concentré sur un seul thème à la mode." },
+  { id: "choc_taux", name: "Choc de taux", description: "80 000 € : les taux grimpent brutalement. Perdez moins de 5 % en 30 jours.", capital: 80000, days: 30, target: -0.05, crisis: "hausse_taux" as const, lesson: "Quand les taux montent, le prix des obligations baisse (d'autant plus que leur duration est longue) et les actions chères souffrent. Raccourcir la duration protège." },
+  { id: "defaut_souverain", name: "Défaut souverain", description: "100 000 € : un État ne rembourse plus sa dette. Perdez moins de 10 % en 30 jours.", capital: 100000, days: 30, target: -0.1, crisis: "defaut_souverain" as const, lesson: "Un défaut d'État contamine ses banques et les pays voisins : écartement des spreads, fuite vers les valeurs refuges. Éviter la dette de l'émetteur en difficulté et diversifier les émetteurs." },
+  { id: "crise_change", name: "Crise de change", description: "75 000 € : une devise s'effondre. Perdez moins de 5 % en 30 jours.", capital: 75000, days: 30, target: -0.05, crisis: "crise_change" as const, lesson: "Une chute de devise fait perdre à ceux qui détiennent des actifs libellés dans cette monnaie. La couverture de change protège ; l'exposition cachée est le danger." },
+  { id: "recession", name: "Récession", description: "100 000 € : l'économie se contracte. Terminez 45 jours sans perte (≥ 0 %).", capital: 100000, days: 45, target: 0, crisis: "recession" as const, lesson: "En récession, les secteurs cycliques (automobile, luxe, industrie) souffrent plus que les défensifs (santé, alimentation). Rééquilibrer vers le défensif et l'obligataire solide limite les dégâts." },
+  { id: "inflation_folle", name: "Inflation qui s'emballe", description: "80 000 € : l'inflation s'emballe. Gagnez 3 % en 40 jours.", capital: 80000, days: 40, target: 0.03, crisis: "inflation" as const, lesson: "L'inflation érode les obligations à taux fixe. Les actifs réels (matières premières, actions de sociétés qui répercutent leurs prix) résistent mieux." },
 ];
 
 /** Génération des parties : les parties créées avant la version « histoire réelle jusqu'en 2026 » sont recommencées une fois */
@@ -329,8 +336,27 @@ function endOfDay(s: GameState) {
   if (s.career.breaches >= 3 && s.mode === "carriere" && s.career.employed && (s.t - ((s.flags["regulatorT"] as number) ?? -1e9)) > 90 * MIN_PER_DAY) { s.flags["regulatorT"] = s.t; addAgendaItem(s, { t: tOfDay(nextBusinessDay(dayIndex(s.t) + 2), 10, 0), durationMin: 60, title: "Inspection du régulateur", kind: "reunion", meetingTemplate: "regulateur", important: true }); }
   if (s.challenge && s.challenge.status === "en_cours") {
     const perf = accountEquity(s, "perso") / s.challenge.startEquity - 1;
-    if (s.t >= s.challenge.deadlineT) { s.challenge.status = (s.challenge.target < 0 ? perf > s.challenge.target : perf >= s.challenge.target) ? "reussi" : "echoue"; notify(s, s.challenge.status === "reussi" ? "succes" : "critique", `Défi ${s.challenge.status === "reussi" ? "réussi" : "échoué"}`, `Performance finale : ${(perf * 100).toFixed(2)} %`); s.paused = true; s.pauseReason = "Fin du défi"; }
+    if (s.t >= s.challenge.deadlineT) { s.challenge.status = (s.challenge.target < 0 ? perf > s.challenge.target : perf >= s.challenge.target) ? "reussi" : "echoue"; notify(s, s.challenge.status === "reussi" ? "succes" : "critique", `Défi ${s.challenge.status === "reussi" ? "réussi" : "échoué"}`, `Performance finale : ${(perf * 100).toFixed(2)} %`); s.paused = true; s.pauseReason = "Fin du défi"; challengeDebrief(s, perf); }
   }
+}
+
+/** Bilan commenté d'un défi : ce que vous avez fait pendant la crise, et la leçon à en tirer */
+function challengeDebrief(s: GameState, perf: number) {
+  const ch = CHALLENGES.find((c) => c.id === s.challengeId); if (!ch || !s.challenge) return;
+  const start = s.challenge.deadlineT - ch.days * MIN_PER_DAY;
+  const crisisT = s.crises[s.crises.length - 1]?.startT ?? start;
+  const mine = s.fills.filter((f) => f.t >= start && f.account === "perso");
+  const soldInCrisis = mine.some((f) => f.side === "sell" && f.t >= crisisT && f.t <= crisisT + 5 * MIN_PER_DAY);
+  const stops = s.orders.some((o) => o.createdT >= start && o.account === "perso" && (o.tag === "stop_loss" || o.type === "stop" || o.type === "stop_limit"));
+  const ok = s.challenge.status === "reussi";
+  const lines = [
+    `${ok ? "✔ Défi réussi" : "✘ Défi échoué"} : performance finale ${(perf * 100).toFixed(2)} % (objectif ${(ch.target * 100).toFixed(0)} %), perte maximale en cours de route ${(s.stats.maxDrawdown * 100).toFixed(1)} %.`,
+    `Votre réaction : ${soldInCrisis ? "vous avez allégé vos positions dans les 5 jours après le début de la crise — bon réflexe." : "vous n'avez pas allégé vos positions dans les 5 jours après le début de la crise : agir vite limite les dégâts."}`,
+    `Vos protections : ${stops ? "vous avez posé des stops, qui plafonnent la perte de chaque ligne." : "aucun stop posé : une position sans stop peut perdre bien plus que prévu."}`,
+    `${mine.length} opérations pendant l'exercice.`,
+    `La leçon : ${ch.lesson}`,
+  ];
+  s.messages.unshift({ id: nextId(s, "msg"), t: s.t, from: "Financial Empire", subject: `Bilan de l'exercice « ${ch.name} »`, body: lines.join("\n\n"), read: false });
 }
 
 export function wealth(s: GameState) {
@@ -361,7 +387,7 @@ export function step(s: GameState) {
   if (s.flags["challengeCrisisDay"] === day && m === 9 * 60 && !s.flags["challengeCrisisFired"]) {
     s.flags["challengeCrisisFired"] = true;
     const ch = CHALLENGES.find((c) => c.id === s.challengeId);
-    if (ch?.crisis) startCrisis(s, ch.crisis, rng);
+    if (ch?.crisis) startCrisis(s, ch.crisis, rng, ch.crisis === "liquidite_bancaire" ? "PCBK" : undefined);
   }
   processCalendar(s, rng);
   const dy = stepYields(s, rng);

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useGame } from "@/lib/store";
 import { MissionQuiz, HelpButton } from "@/components/MissionHelp";
 import { Explained } from "@/components/Explained";
+import { PracticeTip } from "@/components/PracticeTip";
 import { useView, useAction } from "@/lib/hooks";
 import { Card, PageTitle, Loading, Badge, Bar, Button, inputCls, Tabs, Empty } from "@/components/ui";
 import { fmtShortDate } from "@/engine/time";
@@ -37,6 +38,7 @@ export default function Missions() {
     </Card>);
   return <>
     <PageTitle env="Carrière" title="Missions et objectifs" subtitle="Chaque mission a des critères explicites, évalués automatiquement. Besoin d'un coup de main ? Activez l'aide 💡 sur la mission de votre choix." right={<Tabs tabs={[{ id: "active", label: "En cours" }, { id: "done", label: "Terminées" }]} value={tab} onChange={setTab} />} />
+    <PracticeTip />
     {tab === "active" && <div className="mb-4 rounded-lg border border-ink-700 bg-ink-900 p-3 text-sm text-ink-200" data-testid="appreciation">
       <div className="flex flex-wrap items-center gap-3"><span>Appréciation de votre hiérarchie : <b className={ap >= 65 ? "text-gain" : ap >= 45 ? "text-amber-300" : "text-loss"}>{ap}/100</b></span><div className="w-40"><Bar value={ap} tone={ap >= 65 ? "gain" : ap >= 45 ? "warn" : "loss"} /></div></div>
       <p className="mt-1 text-xs text-ink-400">Chaque jour ouvré, de nouvelles missions arrivent. Plus vous êtes apprécié et gradé, plus on vous confie des dossiers à <b>fort enjeu</b> : grosses récompenses (expérience, réputation, bonus) mais lourdes conséquences en cas d'échec. Peu apprécié, vous recevez surtout des tâches sans risque… qui font peu progresser.</p>

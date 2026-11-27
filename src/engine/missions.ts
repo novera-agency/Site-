@@ -257,8 +257,15 @@ export function createMission(s: GameState, templateId: string, params: Record<s
 }
 
 function branchOf(m: Mission): SkillBranch { const c = m.category as string; return (["analyse", "marches", "maths", "macro", "risque", "client", "management", "entrepreneuriat"].includes(c) ? c : c === "trading" ? "marches" : c === "conformite" ? "risque" : "analyse") as SkillBranch; }
+/** Clé de suivi de pratique d'une mission : type de problème de calcul, ou grande famille (action, situation, autre) */
+export function practiceKey(m: Mission) {
+  if (typeof m.params._fam === "string") return String(m.params._fam);
+  const b = BANK.find((x) => x.id === m.templateId);
+  return b ? (b.id.startsWith("c_") ? "~situation" : "~action") : "~autre";
+}
 export function completeMission(s: GameState, m: Mission, success: boolean) {
   if (m.status !== "active") return;
+  const pr = ((s.practice ??= {})[practiceKey(m)] ??= { ok: 0, ko: 0 }); if (success) pr.ok++; else pr.ko++;
   m.status = success ? "reussie" : "echouee";
   m.progress = success ? 1 : m.progress;
   if (success) {
@@ -341,6 +348,13 @@ export function drawStakes(s: GameState, rng: Rng): 1 | 2 | 3 {
   return u < pHigh ? 3 : u < pHigh + pLow ? 1 : 2;
 }
 /** Chaque jour ouvré : au moins deux nouvelles missions, différentes de la veille */
+/** Tirage qui favorise les types de problèmes jamais vus ou souvent ratés (le joueur retravaille ses points faibles) */
+function weakPick<T extends { id: string; family: string }>(s: GameState, rng: Rng, pool: T[]): T {
+  const w = pool.map((x) => { const r = s.practice?.[x.family]; const n = (r?.ok ?? 0) + (r?.ko ?? 0); return n === 0 ? 1.4 : 1 + 2 * ((r?.ko ?? 0) / n); });
+  let u = rng.next() * w.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < pool.length; i++) { u -= w[i]; if (u <= 0) return pool[i]; }
+  return pool[pool.length - 1];
+}
 const QUICK_FAM = new Set((["classe_achat", "ordre", "taille", "veille", "alertes", "secteur", "zone"]));
 export function assignDailyMissions(s: GameState, rng: Rng) {
   if (!s.career.employed || s.mode !== "carriere") return;
@@ -361,7 +375,7 @@ export function assignDailyMissions(s: GameState, rng: Rng) {
     else {
       // missions « de situation » (crise en cours, résultats à venir, banques centrales, actualité, votre portefeuille) : proposées dès que la situation existe
       const pool = (u < 0.4 ? BANK_CTX : u < 0.8 ? BANK_CALC : BANK_ACTION.filter((x) => QUICK_FAM.has(x.family))).filter((x) => !recent.includes(x.id) && !recentFam.slice(-12).includes(x.family) && !famToday.has(x.family));
-      t = pool.length ? rng.pick(pool) : undefined;
+      t = pool.length ? weakPick(s, rng, pool) : undefined;
     }
     if (!t) continue;
     const st = drawStakes(s, rng);

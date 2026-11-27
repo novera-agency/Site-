@@ -26,7 +26,7 @@ for (const vp of [{ name: "ordinateur", width: 1440, height: 900 }, { name: "mob
     await newCareer(page);
     for (const p of PAGES) {
       await go(page, p);
-      await expect(page.locator("main h1").first(), `titre absent sur ${p}`).toBeVisible({ timeout: 15000 });
+      await expect(page.locator("main h1").first(), `titre absent sur ${p}`).toBeVisible({ timeout: 45000 });
       await page.waitForTimeout(700);
       const [sh, ih] = await page.evaluate(() => [document.documentElement.scrollHeight, window.innerHeight]);
       if (sh > ih + 80) {

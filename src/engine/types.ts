@@ -370,6 +370,8 @@ export interface GameState {
   activeMeetingId?: string;
   agenda: AgendaItem[];
   missions: Mission[];
+  /** Bilan de pratique : réussites et échecs par type de problème (clé = type de problème de la banque de missions) */
+  practice?: Record<string, { ok: number; ko: number }>;
   notifications: Notification[];
   messages: Message[];
   news: NewsItem[];

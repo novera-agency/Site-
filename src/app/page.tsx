@@ -20,6 +20,13 @@ const CHALLENGES = [
   { id: "survivre_krach", name: "Survivre au krach", text: "100 000 € en poche, et le marché va s'effondrer. Tenez 30 jours en perdant moins de 10 %." },
   { id: "objectif_10", name: "Objectif +10 %", text: "50 000 € et 60 jours pour gagner 10 %, sans vous faire liquider." },
   { id: "choc_petrolier", name: "Choc pétrolier", text: "Une crise énergétique arrive. Gagnez 5 % en 40 jours avec 75 000 €." },
+  { id: "panique_bancaire", name: "Panique bancaire", text: "Une crise de liquidité secoue les banques. Perdez moins de 8 % en 30 jours avec 100 000 €." },
+  { id: "bulle_tech", name: "Éclatement de la bulle", text: "La bulle technologique éclate. Perdez moins de 10 % en 30 jours avec 100 000 €." },
+  { id: "choc_taux", name: "Choc de taux", text: "Les taux grimpent brutalement. Perdez moins de 5 % en 30 jours avec 80 000 €." },
+  { id: "defaut_souverain", name: "Défaut souverain", text: "Un État ne rembourse plus sa dette. Perdez moins de 10 % en 30 jours avec 100 000 €." },
+  { id: "crise_change", name: "Crise de change", text: "Une devise s'effondre. Perdez moins de 5 % en 30 jours avec 75 000 €." },
+  { id: "recession", name: "Récession", text: "L'économie se contracte. Terminez 45 jours sans perte avec 100 000 €." },
+  { id: "inflation_folle", name: "Inflation qui s'emballe", text: "L'inflation s'emballe. Gagnez 3 % en 40 jours avec 80 000 €." },
 ];
 const MODE_LABEL: Record<string, string> = { carriere: "Carrière", bac_a_sable: "Partie libre", defi: "Défi" };
 

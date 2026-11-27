@@ -44,3 +44,44 @@ describe("Explications : tous les mots de métier sont explicables", () => {
     expect(searchTerms("zzzzqq")).toEqual([]);
   });
 });
+
+import { assignDailyMissions, assignWeeklyMissions, completeMission, answerMission, practiceKey } from "@/engine/missions";
+import { Rng } from "@/engine/rng";
+import { dayIndex, nextBusinessDay, MIN_PER_DAY } from "@/engine/time";
+
+describe("Pratique : suivi des points faibles et aide pour toutes les missions", () => {
+  it("toutes les missions attribuées (du jour, de la semaine, de départ) ont une explication en mots simples", () => {
+    const s = game("carriere", "plain-all"); const rng = new Rng(s.rng); const missing = new Set<string>();
+    for (let d = 0; d < 40; d++) {
+      s.t = nextBusinessDay(dayIndex(s.t) + 1) * MIN_PER_DAY + 1;
+      assignDailyMissions(s, rng); if (d % 4 === 0) assignWeeklyMissions(s, rng);
+    }
+    let n = 0;
+    for (const m of s.missions) { n++; const h = missionHelp(s, m); if (!h.plain) missing.add(m.templateId); }
+    expect(n).toBeGreaterThan(60);
+    expect([...missing]).toEqual([]);
+  });
+  it("chaque mission terminée alimente le bilan de pratique, par type de problème", () => {
+    const s = game("carriere", "practice-1");
+    const m = createMission(s, "p_roi_1", { k: 1 }, "boss")!;
+    expect(practiceKey(m)).toBe("roi");
+    completeMission(s, m, true);
+    const m2 = createMission(s, "p_roi_2", { k: 1 }, "boss")!; completeMission(s, m2, false);
+    expect(s.practice!["roi"]).toEqual({ ok: 1, ko: 1 });
+    const a = createMission(s, "a_veille_6", { k: 1 }, "boss")!; completeMission(s, a, true);
+    expect(s.practice!["~action"]).toEqual({ ok: 1, ko: 0 });
+    void answerMission;
+  });
+  it("les types de problèmes ratés reviennent plus souvent que les maîtrisés", () => {
+    const s = game("carriere", "practice-2"); const rng = new Rng(s.rng);
+    s.practice = { int_simple: { ok: 9, ko: 0 }, roi: { ok: 0, ko: 6 } };
+    const count: Record<string, number> = {};
+    for (let d = 0; d < 200; d++) {
+      s.t = nextBusinessDay(dayIndex(s.t) + 1) * MIN_PER_DAY + 1;
+      const before = new Set(s.missions.map((m) => m.id)); s.flags["recentTpl"] = ""; s.flags["recentFam"] = "";
+      assignDailyMissions(s, rng);
+      for (const m of s.missions) if (!before.has(m.id)) { const k = practiceKey(m); count[k] = (count[k] ?? 0) + 1; m.status = "echouee"; }
+    }
+    expect(count["roi"] ?? 0).toBeGreaterThan((count["int_simple"] ?? 0) * 1.5);
+  });
+});
