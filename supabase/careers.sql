@@ -35,3 +35,23 @@ end $$;
 
 revoke all on function public.career_put(text, text), public.career_get(text) from public;
 grant execute on function public.career_put(text, text), public.career_get(text) to anon, authenticated;
+
+-- Retours des joueurs (formulaire « Donner mon avis » de la page À propos) : écriture seule, jamais lisible depuis le site.
+create table if not exists public.feedback (
+  id bigint generated always as identity primary key,
+  created_at timestamptz not null default now(),
+  kind text not null check (kind in ('bug', 'comprehension', 'idee')),
+  body text not null check (length(body) between 5 and 1500)
+);
+alter table public.feedback enable row level security;
+revoke all on table public.feedback from anon, authenticated;
+
+create or replace function public.feedback_put(p_kind text, p_body text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if (select count(*) from feedback where created_at > now() - interval '1 minute') >= 60 then raise exception 'Trop de retours, réessayez dans une minute.'; end if;
+  insert into feedback (kind, body) values (p_kind, p_body);
+end $$;
+revoke all on function public.feedback_put(text, text) from public;
+grant execute on function public.feedback_put(text, text) to anon, authenticated;
+-- Pour lire les retours : Supabase → Table Editor → feedback.

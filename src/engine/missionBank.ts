@@ -421,8 +421,10 @@ const PLAIN: Record<string, string> = {
 export const FAM_BY_KEY: Record<string, Fam> = Object.fromEntries(FAMS.map((f) => [f.key, f]));
 export interface WorkedExample { question: string; options?: string[]; answer: string; explain: string }
 /** Exemples résolus (autres chiffres, même problème) : montrent la méthode du début à la fin, avec les mots de la question expliqués */
+const EX_CACHE = new Map<string, WorkedExample[]>();
 export function famExamples(key: string, n = 2): WorkedExample[] {
   const f = FAM_BY_KEY[key]; if (!f) return [];
+  const ck = `${key}:${n}`; const hit = EX_CACHE.get(ck); if (hit) return hit;
   const out: WorkedExample[] = [];
   for (let i = 0; i < n; i++) {
     const r = new Rng(seedRng(`ex-${key}-${i}`)); let vals: Record<string, number> = {};
@@ -430,6 +432,7 @@ export function famExamples(key: string, n = 2): WorkedExample[] {
     if (f.choice) { const c = f.choice(vals); out.push({ question: c.question, options: c.options, answer: c.options[c.correct], explain: c.explain }); }
     else { const a = f.ans!(vals); out.push({ question: f.ask(vals), answer: `${fd(a, Math.abs(a) < 10 ? 2 : Math.abs(a) < 1000 ? 1 : 0)} ${f.unit}`.trim(), explain: f.explain!(vals, a) }); }
   }
+  EX_CACHE.set(ck, out);
   return out;
 }
 export const famPlain = (key: string) => PLAIN[key];

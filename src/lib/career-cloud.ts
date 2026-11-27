@@ -46,3 +46,11 @@ export async function cloudPull(code: string): Promise<string | null> {
 const LK = "fe_cc_";
 export const linkedCode = (gameId: string): string | null => { try { return localStorage.getItem(LK + gameId); } catch { return null; } };
 export const linkCode = (gameId: string, code: string) => { try { localStorage.setItem(LK + gameId, code); } catch { /* */ } };
+
+/** Envoie un retour de joueur (anonyme : aucune donnée de la partie n'est jointe) */
+export async function cloudFeedback(kind: "bug" | "comprehension" | "idee", body: string) {
+  const text = body.trim();
+  if (text.length < 5) throw new CloudError("Écrivez au moins quelques mots.");
+  if (text.length > 1500) throw new CloudError("Message trop long (1 500 caractères au maximum).");
+  await rpc("feedback_put", { p_kind: kind, p_body: text });
+}

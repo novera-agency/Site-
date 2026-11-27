@@ -36,4 +36,16 @@ describe("Code de carrière court (base en ligne)", () => {
     const m = await import("@/lib/career-cloud");
     await expect(m.cloudPull("ABCDE-FGHJK")).rejects.toThrow(/refusé/);
   });
+  it("retours des joueurs : envoyés par la fonction de la base, messages trop courts ou trop longs refusés", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://exemple.supabase.co"); vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "k");
+    const calls: { url: string; body: Record<string, string> }[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init: { body: string }) => { calls.push({ url, body: JSON.parse(init.body) }); return new Response(null, { status: 204 }); }));
+    const m = await import("@/lib/career-cloud");
+    await m.cloudFeedback("comprehension", "  Je n'ai pas compris la VaR  ");
+    expect(calls[0].url).toBe("https://exemple.supabase.co/rest/v1/rpc/feedback_put");
+    expect(calls[0].body).toEqual({ p_kind: "comprehension", p_body: "Je n'ai pas compris la VaR" });
+    await expect(m.cloudFeedback("bug", "ok")).rejects.toThrow(/quelques mots/);
+    await expect(m.cloudFeedback("idee", "x".repeat(1501))).rejects.toThrow(/trop long/);
+    expect(calls.length).toBe(1);
+  });
 });
